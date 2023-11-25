@@ -51,7 +51,7 @@ class QuickswapUSDCSwapProcessor(GenericProcessorSnapshot):
             ),
         )
 
-        with open('snapshotter/modules/boost/static/abis/erc20.json') as f:
+        with open('snapshotter/modules/computes/static/abis/erc20.json') as f:
             abi = json.load(f)
 
         w3 = rpc_helper.get_current_node()['web3_client']

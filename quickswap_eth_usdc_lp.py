@@ -54,7 +54,7 @@ class QuickswapEthUSDCLPProcessor(GenericProcessorSnapshot):
             ),
         )
 
-        with open('snapshotter/modules/boost/static/abis/v3_lp_pair.json') as f:
+        with open('snapshotter/modules/computes/static/abis/v3_lp_pair.json') as f:
             abi = json.load(f)
 
         node = rpc_helper.get_current_node()
