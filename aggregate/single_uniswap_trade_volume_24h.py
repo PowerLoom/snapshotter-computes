@@ -18,7 +18,7 @@ from snapshotter.utils.redis.redis_keys import submitted_base_snapshots_key
 from snapshotter.utils.rpc import RpcHelper
 
 
-class AggreagateTradeVolumeProcessor(GenericProcessorAggregate):
+class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
     transformation_lambdas = None
 
     def __init__(self) -> None:
