@@ -14,7 +14,7 @@ from snapshotter.utils.models.message_models import PowerloomSnapshotSubmittedMe
 from snapshotter.utils.rpc import RpcHelper
 
 
-class AggreagateTradeVolumeProcessor(GenericProcessorAggregate):
+class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
     transformation_lambdas = None
 
     def __init__(self) -> None:
