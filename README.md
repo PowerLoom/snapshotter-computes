@@ -4,9 +4,9 @@ Welcome to the Powerloom Snapshotter Node compute processor for tracking Bungee 
 
 To begin, follow the instructions in the [deploy](https://github.com/PowerLoom/deploy/tree/eth_india) repository. This will guide you through the setup process and enable you to build your own use case on top of the Powerloom infrastructure.
 
-We've also provided a helper library to process and decode event logs, present in `utils/event_log_decoder.py`. This library is used in the example compute processor to decode the `Send (address receiver, uint256 amount, bytes32 srcChainTxHash)` event logs emitted by the Bungee Bridge contract. It is explained in more detail below.
+You can follow our [building-use-cases](https://docs.powerloom.io/docs/build-with-powerloom/use-cases/building-new-usecase/tracking_wallet_transactions) guide to learn more about the compute processor and how to build your own.
 
-TODO: Add building use case docs link here.
+We've also provided a helper library to process and decode event logs, present in `utils/event_log_decoder.py`. 
 
 ## Event Log Decoder
 

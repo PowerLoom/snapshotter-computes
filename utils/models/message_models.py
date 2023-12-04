@@ -1,6 +1,5 @@
 from pydantic import BaseModel
 
-class BungeeBridgeSnapshot(BaseModel):
-    receiver: str
-    amount: int
-    srcChainTxHash: str
+class TrackingWalletInteractionSnapshot(BaseModel):
+    wallet_address: str
+    contract_address: str
