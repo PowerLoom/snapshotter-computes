@@ -4,7 +4,7 @@ Welcome to the Powerloom Snapshotter Node compute processor for tracking Bungee 
 
 To begin, follow the instructions in the [deploy](https://github.com/PowerLoom/deploy/tree/eth_india) repository. This will guide you through the setup process and enable you to build your own use case on top of the Powerloom infrastructure.
 
-You can follow our [building-use-cases](https://docs.powerloom.io/docs/build-with-powerloom/use-cases/building-new-usecase/tracking_wallet_transactions) guide to learn more about the compute processor and how to build your own.
+You can follow our [building-use-cases](https://docs.powerloom.io/docs/build-with-powerloom/use-cases/building-new-usecase/tracking-wallet-interactions) guide to learn more about the compute processor and how to build your own.
 
 We've also provided a helper library to process and decode event logs, present in `utils/event_log_decoder.py`. 
 
