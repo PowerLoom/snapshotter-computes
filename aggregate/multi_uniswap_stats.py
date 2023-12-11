@@ -4,13 +4,13 @@ from redis import asyncio as aioredis
 from ..utils.models.message_models import UniswapPairTotalReservesSnapshot
 from ..utils.models.message_models import UniswapStatsSnapshot
 from ..utils.models.message_models import UniswapTradesAggregateSnapshot
-from pooler.utils.callback_helpers import GenericProcessorMultiProjectAggregate
-from pooler.utils.data_utils import get_project_epoch_snapshot
-from pooler.utils.data_utils import get_sumbmission_data_bulk
-from pooler.utils.data_utils import get_tail_epoch_id
-from pooler.utils.default_logger import logger
-from pooler.utils.models.message_models import PowerloomCalculateAggregateMessage
-from pooler.utils.rpc import RpcHelper
+from snapshotter.utils.callback_helpers import GenericProcessorMultiProjectAggregate
+from snapshotter.utils.data_utils import get_project_epoch_snapshot
+from snapshotter.utils.data_utils import get_sumbmission_data_bulk
+from snapshotter.utils.data_utils import get_tail_epoch_id
+from snapshotter.utils.default_logger import logger
+from snapshotter.utils.models.message_models import PowerloomCalculateAggregateMessage
+from snapshotter.utils.rpc import RpcHelper
 
 
 class AggregateStatsProcessor(GenericProcessorMultiProjectAggregate):

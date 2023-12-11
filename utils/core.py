@@ -14,12 +14,11 @@ from .models.data_models import trade_data
 from .pricing import (
     get_token_price_in_block_range,
 )
-from pooler.modules.uniswapv3.total_value_locked import calculate_reserves, get_tick_info, get_token0_in_pool, get_token1_in_pool
-from pooler.modules.uniswapv3.total_value_locked import get_events
-from pooler.utils.default_logger import logger
-from pooler.utils.rpc import get_event_sig_and_abi
-from pooler.utils.rpc import RpcHelper
-from pooler.utils.snapshot_utils import (
+from ..total_value_locked import calculate_reserves, get_tick_info, get_token0_in_pool, get_token1_in_pool, get_events
+from snapshotter.utils.default_logger import logger
+from snapshotter.utils.rpc import get_event_sig_and_abi
+from snapshotter.utils.rpc import RpcHelper
+from snapshotter.utils.snapshot_utils import (
     get_block_details_in_block_range,
 )
 

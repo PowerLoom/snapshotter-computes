@@ -3,12 +3,12 @@ from web3 import Web3
 import asyncio
 import sys
 
-from pooler.modules.uniswapv3.utils.constants import erc20_abi
-from pooler.modules.uniswapv3.total_value_locked import _load_abi, calculate_reserves
-from pooler.modules.uniswapv3.utils.helpers import get_pair_metadata
-from pooler.settings.config import settings
-from pooler.utils.redis.redis_conn import RedisPoolCache
-from pooler.utils.rpc import RpcHelper
+from ..utils.constants import erc20_abi
+from ..total_value_locked import _load_abi, calculate_reserves
+from ..utils.helpers import get_pair_metadata
+from snapshotter.settings.config import settings
+from snapshotter.utils.redis.redis_conn import RedisPoolCache
+from snapshotter.utils.rpc import RpcHelper
 
 
 async def test_calculate_reserves():

@@ -5,11 +5,11 @@ from ..utils.helpers import get_pair_metadata
 from ..utils.models.message_models import UniswapTopPair7dSnapshot
 from ..utils.models.message_models import UniswapTopPairs7dSnapshot
 from ..utils.models.message_models import UniswapTradesAggregateSnapshot
-from pooler.utils.callback_helpers import GenericProcessorMultiProjectAggregate
-from pooler.utils.data_utils import get_sumbmission_data_bulk
-from pooler.utils.default_logger import logger
-from pooler.utils.models.message_models import PowerloomCalculateAggregateMessage
-from pooler.utils.rpc import RpcHelper
+from snapshotter.utils.callback_helpers import GenericProcessorMultiProjectAggregate
+from snapshotter.utils.data_utils import get_sumbmission_data_bulk
+from snapshotter.utils.default_logger import logger
+from snapshotter.utils.models.message_models import PowerloomCalculateAggregateMessage
+from snapshotter.utils.rpc import RpcHelper
 
 
 class AggregateTopPairsProcessor(GenericProcessorMultiProjectAggregate):

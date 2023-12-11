@@ -3,8 +3,8 @@ from typing import List
 
 from pydantic import BaseModel
 
-from pooler.utils.models.message_models import AggregateBase
-from pooler.utils.models.message_models import SnapshotBase
+from snapshotter.utils.models.message_models import AggregateBase
+from snapshotter.utils.models.message_models import SnapshotBase
 
 
 class UniswapPairTotalReservesSnapshot(SnapshotBase):

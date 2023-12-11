@@ -10,15 +10,15 @@ from eth_typing.evm import ChecksumAddress
 from web3 import Web3
 from web3.contract import Contract
 
-from pooler.modules.uniswapv3.utils.constants import helper_contract
-from pooler.modules.uniswapv3.utils.constants import UNISWAP_TRADE_EVENT_SIGS
-from pooler.modules.uniswapv3.utils.constants import pair_contract_abi
-from pooler.modules.uniswapv3.utils.constants import override_address
-from pooler.modules.uniswapv3.utils.constants import univ3_helper_bytecode
-from pooler.modules.uniswapv3.utils.constants import UNISWAP_EVENTS_ABI
-from pooler.modules.uniswapv3.utils.constants import MAX_TICK, MIN_TICK
+from .utils.constants import helper_contract
+from .utils.constants import UNISWAP_TRADE_EVENT_SIGS
+from .utils.constants import pair_contract_abi
+from .utils.constants import override_address
+from .utils.constants import univ3_helper_bytecode
+from .utils.constants import UNISWAP_EVENTS_ABI
+from .utils.constants import MAX_TICK, MIN_TICK
 
-from pooler.utils.rpc import RpcHelper, get_event_sig_and_abi
+from snapshotter.utils.rpc import RpcHelper, get_event_sig_and_abi
 
 AddressLike = Union[Address, ChecksumAddress]
 

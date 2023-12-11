@@ -1,4 +1,4 @@
-from pooler.settings.config import settings
+from snapshotter.settings.config import settings
 
 uniswap_pair_contract_tokens_addresses = (
     "uniswap:pairContract:" + settings.namespace + ":{}:PairContractTokensAddresses"

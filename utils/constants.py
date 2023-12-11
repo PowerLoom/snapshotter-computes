@@ -1,10 +1,8 @@
 from web3 import Web3
-from pooler.modules.uniswapv3 import settings
-
-from pooler.modules.uniswapv3.settings.config import settings as worker_settings
-from pooler.utils.default_logger import logger
-from pooler.utils.file_utils import read_json_file
-from pooler.utils.rpc import RpcHelper
+from ..settings.config import settings as worker_settings
+from snapshotter.utils.default_logger import logger
+from snapshotter.utils.file_utils import read_json_file
+from snapshotter.utils.rpc import RpcHelper
 
 max_gas_static_call = 30_000_000_000
 
