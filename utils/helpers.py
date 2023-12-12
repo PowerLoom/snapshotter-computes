@@ -15,8 +15,8 @@ from .constants import current_node
 from .constants import erc20_abi
 from .constants import pair_contract_abi
 from .constants import quoter_1inch_contract_abi
-from pooler.utils.default_logger import logger
-from pooler.utils.rpc import RpcHelper, get_contract_abi_dict
+from snapshotter.utils.default_logger import logger
+from snapshotter.utils.rpc import RpcHelper, get_contract_abi_dict
 
 
 helper_logger = logger.bind(module="PowerLoom|Uniswap|Helpers")

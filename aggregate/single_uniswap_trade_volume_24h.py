@@ -3,15 +3,15 @@ from redis import asyncio as aioredis
 
 from ..utils.models.message_models import UniswapTradesAggregateSnapshot
 from ..utils.models.message_models import UniswapTradesSnapshot
-from pooler.utils.callback_helpers import GenericProcessorSingleProjectAggregate
-from pooler.utils.data_utils import get_project_epoch_snapshot
-from pooler.utils.data_utils import get_project_epoch_snapshot_bulk
-from pooler.utils.data_utils import get_project_first_epoch
-from pooler.utils.data_utils import get_submission_data
-from pooler.utils.data_utils import get_tail_epoch_id
-from pooler.utils.default_logger import logger
-from pooler.utils.models.message_models import PowerloomSnapshotSubmittedMessage
-from pooler.utils.rpc import RpcHelper
+from snapshotter.utils.callback_helpers import GenericProcessorSingleProjectAggregate
+from snapshotter.utils.data_utils import get_project_epoch_snapshot
+from snapshotter.utils.data_utils import get_project_epoch_snapshot_bulk
+from snapshotter.utils.data_utils import get_project_first_epoch
+from snapshotter.utils.data_utils import get_submission_data
+from snapshotter.utils.data_utils import get_tail_epoch_id
+from snapshotter.utils.default_logger import logger
+from snapshotter.utils.models.message_models import PowerloomSnapshotSubmittedMessage
+from snapshotter.utils.rpc import RpcHelper
 
 
 class AggregateTradeVolumeProcessor(GenericProcessorSingleProjectAggregate):

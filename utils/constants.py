@@ -1,10 +1,8 @@
 from web3 import Web3
-from pooler.modules.uniswapv3 import settings
-
-from pooler.modules.uniswapv3.settings.config import settings as worker_settings
-from pooler.utils.default_logger import logger
-from pooler.utils.file_utils import read_json_file
-from pooler.utils.rpc import RpcHelper
+from ..settings.config import settings as worker_settings
+from snapshotter.utils.default_logger import logger
+from snapshotter.utils.file_utils import read_json_file
+from snapshotter.utils.rpc import RpcHelper
 
 max_gas_static_call = 30_000_000_000
 
@@ -45,7 +43,7 @@ factory_contract_abi = read_json_file(
 
 # load helper abi
 helper_contract_abi = read_json_file(
-    "pooler/tests/static/abi/UniV3Helper.json",
+    "snapshotter/modules/computes/static/abis/UniV3Helper.json",
 )
 
 override_address = Web3.to_checksum_address("0x" + "1" * 40)
@@ -88,7 +86,7 @@ eth_usdt_contract_obj = current_node["web3_client"].eth.contract(
 
 # 1 inch quoter
 quoter_1inch_contract_abi = read_json_file(
-    "pooler/modules/uniswapv3/static/abis/OneInchQuoter.json",
+    "snapshotter/modules/computes/static/abis/OneInchQuoter.json",
 )
 
 quoter_1inch_contract_obj = current_node["web3_client"].eth.contract(

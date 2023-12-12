@@ -10,15 +10,16 @@ from eth_typing.evm import ChecksumAddress
 from web3 import Web3
 from web3.contract import Contract
 
-from pooler.modules.uniswapv3.utils.constants import helper_contract
-from pooler.modules.uniswapv3.utils.constants import UNISWAP_TRADE_EVENT_SIGS
-from pooler.modules.uniswapv3.utils.constants import pair_contract_abi
-from pooler.modules.uniswapv3.utils.constants import override_address
-from pooler.modules.uniswapv3.utils.constants import univ3_helper_bytecode
-from pooler.modules.uniswapv3.utils.constants import UNISWAP_EVENTS_ABI
-from pooler.modules.uniswapv3.utils.constants import MAX_TICK, MIN_TICK
+from .utils.constants import helper_contract
+from .utils.constants import UNISWAP_TRADE_EVENT_SIGS
+from .utils.constants import pair_contract_abi
+from .utils.constants import override_address
+from .utils.constants import univ3_helper_bytecode
+from .utils.constants import UNISWAP_EVENTS_ABI
+from .utils.constants import MAX_TICK, MIN_TICK
+from .redis_keys import uniswap_cached_tick_data_block_height
 
-from pooler.utils.rpc import RpcHelper, get_event_sig_and_abi
+from snapshotter.utils.rpc import RpcHelper, get_event_sig_and_abi
 
 AddressLike = Union[Address, ChecksumAddress]
 
@@ -49,11 +50,13 @@ def calculate_tvl_from_ticks(ticks, pair_metadata, sqrt_price):
     if len(ticks) == 0:
         return (0, 0)
 
-    if pair_metadata["pair"]["fee"] == 3000:
+    int_fee = int(pair_metadata["pair"]["fee"])
+
+    if int_fee == 3000:
         tick_spacing = 60
-    elif pair_metadata["pair"]["fee"] == 500:
+    elif int_fee == 500:
         tick_spacing = 10
-    elif pair_metadata["pair"]["fee"] == 10000:
+    elif int_fee == 10000:
         tick_spacing = 200
 # https://atiselsts.github.io/pdfs/uniswap-v3-liquidity-math.pdf
     for i in range(len(ticks)):
@@ -170,6 +173,7 @@ async def calculate_reserves(
         pair_address=pair_address,
         from_block=from_block,
         redis_conn=redis_conn,
+        pair_per_token_metadata=pair_per_token_metadata,
 
     )
 
@@ -188,19 +192,56 @@ async def get_tick_info(
         pair_address: str,  
         from_block,
         redis_conn,
+        pair_per_token_metadata,
     
 ):
+    
+    cached_tick_dict = await redis_conn.zrangebyscore(
+        name=uniswap_cached_tick_data_block_height.format(
+                Web3.to_checksum_address(pair_address),
+        ),
+        min=int(from_block),
+        max=int(from_block),
+    )
+
+    if cached_tick_dict:
+        tick_dict = json.loads(cached_tick_dict[0])
+        return tick_dict["ticks_list"], tick_dict["slot0"]
+    
         # get token price function takes care of its own rate limit
     overrides = {
         override_address: {"code": univ3_helper_bytecode},
     }
     current_node = rpc_helper.get_current_node()
     pair_contract = current_node['web3_client'].eth.contract(address=pair_address, abi=pair_contract_abi)
+    int_fee = int(pair_per_token_metadata["pair"]["fee"])
+
     # batch rpc calls for tick data to prevent oog errors
-    tick_tasks = [
-        helper_contract.functions.getTicks(pair_address, MIN_TICK, int(0)),   
-        helper_contract.functions.getTicks(pair_address, int(0), MAX_TICK),   
-    ]
+    if int_fee == 100:
+        step = (MAX_TICK - MIN_TICK) // 4
+        tick_tasks = []
+
+        for i in range(MIN_TICK, MAX_TICK, step):
+            upper = i + step
+
+            # account for rounding
+            if upper > MAX_TICK or (upper + step) > MAX_TICK:
+                tick_tasks.append(helper_contract.functions.getTicks(pair_address, i, MAX_TICK))
+
+            # upper - 1 because getTicks() is inclusive for start and end ticks
+            else:
+                tick_tasks.append(helper_contract.functions.getTicks(pair_address, i, upper - 1))
+
+    elif int_fee == 500:
+        tick_tasks = [
+            helper_contract.functions.getTicks(pair_address, MIN_TICK, int(-1)),   
+            helper_contract.functions.getTicks(pair_address, int(0), MAX_TICK),   
+        ]
+
+    else:
+        tick_tasks = [
+            helper_contract.functions.getTicks(pair_address, MIN_TICK, MAX_TICK) 
+        ]
     # for i in range(MIN_TICK, MAX_TICK, 221818):
     #     next_tick = MAX_TICK if i + 221818 > MAX_TICK else i + 221818
     #     tick_tasks.append(
@@ -217,8 +258,33 @@ async def get_tick_info(
         rpc_helper.web3_call(slot0_tasks, redis_conn, block=from_block,),
         )
         
-    ticks = functools.reduce(lambda x, y: x + y, tickDataResponse)
-    ticks_list = transform_tick_bytes_to_list(ticks)
+    ticks_list = []
+    for ticks in tickDataResponse:
+        ticks_list.append(transform_tick_bytes_to_list(ticks))
+
+    ticks_list = functools.reduce(lambda x, y: x + y, ticks_list)
     
     slot0 = slot0Response[0]
+
+    if len(ticks_list) > 0:
+        redis_cache_mapping = {
+            json.dumps({"blockHeight": from_block, "slot0": slot0, "ticks_list": ticks_list,}): int(from_block)
+        }
+
+        await asyncio.gather(
+            redis_conn.zadd(
+                name=uniswap_cached_tick_data_block_height.format(
+                    Web3.to_checksum_address(pair_address),
+                ),
+                mapping=redis_cache_mapping,
+            ),
+            redis_conn.zremrangebyscore(
+                name=uniswap_cached_tick_data_block_height.format(
+                    Web3.to_checksum_address(pair_address),
+                ),
+                min=0,
+                max=from_block - 20, # shouldn't need to keep all tick data in this implementation
+            ),
+        )
+        
     return ticks_list, slot0

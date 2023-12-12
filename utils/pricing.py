@@ -3,15 +3,15 @@ import json
 from redis import asyncio as aioredis
 from web3 import Web3
 
-from pooler.modules.uniswapv3.utils.helpers import get_token_eth_price_dict
+from ..utils.helpers import get_token_eth_price_dict
 
 from ..redis_keys import (
     uniswap_pair_cached_block_height_token_price,
 )
 from ..settings.config import settings as worker_settings
-from pooler.utils.default_logger import logger
-from pooler.utils.rpc import RpcHelper
-from pooler.utils.snapshot_utils import get_eth_price_usd
+from snapshotter.utils.default_logger import logger
+from snapshotter.utils.rpc import RpcHelper
+from snapshotter.utils.snapshot_utils import get_eth_price_usd
 
 pricing_logger = logger.bind(module="PowerLoom|Uniswap|Pricing")
 

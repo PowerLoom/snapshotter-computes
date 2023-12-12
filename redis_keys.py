@@ -1,4 +1,4 @@
-from pooler.settings.config import settings
+from snapshotter.settings.config import settings
 
 uniswap_pair_contract_tokens_addresses = (
     "uniswap:pairContract:" + settings.namespace + ":{}:PairContractTokensAddresses"
@@ -53,4 +53,8 @@ uniswap_token_derived_eth_cached_block_height = (
 # to build modules grabbing data from multiple protocols all token eth prices can be stored in the same place
 uniswap_cached_block_height_token_eth_price = (
     "uniswap:pairContract:" + settings.namespace + ":{}:cachedBlockHeightTokenEthPrice"
+)
+
+uniswap_cached_tick_data_block_height = (
+    "uniswap:pairContract:" + settings.namespace + ":{}:cachedBlockHeightTickData"
 )
