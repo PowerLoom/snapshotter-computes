@@ -17,6 +17,7 @@ from .utils.constants import override_address
 from .utils.constants import univ3_helper_bytecode
 from .utils.constants import UNISWAP_EVENTS_ABI
 from .utils.constants import MAX_TICK, MIN_TICK
+from .redis_keys import uniswap_cached_tick_data_block_height
 
 from snapshotter.utils.rpc import RpcHelper, get_event_sig_and_abi
 
@@ -194,6 +195,19 @@ async def get_tick_info(
         pair_per_token_metadata,
     
 ):
+    
+    cached_tick_dict = await redis_conn.zrangebyscore(
+        name=uniswap_cached_tick_data_block_height.format(
+                Web3.to_checksum_address(pair_address),
+        ),
+        min=int(from_block),
+        max=int(from_block),
+    )
+
+    if cached_tick_dict:
+        tick_dict = json.loads(cached_tick_dict[0])
+        return tick_dict["ticks_list"], tick_dict["slot0"]
+    
         # get token price function takes care of its own rate limit
     overrides = {
         override_address: {"code": univ3_helper_bytecode},
@@ -251,4 +265,26 @@ async def get_tick_info(
     ticks_list = functools.reduce(lambda x, y: x + y, ticks_list)
     
     slot0 = slot0Response[0]
+
+    if len(ticks_list) > 0:
+        redis_cache_mapping = {
+            json.dumps({"blockHeight": from_block, "slot0": slot0, "ticks_list": ticks_list,}): int(from_block)
+        }
+
+        await asyncio.gather(
+            redis_conn.zadd(
+                name=uniswap_cached_tick_data_block_height.format(
+                    Web3.to_checksum_address(pair_address),
+                ),
+                mapping=redis_cache_mapping,
+            ),
+            redis_conn.zremrangebyscore(
+                name=uniswap_cached_tick_data_block_height.format(
+                    Web3.to_checksum_address(pair_address),
+                ),
+                min=0,
+                max=from_block - 20, # shouldn't need to keep all tick data in this implementation
+            ),
+        )
+        
     return ticks_list, slot0

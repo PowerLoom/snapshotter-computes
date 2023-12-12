@@ -16,7 +16,7 @@ async def test_calculate_reserves():
     pair_address = Web3.to_checksum_address(
         "0x7858E59e0C01EA06Df3aF3D20aC7B0003275D4Bf"
     )
-    from_block = 18746454
+    from_block = 18766112
     rpc_helper = RpcHelper()
     aioredis_pool = RedisPoolCache()
 
@@ -39,7 +39,7 @@ async def test_calculate_reserves():
     w3 = Web3(Web3.HTTPProvider(settings.rpc.full_nodes[0].url))
     contract = w3.eth.contract(
         address=pair_address,
-        abi=_load_abi("pooler/tests/static/abi/UniswapV3Pool.json"),
+        abi=_load_abi("snapshotter/modules/computes/static/abis/UniswapV3Pool.json"),
     )
     token0 = contract.functions.token0().call()
     token1 = contract.functions.token1().call()

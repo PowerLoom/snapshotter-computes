@@ -43,7 +43,7 @@ factory_contract_abi = read_json_file(
 
 # load helper abi
 helper_contract_abi = read_json_file(
-    "pooler/tests/static/abi/UniV3Helper.json",
+    "snapshotter/modules/computes/static/abis/UniV3Helper.json",
 )
 
 override_address = Web3.to_checksum_address("0x" + "1" * 40)
@@ -86,7 +86,7 @@ eth_usdt_contract_obj = current_node["web3_client"].eth.contract(
 
 # 1 inch quoter
 quoter_1inch_contract_abi = read_json_file(
-    "pooler/modules/uniswapv3/static/abis/OneInchQuoter.json",
+    "snapshotter/modules/computes/static/abis/OneInchQuoter.json",
 )
 
 quoter_1inch_contract_obj = current_node["web3_client"].eth.contract(
