@@ -2,7 +2,6 @@ from typing import Dict
 from typing import List
 
 from pydantic import BaseModel
-
 from snapshotter.utils.models.message_models import AggregateBase
 
 
@@ -15,6 +14,21 @@ class SnapshotBase(BaseModel):
     contract: str
     chainHeightRange: EpochBaseSnapshot
     timestamp: int
+
+
+class AavePoolTotalAssetSnapshot(SnapshotBase):
+    totalAToken: Dict[
+        str,
+        float,
+    ]  # block number to corresponding total supply
+    liquidityRate: Dict[str, float]
+    liquidityIndex: Dict[str, float]
+    totalVariableDebt: Dict[str, float]
+    totalStableDebt: Dict[str, float]
+    variableBorrowRate: Dict[str, float]
+    stableBorrowRate: Dict[str, float]
+    variableBorrowIndex: Dict[str, float]
+    lastUpdateTimestamp: Dict[str, int]
 
 
 class UniswapPairTotalReservesSnapshot(SnapshotBase):

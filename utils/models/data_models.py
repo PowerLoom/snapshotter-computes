@@ -2,6 +2,46 @@ from typing import Dict
 from typing import List
 
 from pydantic import BaseModel
+from pydantic.dataclasses import dataclass
+
+
+class ReserveConfiguration(BaseModel):
+    data: int
+
+
+@dataclass
+class data_provider_reserve_data():
+    unbacked: int
+    accruedToTreasuryScaled: int
+    totalAToken: int
+    totalStableDebt: int
+    totalVariableDebt: int
+    liquidityRate: int
+    variableBorrowRate: int
+    stableBorrowRate: int
+    averageStableBorrowRate: int
+    liquidityIndex: int
+    variableBorrowIndex: int
+    lastUpdateTimestamp: int
+
+
+@dataclass
+class pool_reserve_data():
+    configuration: int
+    liquidityIndex: int
+    currentLiquidityRate: int
+    variableBorrowIndex: int
+    currentVariableBorrowRate: int
+    currentStableBorrowRate: int
+    lastUpdateTimestamp: int
+    reserve_id: int
+    aTokenAddress: str
+    stableDebtTokenAddress: str
+    variableDebtTokenAddress: str
+    interestRateStrategyAddress: str
+    accruedToTreasury: int
+    unbacked: int
+    isolationModeTotalDebt: int
 
 
 class trade_data(BaseModel):

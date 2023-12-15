@@ -1,5 +1,9 @@
 from snapshotter.settings.config import settings
 
+aave_asset_contract_data = (
+    'aave:assetContract:' + settings.namespace + ':{}:AssetContractData'
+)
+
 uniswap_pair_contract_tokens_addresses = (
     'uniswap:pairContract:' + settings.namespace + ':{}:PairContractTokensAddresses'
 )

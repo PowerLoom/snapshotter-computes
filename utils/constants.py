@@ -1,86 +1,76 @@
-from web3 import Web3
-
-from ..settings.config import settings as worker_settings
 from snapshotter.utils.default_logger import logger
 from snapshotter.utils.file_utils import read_json_file
 from snapshotter.utils.rpc import RpcHelper
+from web3 import Web3
 
-constants_logger = logger.bind(module='PowerLoom|Uniswap|Constants')
+from ..settings.config import settings as worker_settings
+
+constants_logger = logger.bind(module='PowerLoom|Aave|Constants')
 # Getting current node
 
 rpc_helper = RpcHelper()
 current_node = rpc_helper.get_current_node()
 
 # LOAD ABIs
-pair_contract_abi = read_json_file(
-    worker_settings.uniswap_contract_abis.pair_contract,
+pool_contract_abi = read_json_file(
+    worker_settings.aave_contract_abis.pool_contract,
     constants_logger,
 )
+
+pool_data_provider_abi = read_json_file(
+    worker_settings.aave_contract_abis.pool_data_provider_contract,
+    constants_logger,
+)
+
 erc20_abi = read_json_file(
-    worker_settings.uniswap_contract_abis.erc20,
+    worker_settings.aave_contract_abis.erc20,
     constants_logger,
 )
-router_contract_abi = read_json_file(
-    worker_settings.uniswap_contract_abis.router,
-    constants_logger,
-)
-uniswap_trade_events_abi = read_json_file(
-    worker_settings.uniswap_contract_abis.trade_events,
-    constants_logger,
-)
-factory_contract_abi = read_json_file(
-    worker_settings.uniswap_contract_abis.factory,
+
+a_token_abi = read_json_file(
+    worker_settings.aave_contract_abis.a_token,
     constants_logger,
 )
 
 
-# Init Uniswap V2 Core contract Objects
-router_contract_obj = current_node['web3_client'].eth.contract(
+# Init Aave V3 Core contract Objects
+pool_contract_obj = current_node['web3_client'].eth.contract(
     address=Web3.toChecksumAddress(
-        worker_settings.contract_addresses.iuniswap_v2_router,
+        worker_settings.contract_addresses.aave_v3_pool,
     ),
-    abi=router_contract_abi,
+    abi=pool_contract_abi,
 )
-factory_contract_obj = current_node['web3_client'].eth.contract(
+
+pool_data_provider_contract_obj = current_node['web3_client'].eth.contract(
     address=Web3.toChecksumAddress(
-        worker_settings.contract_addresses.iuniswap_v2_factory,
+        worker_settings.contract_addresses.pool_data_provider,
     ),
-    abi=factory_contract_abi,
-)
-dai_eth_contract_obj = current_node['web3_client'].eth.contract(
-    address=Web3.toChecksumAddress(
-        worker_settings.contract_addresses.DAI_WETH_PAIR,
-    ),
-    abi=pair_contract_abi,
-)
-usdc_eth_contract_obj = current_node['web3_client'].eth.contract(
-    address=Web3.toChecksumAddress(
-        worker_settings.contract_addresses.USDC_WETH_PAIR,
-    ),
-    abi=pair_contract_abi,
-)
-eth_usdt_contract_obj = current_node['web3_client'].eth.contract(
-    address=Web3.toChecksumAddress(
-        worker_settings.contract_addresses.USDT_WETH_PAIR,
-    ),
-    abi=pair_contract_abi,
+    abi=pool_data_provider_abi,
 )
 
 
 # FUNCTION SIGNATURES and OTHER CONSTANTS
-UNISWAP_TRADE_EVENT_SIGS = {
-    'Swap': 'Swap(address,uint256,uint256,uint256,uint256,address)',
-    'Mint': 'Mint(address,uint256,uint256)',
-    'Burn': 'Burn(address,uint256,uint256,address)',
+AAVE_EVENT_SIGS = {
+    'Withdraw': 'Withdraw(address,address,address,uint256)',
+    'Supply': 'Supply(address,address,address,uint256,uint16)',
+    'LiquidationCall': 'LiquidationCall(address,address,address,uint256,uint256,address,bool)',
+    'ReserveDataUpdated': 'ReserveDataUpdated(address,uint256,uint256,uint256,uint256,uint256)',
+    'Borrow': 'Borrow(address,address,address,uint256,uint8,uint256,uint16)',
 }
-UNISWAP_EVENTS_ABI = {
-    'Swap': usdc_eth_contract_obj.events.Swap._get_event_abi(),
-    'Mint': usdc_eth_contract_obj.events.Mint._get_event_abi(),
-    'Burn': usdc_eth_contract_obj.events.Burn._get_event_abi(),
+AAVE_EVENTS_ABI = {
+    'Withdraw': pool_contract_obj.events.Withdraw._get_event_abi(),
+    'Supply': pool_contract_obj.events.Supply._get_event_abi(),
+    'LiquidationCall': pool_contract_obj.events.LiquidationCall._get_event_abi(),
+    'ReserveDataUpdated': pool_contract_obj.events.ReserveDataUpdated._get_event_abi(),
+    'Borrow': pool_contract_obj.events.Borrow._get_event_abi(),
 }
+AAVE_CORE_EVENTS = ('Withdraw', 'Supply')
 tokens_decimals = {
     'USDT': 6,
     'DAI': 18,
     'USDC': 6,
     'WETH': 18,
 }
+
+ray = 1e27
+seconds_in_year = 31536000
