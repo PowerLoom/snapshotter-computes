@@ -3,7 +3,7 @@ from redis import asyncio as aioredis
 
 from ..utils.models.message_models import UniswapTradesAggregateSnapshot
 from ..utils.models.message_models import UniswapTradesSnapshot
-from snapshotter.utils.callback_helpers import GenericProcessorSingleProjectAggregate
+from snapshotter.utils.callback_helpers import GenericProcessorAggregate
 from snapshotter.utils.data_utils import get_project_epoch_snapshot
 from snapshotter.utils.data_utils import get_project_epoch_snapshot_bulk
 from snapshotter.utils.data_utils import get_project_first_epoch
@@ -14,7 +14,7 @@ from snapshotter.utils.models.message_models import PowerloomSnapshotSubmittedMe
 from snapshotter.utils.rpc import RpcHelper
 
 
-class AggregateTradeVolumeProcessor(GenericProcessorSingleProjectAggregate):
+class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
     transformation_lambdas = None
 
     def __init__(self) -> None:

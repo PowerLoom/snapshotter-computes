@@ -4,9 +4,17 @@ from typing import List
 from pydantic import BaseModel
 
 from snapshotter.utils.models.message_models import AggregateBase
-from snapshotter.utils.models.message_models import SnapshotBase
 
 
+class EpochBaseSnapshot(BaseModel):
+    begin: int
+    end: int
+
+
+class SnapshotBase(BaseModel):
+    contract: str
+    chainHeightRange: EpochBaseSnapshot
+    timestamp: int
 class UniswapPairTotalReservesSnapshot(SnapshotBase):
     token0Reserves: Dict[
         str,

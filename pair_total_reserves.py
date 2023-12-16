@@ -5,11 +5,13 @@ from typing import Union
 
 from redis import asyncio as aioredis
 
+from snapshotter.utils.models.message_models import PowerloomSnapshotProcessMessage
+
 from .utils.core import get_pair_reserves
 from .utils.models.message_models import UniswapPairTotalReservesSnapshot
 from snapshotter.utils.callback_helpers import GenericProcessorSnapshot
 from snapshotter.utils.default_logger import logger
-from snapshotter.utils.models.message_models import EpochBaseSnapshot
+from .utils.models.message_models import EpochBaseSnapshot
 from snapshotter.utils.rpc import RpcHelper
 
 
@@ -22,9 +24,7 @@ class PairTotalReservesProcessor(GenericProcessorSnapshot):
 
     async def compute(
         self,
-        min_chain_height: int,
-        max_chain_height: int,
-        data_source_contract_address: str,
+        epoch: PowerloomSnapshotProcessMessage,
         redis_conn: aioredis.Redis,
         rpc_helper: RpcHelper,
     ) -> Optional[Dict[str, Union[int, float]]]:
@@ -35,7 +35,11 @@ class PairTotalReservesProcessor(GenericProcessorSnapshot):
         epoch_usd_reserves_snapshot_map_token0 = dict()
         epoch_usd_reserves_snapshot_map_token1 = dict()
         max_block_timestamp = int(time.time())
-
+        self._logger.debug(
+            f"epoch {epoch} computation init time {time.time()}")
+        data_source_contract_address = epoch.data_source
+        min_chain_height = epoch.begin
+        max_chain_height = epoch.end
         self._logger.debug(
             f"pair reserves {data_source_contract_address} computation init time {time.time()}"
         )

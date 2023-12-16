@@ -6,14 +6,14 @@ from ..utils.models.message_models import UniswapPairTotalReservesSnapshot
 from ..utils.models.message_models import UniswapTopPair24hSnapshot
 from ..utils.models.message_models import UniswapTopPairs24hSnapshot
 from ..utils.models.message_models import UniswapTradesAggregateSnapshot
-from snapshotter.utils.callback_helpers import GenericProcessorMultiProjectAggregate
-from snapshotter.utils.data_utils import get_sumbmission_data_bulk
+from snapshotter.utils.callback_helpers import GenericProcessorAggregate
+from snapshotter.utils.data_utils import get_submission_data_bulk
 from snapshotter.utils.default_logger import logger
 from snapshotter.utils.models.message_models import PowerloomCalculateAggregateMessage
 from snapshotter.utils.rpc import RpcHelper
 
 
-class AggregateTopPairsProcessor(GenericProcessorMultiProjectAggregate):
+class AggregateTopPairsProcessor(GenericProcessorAggregate):
     transformation_lambdas = None
 
     def __init__(self) -> None:
@@ -39,7 +39,7 @@ class AggregateTopPairsProcessor(GenericProcessorMultiProjectAggregate):
         snapshot_mapping = {}
         all_pair_metadata = {}
 
-        snapshot_data = await get_sumbmission_data_bulk(
+        snapshot_data = await get_submission_data_bulk(
             redis,
             [msg.snapshotCid for msg in msg_obj.messages],
             ipfs_reader,
