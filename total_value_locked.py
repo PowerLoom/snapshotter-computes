@@ -214,40 +214,20 @@ async def get_tick_info(
     }
     current_node = rpc_helper.get_current_node()
     pair_contract = current_node['web3_client'].eth.contract(address=pair_address, abi=pair_contract_abi)
-    int_fee = int(pair_per_token_metadata["pair"]["fee"])
 
     # batch rpc calls for tick data to prevent oog errors
-    if int_fee == 100:
-        step = (MAX_TICK - MIN_TICK) // 4
-        tick_tasks = []
-
-        for i in range(MIN_TICK, MAX_TICK, step):
-            upper = i + step
-
-            # account for rounding
-            if upper > MAX_TICK or (upper + step) > MAX_TICK:
-                tick_tasks.append(helper_contract.functions.getTicks(pair_address, i, MAX_TICK))
-
-            # upper - 1 because getTicks() is inclusive for start and end ticks
-            else:
-                tick_tasks.append(helper_contract.functions.getTicks(pair_address, i, upper - 1))
-
-    elif int_fee == 500:
-        tick_tasks = [
-            helper_contract.functions.getTicks(pair_address, MIN_TICK, int(-1)),   
-            helper_contract.functions.getTicks(pair_address, int(0), MAX_TICK),   
-        ]
-
-    else:
-        tick_tasks = [
-            helper_contract.functions.getTicks(pair_address, MIN_TICK, MAX_TICK) 
-        ]
-    # for i in range(MIN_TICK, MAX_TICK, 221818):
-    #     next_tick = MAX_TICK if i + 221818 > MAX_TICK else i + 221818
-    #     tick_tasks.append(
-    #         helper_contract.functions.getTicks(pair_address, i, next_tick)
-        # )
-
+    # step must be a divisor of 887272 * 2
+    step = (MAX_TICK - MIN_TICK) // 16
+    tick_tasks = []
+   
+    # getTicks() is inclusive for start and end ticks
+    for idx in range(MIN_TICK, MAX_TICK+1, step):
+        tick_tasks.append(
+            helper_contract.functions.getTicks(
+                pair_address, idx, min(idx + step - 1, MAX_TICK),
+            ),
+        )
+    
     slot0_tasks = [
         pair_contract.functions.slot0(),
     ]
