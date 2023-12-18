@@ -220,18 +220,15 @@ async def get_tick_info(
     # batch rpc calls for tick data to prevent oog errors
     step = (MAX_TICK - MIN_TICK) // 20
     tick_tasks = []
-
-    for i in range(MIN_TICK, MAX_TICK, step):
-        upper = i + step
-
-        # account for rounding
-        if upper > MAX_TICK or (upper + step) > MAX_TICK:
-            tick_tasks.append(helper_contract.functions.getTicks(pair_address, i, MAX_TICK))
-
-        # upper - 1 because getTicks() is inclusive for start and end ticks
-        else:
-            tick_tasks.append(helper_contract.functions.getTicks(pair_address, i, upper - 1))
-
+    
+    # getTicks() is inclusive for start and end ticks
+    for idx in range(MIN_TICK, MAX_TICK+1, step):
+        tick_tasks.append(
+            helper_contract.functions.getTicks(
+                pair_address, idx, min(idx + step - 1, MAX_TICK),
+            ),
+        )
+    
     slot0_tasks = [
         pair_contract.functions.slot0(),
     ]
