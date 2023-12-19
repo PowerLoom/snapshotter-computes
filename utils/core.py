@@ -108,11 +108,13 @@ async def get_pair_reserves(
 
     initial_reserves = None
 
+    # cached reserves flag to dictate whether we grab events from from_block or from_block + 1
+    cached_reserves_flag = False
     if cached_reserves_dict:
         loaded_dict = json.loads(cached_reserves_dict[0])
         core_logger.info(f'loaded_dict: {loaded_dict}')
         initial_reserves = [int(loaded_dict['token0_reserves']), int(loaded_dict['token1_reserves'])]
-
+        cached_reserves_flag = True
     else:
         initial_reserves = await calculate_reserves(
             pair_address,
@@ -133,7 +135,7 @@ async def get_pair_reserves(
     events = await get_events(
         pair_address=pair_address,
         rpc=rpc_helper,
-        from_block=from_block,
+        from_block=from_block if cached_reserves_flag else from_block + 1,
         to_block=to_block,
         redis_con=redis_conn,
     )
