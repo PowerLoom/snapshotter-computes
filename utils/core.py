@@ -228,7 +228,7 @@ async def get_pair_reserves(
                 max=to_block - 20,
             ),
         )
-        core_logger.debug(' penguin updated redis cache')
+        
     else:
         core_logger.error(
             (
