@@ -123,7 +123,7 @@ async def get_pair_reserves(
             redis_conn
         )
 
-    core_logger.debug(f"initial_reserves: {initial_reserves}")
+    
 
     core_logger.debug(
         f"Total reserves fetched tick data for {pair_address} of {initial_reserves} for block {from_block}",
