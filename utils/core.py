@@ -112,7 +112,6 @@ async def get_pair_reserves(
     
     if cached_reserves_dict:
         loaded_dict = json.loads(cached_reserves_dict[0])
-        core_logger.info(f'loaded_dict: {loaded_dict}')
         initial_reserves = [int(loaded_dict['token0_reserves']), int(loaded_dict['token1_reserves'])]
     
     else:
