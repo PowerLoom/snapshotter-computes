@@ -219,7 +219,19 @@ async def get_tick_info(
 
     # batch rpc calls for tick data to prevent oog errors
     # step must be a divisor of 887272 * 2
+    fee = pair_per_token_metadata["pair"]["fee"]
+
+    # if fee is 100
     step = (MAX_TICK - MIN_TICK) // 16
+
+    # we can cut down on rpc requests by increasing step size for higher fees
+    if fee == 500:
+        step = (MAX_TICK - MIN_TICK) // 4
+    elif fee == 3000:
+        step = MAX_TICK - MIN_TICK  // 2
+    elif fee == 10000:
+        step = MAX_TICK - MIN_TICK
+
     tick_tasks = []
    
     # getTicks() is inclusive for start and end ticks

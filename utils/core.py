@@ -5,6 +5,7 @@ import json
 from redis import asyncio as aioredis
 from web3 import Web3
 
+from snapshotter.modules.computes.redis_keys import uniswap_pair_cached_block_height_reserves
 from .constants import UNISWAP_EVENTS_ABI, UNISWAPV3_FEE_DIV
 from .constants import UNISWAP_TRADE_EVENT_SIGS
 from .helpers import get_pair_metadata
@@ -69,7 +70,7 @@ async def get_pair_reserves(
     core_logger.debug(
         ("total pair reserves fetched block details for epoch for:" f" {pair_address}"),
     )
-
+    
     token0_price_map, token1_price_map = await asyncio.gather(
         get_token_price_in_block_range(
             token_metadata=pair_per_token_metadata["token0"],
@@ -95,16 +96,31 @@ async def get_pair_reserves(
         f"Total reserves fetched token prices for: {pair_address}",
     )
 
-    core_logger.debug(f"token0_price_map: {token0_price_map}") 
-    core_logger.debug(f"token1_price_map: {token1_price_map}")  
-
-    initial_reserves = await calculate_reserves(
-        pair_address,
-        from_block,
-        pair_per_token_metadata,
-        rpc_helper,
-        redis_conn
+    # attempt to fetch previous epoch end block reserves from redis
+    
+    cached_reserves_dict = await redis_conn.zrangebyscore(
+        name=uniswap_pair_cached_block_height_reserves.format(
+            Web3.to_checksum_address(pair_address),
+        ),
+        min=int(from_block - 1),
+        max=int(from_block - 1),
     )
+
+    initial_reserves = None
+
+    if cached_reserves_dict:
+        loaded_dict = json.loads(cached_reserves_dict[0])
+        core_logger.info(f'loaded_dict: {loaded_dict}')
+        initial_reserves = [int(loaded_dict['token0_reserves']), int(loaded_dict['token1_reserves'])]
+
+    else:
+        initial_reserves = await calculate_reserves(
+            pair_address,
+            from_block,
+            pair_per_token_metadata,
+            rpc_helper,
+            redis_conn
+        )
 
     core_logger.debug(f"initial_reserves: {initial_reserves}")
 
@@ -186,6 +202,38 @@ async def get_pair_reserves(
         ),
     )
 
+    # here we store the final block in the epoch reserves in redis so they may be used as
+    # a starting point in the next epoch
+    end_block = pair_reserves_dict.get(to_block, None)
+
+    if end_block:
+        redis_cache_mapping = {
+            json.dumps({"blockHeight": to_block, "token0_reserves": end_block['token0']['reserves'], "token1_reserves": end_block['token1']['reserves']}): int(to_block)
+        }
+
+        await asyncio.gather(
+            redis_conn.zadd(
+                name=uniswap_pair_cached_block_height_reserves.format(
+                    Web3.to_checksum_address(pair_address),
+                ),
+                mapping=redis_cache_mapping,
+            ),
+            redis_conn.zremrangebyscore(
+                name=uniswap_pair_cached_block_height_reserves.format(
+                    Web3.to_checksum_address(pair_address),
+                ),
+                min=0,
+                max=to_block - 20,
+            ),
+        )
+        core_logger.debug(' penguin updated redis cache')
+    else:
+        core_logger.error(
+            (
+                "Error attempting to set end block pair total reserves for pair_contract:"
+                f" {pair_address} | epoch: {from_block} - {to_block}"
+            ),
+        )
     return pair_reserves_dict
         
 def extract_trade_volume_log(

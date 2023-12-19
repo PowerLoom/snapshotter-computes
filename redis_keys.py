@@ -11,23 +11,23 @@ uinswap_token_pair_contract_mapping = (
     "uniswap:tokens:" + settings.namespace + ":PairContractAddress"
 )
 
-uniswap_V2_summarized_snapshots_zset = (
-    "uniswap:V2PairsSummarySnapshot:" + settings.namespace + ":snapshotsZset"
+uniswap_V3_summarized_snapshots_zset = (
+    "uniswap:V3PairsSummarySnapshot:" + settings.namespace + ":snapshotsZset"
 )
-uniswap_V2_snapshot_at_blockheight = (
-    "uniswap:V2PairsSummarySnapshot:" + settings.namespace + ":snapshot:{}"
+uniswap_V3_snapshot_at_blockheight = (
+    "uniswap:V3PairsSummarySnapshot:" + settings.namespace + ":snapshot:{}"
 )  # block_height
-uniswap_v2_daily_stats_snapshot_zset = (
-    "uniswap:V2DailyStatsSnapshot:" + settings.namespace + ":snapshotsZset"
+uniswap_V3_daily_stats_snapshot_zset = (
+    "uniswap:V3DailyStatsSnapshot:" + settings.namespace + ":snapshotsZset"
 )
-uniswap_V2_daily_stats_at_blockheight = (
-    "uniswap:V2DailyStatsSnapshot:" + settings.namespace + ":snapshot:{}"
+uniswap_V3_daily_stats_at_blockheight = (
+    "uniswap:V3DailyStatsSnapshot:" + settings.namespace + ":snapshot:{}"
 )  # block_height
-uniswap_v2_tokens_snapshot_zset = (
-    "uniswap:V2TokensSummarySnapshot:" + settings.namespace + ":snapshotsZset"
+uniswap_V3_tokens_snapshot_zset = (
+    "uniswap:V3TokensSummarySnapshot:" + settings.namespace + ":snapshotsZset"
 )
-uniswap_V2_tokens_at_blockheight = (
-    "uniswap:V2TokensSummarySnapshot:" + settings.namespace + ":{}"
+uniswap_V3_tokens_at_blockheight = (
+    "uniswap:V3TokensSummarySnapshot:" + settings.namespace + ":{}"
 )  # block_height
 
 uniswap_pair_cached_recent_logs = (
@@ -57,4 +57,7 @@ uniswap_cached_block_height_token_eth_price = (
 
 uniswap_cached_tick_data_block_height = (
     "uniswap:pairContract:" + settings.namespace + ":{}:cachedBlockHeightTickData"
+)
+uniswap_pair_cached_block_height_reserves = (
+    "uniswap:pairContract:" + settings.namespace + ":{}:cachedBlockHeightReserves"
 )

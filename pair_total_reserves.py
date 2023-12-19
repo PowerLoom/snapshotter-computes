@@ -2,8 +2,10 @@ import time
 from typing import Dict
 from typing import Optional
 from typing import Union
+from fastapi import Request, Response
 
 from redis import asyncio as aioredis
+from snapshotter.core_api import get_data_for_project_id_epoch_id
 
 from snapshotter.utils.models.message_models import PowerloomSnapshotProcessMessage
 
@@ -40,9 +42,11 @@ class PairTotalReservesProcessor(GenericProcessorSnapshot):
         data_source_contract_address = epoch.data_source
         min_chain_height = epoch.begin
         max_chain_height = epoch.end
+        self._logger.info(' moose epoch {}', epoch)
         self._logger.debug(
             f"pair reserves {data_source_contract_address} computation init time {time.time()}"
         )
+
         pair_reserve_total = await get_pair_reserves(
             pair_address=data_source_contract_address,
             from_block=min_chain_height,
