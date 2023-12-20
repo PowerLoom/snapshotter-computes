@@ -58,12 +58,9 @@ class ContractAddresses(BaseModel):
         ...,
         example='0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
     )
-    MAKER_POOLS: List[str] = Field(
+    MAKER: str = Field(
         ...,
-        example=[
-            '0xe8c6c9227491c0a8156a0106a0204d881bb7e531',
-            '0x3afdc5e6dfc0b0a507a8e023c9dce2cafc310316',
-        ],
+        example='0x9f8F72aA9304c8B593d555F12eF6589cC3A579A2',
     )
     QUOTER_1INCH: str = Field(
         ...,

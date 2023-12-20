@@ -5,10 +5,7 @@
     "uniswap_v3_quoter": "0xb27308f9F90D607463bb33eA1BeBb41C27CE5AB6",
     "uniswap_v3_multicall": "0x5BA1e12693Dc8F9c48aAD8770482f4739bEeD696",
     "WETH": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
-    "MAKER_POOLS": [
-        "0xe8c6c9227491c0a8156a0106a0204d881bb7e531", 
-        "0x3afdc5e6dfc0b0a507a8e023c9dce2cafc310316"
-    ], 
+    "MAKER": "0x9f8F72aA9304c8B593d555F12eF6589cC3A579A2", 
     "QUOTER_1INCH": "0x07D91f5fb9Bf7798734C3f606dB065549F6893bb"
   },
   "uniswap_contract_abis": {

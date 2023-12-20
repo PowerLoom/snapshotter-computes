@@ -167,11 +167,9 @@ async def get_pair_metadata(
             maker_token0 = None
             maker_token1 = None
             
-            if Web3.to_checksum_address(token0Addr) in [
-                Web3.to_checksum_address(
-                address,
-            ) for address in worker_settings.contract_addresses.MAKER_POOLS
-            ]:
+            if (
+                Web3.to_checksum_address(token0Addr) == Web3.to_checksum_address(worker_settings.contract_addresses.MAKER)
+            ):
                 token0_name = get_maker_pair_data('name')
                 token0_symbol = get_maker_pair_data('symbol')
                 maker_token0 = True
@@ -181,11 +179,9 @@ async def get_pair_metadata(
                 tasks.append(token0.functions.decimals())
 
 
-            if Web3.to_checksum_address(token1Addr) in [
-                Web3.to_checksum_address(
-                address,
-            ) for address in worker_settings.contract_addresses.MAKER_POOLS
-            ]:
+            if (
+                Web3.to_checksum_address(token1Addr) == Web3.to_checksum_address(worker_settings.contract_addresses.MAKER)
+            ):
                 token1_name = get_maker_pair_data('name')
                 token1_symbol = get_maker_pair_data('symbol')
                 maker_token1 = True
