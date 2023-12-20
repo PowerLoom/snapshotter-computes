@@ -1,4 +1,5 @@
 import asyncio
+from decimal import Decimal, getcontext
 import functools
 import json
 from typing import Union
@@ -22,7 +23,7 @@ from .redis_keys import uniswap_cached_tick_data_block_height
 from snapshotter.utils.rpc import RpcHelper, get_event_sig_and_abi
 
 AddressLike = Union[Address, ChecksumAddress]
-
+getcontext().prec = 100
 
 def transform_tick_bytes_to_list(tickData: bytes):
     if tickData == b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00 \x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00':
@@ -43,10 +44,11 @@ def transform_tick_bytes_to_list(tickData: bytes):
 
 
 def calculate_tvl_from_ticks(ticks, pair_metadata, sqrt_price):
-    sqrt_price = sqrt_price / 2 ** 96
-    liquidity_total = 0
-    token0_liquidity = 0
-    token1_liquidity = 0
+    sqrt_price = Decimal(sqrt_price) / 2 ** 96
+    
+    liquidity_total = Decimal(0)
+    token0_liquidity = Decimal(0)
+    token1_liquidity = Decimal(0)
     tick_spacing = 1
 
     if len(ticks) == 0:
@@ -55,37 +57,42 @@ def calculate_tvl_from_ticks(ticks, pair_metadata, sqrt_price):
     int_fee = int(pair_metadata["pair"]["fee"])
 
     if int_fee == 3000:
-        tick_spacing = 60
+        tick_spacing = Decimal(60)
     elif int_fee == 500:
-        tick_spacing = 10
+        tick_spacing = Decimal(10)
     elif int_fee == 10000:
-        tick_spacing = 200
+        tick_spacing = Decimal(200)
     # https://atiselsts.github.io/pdfs/uniswap-v3-liquidity-math.pdf
+    
+
     for i in range(len(ticks)):
         tick = ticks[i]
-        idx = tick["idx"]
-        nextIdx = ticks[i + 1]["idx"] \
+        idx = Decimal(tick["idx"])
+        nextIdx = Decimal(ticks[i + 1]["idx"]) \
         if i < len(ticks) - 1 \
         else idx + tick_spacing
-
-        liquidity_net = tick["liquidity_net"]   
+        
+        liquidity_net = Decimal(tick["liquidity_net"])
         liquidity_total += liquidity_net
-        sqrtPriceLow = 1.0001 ** (idx // 2)
-        sqrtPriceHigh = 1.0001 ** (nextIdx // 2)
+        sqrtPriceLow = Decimal(1.0001) ** (idx / 2)
+        sqrtPriceHigh = Decimal(1.0001) ** (nextIdx / 2)
+
         if sqrt_price <= sqrtPriceLow:
             token0_liquidity += get_token0_in_pool(
                 liquidity_total,
                 sqrtPriceLow,
                 sqrtPriceHigh,
             )
+            
         elif sqrt_price >= sqrtPriceHigh:
             token1_liquidity += get_token1_in_pool(
                 liquidity_total,
                 sqrtPriceLow,
                 sqrtPriceHigh,
             )
-
+            
         else: 
+
             token0_liquidity += get_token0_in_pool(
                 liquidity_total,
                 sqrt_price,
@@ -96,8 +103,9 @@ def calculate_tvl_from_ticks(ticks, pair_metadata, sqrt_price):
                 sqrtPriceLow,
                 sqrt_price,
             )   
+        
             
-    return (token0_liquidity, token1_liquidity)
+    return (int(token0_liquidity), int(token1_liquidity))
 
 
 def get_token0_in_pool(
@@ -177,6 +185,7 @@ async def calculate_reserves(
     )
 
     sqrt_price = slot0[0]
+
     t0_reserves, t1_reserves = calculate_tvl_from_ticks(
         ticks_list,
         pair_per_token_metadata,
