@@ -2,10 +2,8 @@ import time
 from typing import Dict
 from typing import Optional
 from typing import Union
-from fastapi import Request, Response
 
 from redis import asyncio as aioredis
-from snapshotter.core_api import get_data_for_project_id_epoch_id
 
 from snapshotter.utils.models.message_models import PowerloomSnapshotProcessMessage
 
