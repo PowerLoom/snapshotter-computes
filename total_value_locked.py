@@ -130,10 +130,7 @@ async def get_events(
 ):
 
     event_sig, event_abi = get_event_sig_and_abi(
-        {
-            "Mint": UNISWAP_TRADE_EVENT_SIGS['Mint'], 
-            "Burn": UNISWAP_TRADE_EVENT_SIGS['Burn']
-        },
+        UNISWAP_TRADE_EVENT_SIGS,
         UNISWAP_EVENTS_ABI,
     )
     

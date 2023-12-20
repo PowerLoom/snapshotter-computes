@@ -158,14 +158,15 @@ async def get_pair_reserves(
     for block_num, events in block_event_dict.items():
         events_in_block = block_event_dict.get(block_num, []) 
 
+        # Swap events use ints and mint events are positive, so only need to subtract burn events. 
         token0Amount += reduce(
-            lambda acc, event: acc + event['args']['amount0']
-            if event['name'] == 'Mint' 
-            else acc - event['args']['amount0'], events_in_block, 0)
+            lambda acc, event: acc - event['args']['amount0']
+            if event['name'] == 'Burn'
+            else acc + event['args']['amount0'], events_in_block, 0)
         token1Amount += reduce(
-            lambda acc, event: acc + event['args']['amount0']
-            if event['name'] == 'Mint' 
-            else acc - event['args']['amount1'], events_in_block, 0)
+            lambda acc, event: acc - event['args']['amount0']
+            if event['name'] == 'Burn' 
+            else acc + event['args']['amount1'], events_in_block, 0)
         
         token0USD = token0Amount * token0_price_map.get(block_num, 0) * (10 ** -int(pair_per_token_metadata["token0"]["decimals"]))
         token1USD = token1Amount * (token1_price_map.get(block_num, 0)) * (10 ** -int(pair_per_token_metadata["token1"]["decimals"]))
