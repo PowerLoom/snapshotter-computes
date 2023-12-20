@@ -166,28 +166,33 @@ async def get_pair_metadata(
             # special case to handle maker token
             maker_token0 = None
             maker_token1 = None
-            # if Web3.to_checksum_address(
-            #     worker_settings.contract_addresses.MAKER,
-            # ) == Web3.to_checksum_address(token0Addr):
-            #     token0_name = get_maker_pair_data('name')
-            #     token0_symbol = get_maker_pair_data('symbol')
-            #     maker_token0 = True
-            # else:
-            tasks.append(token0.functions.name())
-            tasks.append(token0.functions.symbol())
-            tasks.append(token0.functions.decimals())
+            
+            if Web3.to_checksum_address(token0Addr) in [
+                Web3.to_checksum_address(
+                address,
+            ) for address in worker_settings.contract_addresses.MAKER_POOLS
+            ]:
+                token0_name = get_maker_pair_data('name')
+                token0_symbol = get_maker_pair_data('symbol')
+                maker_token0 = True
+            else:
+                tasks.append(token0.functions.name())
+                tasks.append(token0.functions.symbol())
+                tasks.append(token0.functions.decimals())
 
 
-            # if Web3.to_checksum_address(
-            #     worker_settings.contract_addresses.MAKER,
-            # ) == Web3.to_checksum_address(token1Addr):
-            #     token1_name = get_maker_pair_data('name')
-            #     token1_symbol = get_maker_pair_data('symbol')
-            #     maker_token1 = True
-            # else:
-            tasks.append(token1.functions.name())
-            tasks.append(token1.functions.symbol())
-            tasks.append(token1.functions.decimals())
+            if Web3.to_checksum_address(token1Addr) in [
+                Web3.to_checksum_address(
+                address,
+            ) for address in worker_settings.contract_addresses.MAKER_POOLS
+            ]:
+                token1_name = get_maker_pair_data('name')
+                token1_symbol = get_maker_pair_data('symbol')
+                maker_token1 = True
+            else:
+                tasks.append(token1.functions.name())
+                tasks.append(token1.functions.symbol())
+                tasks.append(token1.functions.decimals())
 
             if maker_token1:
                 [
