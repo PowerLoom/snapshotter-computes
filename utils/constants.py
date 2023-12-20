@@ -92,10 +92,12 @@ UNISWAP_TRADE_EVENT_SIGS = {
     'Swap': 'Swap(address,address,int256,int256,uint160,uint128,int24)',
     'Mint': 'Mint(address,address,int24,int24,uint128,uint256,uint256)',
     'Burn': 'Burn(address,int24,int24,uint128,uint256,uint256)',
+    'Flash': 'Flash(address,address,uint256,uint256,uint256,uint256)'
 }
 
 UNISWAP_EVENTS_ABI = {
     'Swap': pool_contract_obj.events.Swap._get_event_abi(),
     'Mint': pool_contract_obj.events.Mint._get_event_abi(),
     'Burn': pool_contract_obj.events.Burn._get_event_abi(),
+    'Flash': pool_contract_obj.events.Flash._get_event_abi(),
 }
