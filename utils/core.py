@@ -166,7 +166,7 @@ async def get_pair_reserves(
             if event['name'] == 'Burn'
             else acc + event['args']['amount0'], events_in_block, 0)
         token1Amount += reduce(
-            lambda acc, event: acc - event['args']['amount0']
+            lambda acc, event: acc - event['args']['amount1']
             if event['name'] == 'Burn' 
             else acc + event['args']['amount1'], events_in_block, 0)
         
