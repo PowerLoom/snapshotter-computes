@@ -172,6 +172,7 @@ async def get_pair_metadata(
             ):
                 token0_name = get_maker_pair_data('name')
                 token0_symbol = get_maker_pair_data('symbol')
+                tasks.append(token0.functions.decimals())
                 maker_token0 = True
             else:
                 tasks.append(token0.functions.name())
@@ -184,6 +185,7 @@ async def get_pair_metadata(
             ):
                 token1_name = get_maker_pair_data('name')
                 token1_symbol = get_maker_pair_data('symbol')
+                tasks.append(token1.functions.decimals())
                 maker_token1 = True
             else:
                 tasks.append(token1.functions.name())
