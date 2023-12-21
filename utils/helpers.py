@@ -11,10 +11,11 @@ from ..redis_keys import uniswap_cached_block_height_token_eth_price
 from ..redis_keys import uniswap_pair_contract_tokens_data
 from ..redis_keys import uniswap_tokens_pair_map
 from ..settings.config import settings as worker_settings
-from .constants import current_node
+from .constants import ZERO_ADDRESS, current_node
 from .constants import erc20_abi
 from .constants import pair_contract_abi
 from .constants import quoter_1inch_contract_abi
+from .constants import factory_contract_obj
 from snapshotter.utils.default_logger import logger
 from snapshotter.utils.rpc import RpcHelper, get_contract_abi_dict
 
@@ -259,7 +260,7 @@ async def get_pair_metadata(
         raise err
     
 
-async def get_token_eth_price_dict(
+async def  get_token_eth_price_dict(
     token_address: str,
     token_decimals: int,
     from_block,
@@ -305,13 +306,26 @@ async def get_token_eth_price_dict(
             redis_conn=redis_conn,
         )
         block_counter = 0
+        helper_logger.debug(f"token_eth_quote moose : {token_eth_quote}")  
+        # case to handle tokens that cannot be quoted by spot aggregator
+        if len(token_eth_quote) == 0:
+            # get addresses of uniswapv3 pools that contain token and weth
+           
+            token_eth_quote = await get_token_eth_quote_from_uniswap(
+                token_address=token_address,
+                from_block=from_block,
+                to_block=to_block,
+                redis_conn=redis_conn,
+                rpc_helper=rpc_helper,
+            )
+        helper_logger.debug(f"token_eth_quote moose : {token_eth_quote}")
         # parse token_eth_quote and store in dict
         if len(token_eth_quote) > 0:
             token_eth_quote = [(quote[0] * (10 ** (-36 + token_decimals))) for quote in token_eth_quote]
             for block_num in range(from_block, to_block + 1):
                 token_eth_price_dict[block_num] = token_eth_quote[block_counter]
                 block_counter += 1
-            
+        
                 # cache price at height
         if len(token_eth_price_dict) > 0:
 
@@ -342,8 +356,47 @@ async def get_token_eth_price_dict(
         raise e
     
 
+async def get_token_eth_quote_from_uniswap(
+    token_address,
+    from_block,
+    to_block,
+    redis_conn,
+    rpc_helper: RpcHelper,
+    ):
+
+    token0 = token_address
+    token1 = worker_settings.contract_addresses.WETH
+    token0, token1 = token0, token1 if int(token0, 16) < int(token1, 16) else token1, token0
+    tasks = [
+        get_pair(factory_contract_obj=factory_contract_obj, token0=token0, token1=token1, fee=int(10000), redis_conn=redis_conn, rpc_helper=rpc_helper),
+        get_pair(factory_contract_obj=factory_contract_obj, token0=token0, token1=token1, fee=int(3000), redis_conn=redis_conn, rpc_helper=rpc_helper),
+        get_pair(factory_contract_obj=factory_contract_obj, token0=token0, token1=token1, fee=int(500), redis_conn=redis_conn, rpc_helper=rpc_helper),
+        get_pair(factory_contract_obj=factory_contract_obj, token0=token0, token1=token1, fee=int(100), redis_conn=redis_conn, rpc_helper=rpc_helper),
+    ]
+    pair_address_list = await asyncio.gather(*tasks)
+    pair_address_list = list(filter(ZERO_ADDRESS, pair_address_list))
+
+    token_eth_quote = []
+
+    if len(pair_address_list) == 0:
+        return token_eth_quote
+    
+    response = await rpc_helper.batch_eth_call_on_block_range(
+        abi_dict=get_contract_abi_dict(
+            abi=pair_contract_abi
+        ),
+        contract_address=pair_address_list[0],
+        from_block=from_block,
+        to_block=to_block,
+        function_name="slot0",
+        params=[],
+        redis_conn=redis_conn,
+    )
+    token_eth_quote = [slot[0] for slot in response]
+    return token_eth_quote
+
+    
 
 
 
         
-
