@@ -1,10 +1,13 @@
 import asyncio
+from decimal import Decimal, getcontext
 import functools
 from functools import reduce
 import json
 
 from redis import asyncio as aioredis
 from web3 import Web3
+
+from snapshotter.utils.snapshot_utils import sqrtPriceX96ToTokenPrices
 
 from ..redis_keys import uniswap_pair_contract_tokens_addresses
 from ..redis_keys import uniswap_cached_block_height_token_eth_price
@@ -18,7 +21,7 @@ from .constants import quoter_1inch_contract_abi
 from .constants import factory_contract_obj
 from snapshotter.utils.default_logger import logger
 from snapshotter.utils.rpc import RpcHelper, get_contract_abi_dict
-
+getcontext().prec = 36
 
 helper_logger = logger.bind(module="PowerLoom|Uniswap|Helpers")
 
@@ -313,6 +316,7 @@ async def  get_token_eth_price_dict(
            
             token_eth_quote = await get_token_eth_quote_from_uniswap(
                 token_address=token_address,
+                token_decimals=token_decimals,
                 from_block=from_block,
                 to_block=to_block,
                 redis_conn=redis_conn,
@@ -358,6 +362,7 @@ async def  get_token_eth_price_dict(
 
 async def get_token_eth_quote_from_uniswap(
     token_address,
+    token_decimals,
     from_block,
     to_block,
     redis_conn,
@@ -367,6 +372,9 @@ async def get_token_eth_quote_from_uniswap(
     token0 = token_address
     token1 = worker_settings.contract_addresses.WETH
     token0, token1 = token0, token1 if int(token0, 16) < int(token1, 16) else token1, token0
+    token0_decimals, token1_decimals = int(token_decimals), int(18) \
+                                        if int(token0, 16) < int(token1, 16) else int(18), int(token_decimals)
+    
     tasks = [
         get_pair(factory_contract_obj=factory_contract_obj, token0=token0, token1=token1, fee=int(10000), redis_conn=redis_conn, rpc_helper=rpc_helper),
         get_pair(factory_contract_obj=factory_contract_obj, token0=token0, token1=token1, fee=int(3000), redis_conn=redis_conn, rpc_helper=rpc_helper),
@@ -392,7 +400,10 @@ async def get_token_eth_quote_from_uniswap(
         params=[],
         redis_conn=redis_conn,
     )
-    token_eth_quote = [slot[0] for slot in response]
+
+    token_eth_quote = [sqrtPriceX96ToTokenPrices(slot[0], token0_decimals, token1_decimals) for slot in response]
+    
+
     return token_eth_quote
 
     
