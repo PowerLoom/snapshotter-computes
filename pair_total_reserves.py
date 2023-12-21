@@ -40,7 +40,6 @@ class PairTotalReservesProcessor(GenericProcessorSnapshot):
         data_source_contract_address = epoch.data_source
         min_chain_height = epoch.begin
         max_chain_height = epoch.end
-        self._logger.info(' moose epoch {}', epoch)
         self._logger.debug(
             f"pair reserves {data_source_contract_address} computation init time {time.time()}"
         )

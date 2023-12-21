@@ -619,16 +619,13 @@ async def get_liquidity_depth(
         from_block=from_block,
         redis_conn=redis_conn,
     )
-    core_logger.debug('the dog jumped over the tracks')
+    
     liquidity_depth_initial = calculate_liquidity_depth(
         ticks_list,
         slot0[0],
         pair_per_token_metadata,
     )
 
-    core_logger.debug(
-        'initial liquidity depth fetched block details for epoch for:' f' {pair_address} moose ',
-    )
 
     for block_num in range(from_block, to_block + 1):
         liquidity_depth_dict[block_num] = liquidity_depth_initial
