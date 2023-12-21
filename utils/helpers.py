@@ -400,11 +400,18 @@ async def get_token_eth_quote_from_uniswap(
         params=[],
         redis_conn=redis_conn,
     )
-
-    token_eth_quote = [sqrtPriceX96ToTokenPrices(slot[0], token0_decimals, token1_decimals) for slot in response]
+    sqrtP_list = [slot0[0] for slot0 in response]
+    token_eth_quote = []
+    for sqrtP in sqrtP_list:
+        price0, price1 = sqrtPriceX96ToTokenPrices(sqrtP, token0_decimals, token1_decimals)
+        if token0 == token_address:
+            token_eth_quote.append(price0)
+        else:
+            token_eth_quote.append(price1)
     
 
     return token_eth_quote
+
 
     
 
