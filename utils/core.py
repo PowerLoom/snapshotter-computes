@@ -141,7 +141,7 @@ async def get_pair_reserves(
         to_block=to_block,
         redis_con=redis_conn,
     )
-
+    
     core_logger.debug(
         f'Total reserves fetched event data for : {pair_address}',
     )
@@ -155,19 +155,20 @@ async def get_pair_reserves(
     block_event_dict = dict()
 
     for block_num in range(from_block, to_block + 1):
-        block_event_dict[block_num] = filter(lambda x: x if x.get('blockNumber') == block_num else None, events)
+        block_event_dict[block_num] = list(filter(lambda x: x if x.get('blockNumber') == block_num else None, events))
 
     for block_num, events in block_event_dict.items():
         events_in_block = block_event_dict.get(block_num, [])
 
         # Swap events use ints and mint events are positive, so only need to subtract burn events. 
+        
         token0Amount += reduce(
             lambda acc, event: acc - event['args']['amount0']
-            if event['name'] == 'Burn'
+            if event['event'] == 'Burn'
             else acc + event['args']['amount0'], events_in_block, 0)
         token1Amount += reduce(
             lambda acc, event: acc - event['args']['amount1']
-            if event['name'] == 'Burn' 
+            if event['event'] == 'Burn' 
             else acc + event['args']['amount1'], events_in_block, 0)
         
         token0USD = token0Amount * token0_price_map.get(block_num, 0) * (10 ** -int(pair_per_token_metadata["token0"]["decimals"]))
@@ -191,8 +192,8 @@ async def get_pair_reserves(
         pair_reserves_dict[block_num] = {
             'token0': {'reserves': token0Amount, 'decimals': pair_per_token_metadata['token0']['decimals']},
             'token1': {'reserves': token1Amount, 'decimals': pair_per_token_metadata['token1']['decimals']},
-            'token0USD': token0USD,
-            'token1USD': token1USD,
+            'token0USD': round(token0USD, 2),
+            'token1USD': round(token1USD, 2),
             'token0Price': token0Price,
             'token1Price': token1Price,
             'timestamp': timestamp,
