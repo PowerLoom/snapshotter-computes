@@ -3,7 +3,6 @@ import asyncio
 from snapshotter.utils.models.message_models import PowerloomSnapshotProcessMessage
 from snapshotter.utils.redis.redis_conn import RedisPoolCache
 from snapshotter.utils.rpc import RpcHelper
-from web3 import Web3
 
 from ..pool_total_supply import AssetTotalSupplyProcessor
 from ..utils.models.message_models import AavePoolTotalAssetSnapshot

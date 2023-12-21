@@ -16,6 +16,7 @@ from .constants import seconds_in_year
 from .helpers import get_asset_metadata
 from .helpers import get_supply_events
 from .models.data_models import data_provider_reserve_data
+from .pricing import get_token_price_in_block_range
 
 core_logger = logger.bind(module='PowerLoom|AaveCore')
 
@@ -55,9 +56,10 @@ async def get_asset_supply_and_debt(
 
         # aave supply is computed using block timestamps
         # if we are fetching timestamps, we can save rpc calls by computing event data
+        # fetching timestamps is better for multi-asset projects as assets can share block data
         # otherwise, batching calls is more efficient
 
-        return await calculate_asset_supply_timestamped(
+        asset_data: list = await calculate_asset_supply_timestamped(
             rpc_helper=rpc_helper,
             redis_conn=redis_conn,
             from_block=from_block,
@@ -68,6 +70,7 @@ async def get_asset_supply_and_debt(
 
     else:
         block_details_dict = dict()
+        asset_data = list()
 
     core_logger.debug(
         (
@@ -82,35 +85,55 @@ async def get_asset_supply_and_debt(
         rpc_helper=rpc_helper,
     )
 
-    data_contract_abi_dict = get_contract_abi_dict(pool_data_provider_contract_obj.abi)
-
-    asset_data = await rpc_helper.batch_eth_call_on_block_range(
-        abi_dict=data_contract_abi_dict,
-        function_name='getReserveData',
-        contract_address=pool_data_provider_contract_obj.address,
+    asset_price_map = await get_token_price_in_block_range(
+        token_metadata=asset_metadata,
         from_block=from_block,
         to_block=to_block,
         redis_conn=redis_conn,
-        params=[asset_address],
+        rpc_helper=rpc_helper,
+        debug_log=False,
     )
 
-    asset_data = [data_provider_reserve_data(*data) for data in asset_data]
+    if not asset_data:
+
+        data_contract_abi_dict = get_contract_abi_dict(pool_data_provider_contract_obj.abi)
+
+        asset_data = await rpc_helper.batch_eth_call_on_block_range(
+            abi_dict=data_contract_abi_dict,
+            function_name='getReserveData',
+            contract_address=pool_data_provider_contract_obj.address,
+            from_block=from_block,
+            to_block=to_block,
+            redis_conn=redis_conn,
+            params=[asset_address],
+        )
+
+        asset_data = [data_provider_reserve_data(*data) for data in asset_data]
 
     asset_supply_debt_dict = dict()
 
     for i, block_num in enumerate(range(from_block, to_block + 1)):
+        total_supply = asset_data[i].totalAToken / (10 ** int(asset_metadata['decimals']))
+        total_supply_usd = total_supply * asset_price_map.get(block_num, 0)
+
+        total_stable_debt = asset_data[i].totalStableDebt / (10 ** int(asset_metadata['decimals']))
+        total_variable_debt = asset_data[i].totalVariableDebt / (10 ** int(asset_metadata['decimals']))
+        total_stable_debt_usd = total_stable_debt * asset_price_map.get(block_num, 0)
+        total_variable_debt_usd = total_variable_debt * asset_price_map.get(block_num, 0)
+
+        current_block_details = block_details_dict.get(from_block, None)
 
         asset_supply_debt_dict[block_num] = {
-            'total_supply': asset_data[i].totalAToken / 10 ** int(asset_metadata['decimals']),
+            'total_supply': {'token_supply': total_supply, 'usd_supply': total_supply_usd},
+            'total_stable_debt': {'token_debt': total_stable_debt, 'usd_debt': total_stable_debt_usd},
+            'total_variable_debt': {'token_debt': total_variable_debt, 'usd_debt': total_variable_debt_usd},
             'liquidity_rate': asset_data[i].liquidityRate / ray,
             'liquidity_index': asset_data[i].liquidityIndex / ray,
-            'total_stable_debt': asset_data[i].totalStableDebt / 10 ** int(asset_metadata['decimals']),
-            'total_variable_debt': asset_data[i].totalVariableDebt / 10 ** int(asset_metadata['decimals']),
             'variable_borrow_rate': asset_data[i].variableBorrowRate / ray,
             'stable_borrow_rate': asset_data[i].stableBorrowRate / ray,
             'variable_borrow_index': asset_data[i].variableBorrowIndex / ray,
             'last_update_timestamp': int(asset_data[i].lastUpdateTimestamp),
-            'timestamp': None,
+            'timestamp': asset_data[i].timestamp,
         }
 
     core_logger.debug(
@@ -123,7 +146,7 @@ async def get_asset_supply_and_debt(
     return asset_supply_debt_dict
 
 
-# TODO: add debt calculation
+# TODO: add debt calculation, add unbacked calculation
 async def calculate_asset_supply_timestamped(
     rpc_helper: RpcHelper,
     redis_conn: aioredis.Redis,
@@ -132,12 +155,6 @@ async def calculate_asset_supply_timestamped(
     asset_address: str,
     block_details_dict: dict,
 ):
-    asset_metadata = await get_asset_metadata(
-        asset_address=asset_address,
-        redis_conn=redis_conn,
-        rpc_helper=rpc_helper,
-    )
-
     pool_contract_abi_dict = get_contract_abi_dict(pool_data_provider_contract_obj.abi)
 
     initial_data, events = await asyncio.gather(
@@ -195,21 +212,24 @@ async def calculate_asset_supply_timestamped(
         liquidity_index=liquidity_index,
     )
 
-    asset_supply_debt_dict = dict()
+    computed_supply_debt_list = list()
 
-    # add known from_block data to return dict
-    asset_supply_debt_dict[from_block] = {
-        'total_supply': supply / 10 ** int(asset_metadata['decimals']),
-        'liquidity_rate': liquidity_rate / ray,
-        'liquidity_index': liquidity_index / ray,
-        'total_stable_debt': 0,
-        'total_variable_debt': 0,
-        'variable_borrow_rate': 0,
-        'stable_borrow_rate': 0,
-        'variable_borrow_index': 0,
-        'last_update_timestamp': last_update,
+    # add known from_block data to return list
+    computed_supply_debt_list.append({
+        'totalAToken': supply,
+        'liquidityRate': liquidity_rate,
+        'liquidityIndex': liquidity_index,
+        'totalStableDebt': 0,
+        'totalVariableDebt': 0,
+        'variableBorrowRate': 0,
+        'stableBorrowRate': 0,
+        'variableBorrowIndex': 0,
+        'lastUpdateTimestamp': last_update,
         'timestamp': current_block_details.get('timestamp', None),
-    }
+        'unbacked': initial_data.unbacked,  # using initial data for unbacked until calculation implemented
+        'accruedToTreasuryScaled': 0,  # not used in current snapshot
+        'averageStableBorrowRate': 0,  # not used in current snapshot
+    })
 
     # calculate supply for each block excluding from block
     for block_num in range(from_block + 1, to_block + 1):
@@ -232,18 +252,21 @@ async def calculate_asset_supply_timestamped(
             data_events=data_events,
         )
 
-        asset_supply_debt_dict[block_num] = {
-            'total_supply': supply / 10 ** int(asset_metadata['decimals']),
-            'liquidity_rate': liquidity_rate / ray,
-            'liquidity_index': liquidity_index / ray,
-            'total_stable_debt': 0,
-            'total_variable_debt': 0,
-            'variable_borrow_rate': 0,
-            'stable_borrow_rate': 0,
-            'variable_borrow_index': 0,
-            'last_update_timestamp': last_update,
+        computed_supply_debt_list.append({
+            'totalAToken': supply,
+            'liquidityRate': liquidity_rate,
+            'liquidityIndex': liquidity_index,
+            'totalStableDebt': 0,
+            'totalVariableDebt': 0,
+            'variableBorrowRate': 0,
+            'stableBorrowRate': 0,
+            'variableBorrowIndex': 0,
+            'lastUpdateTimestamp': last_update,
             'timestamp': current_block_details.get('timestamp', None),
-        }
+            'unbacked': initial_data.unbacked,
+            'accruedToTreasuryScaled': 0,
+            'averageStableBorrowRate': 0,
+        })
 
     core_logger.debug(
         (
@@ -252,7 +275,7 @@ async def calculate_asset_supply_timestamped(
         ),
     )
 
-    return asset_supply_debt_dict
+    return [data_provider_reserve_data(**data) for data in computed_supply_debt_list]
 
 
 def calculate_supply_data(

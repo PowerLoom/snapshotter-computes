@@ -1,4 +1,5 @@
 import asyncio
+import decimal
 
 from snapshotter.utils.redis.redis_conn import RedisPoolCache
 from snapshotter.utils.redis.redis_keys import source_chain_epoch_size_key
@@ -15,7 +16,7 @@ from ..utils.models.data_models import data_provider_reserve_data
 async def test_total_supply():
     # Mock your parameters
     asset_address = Web3.to_checksum_address(
-        '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+        '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
     )
 
     # from_block = 18774276 # liq call event
@@ -68,11 +69,15 @@ async def test_total_supply():
 
     for i, block_num in enumerate(range(from_block, to_block + 1)):
 
-        target = chain_data[i].totalAToken
-        computed_supply = asset_supply_debt_total[block_num]['total_supply'] * 10 ** int(asset_metadata['decimals'])
+        # Might need to use a more precise type than float for more accurate return data
+        target = decimal.Decimal(str(chain_data[i].totalAToken / 10 ** int(asset_metadata['decimals'])))
+        computed_supply = decimal.Decimal(asset_supply_debt_total[block_num]['total_supply']['token_supply'])
+
+        # get decimal precision for chain data
+        decimal_places = target.as_tuple().exponent
 
         # may be +/- 1 due to rounding
-        assert computed_supply in range(target - 1, target + 2), 'Results do not match chain data'
+        assert abs(target - computed_supply) < (2e-1 ** -decimal_places), 'Results do not match chain data'
 
     print('PASSED')
 

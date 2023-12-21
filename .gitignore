@@ -9,5 +9,5 @@ temp/*
 **/*aggregator.json
 config/*settings.json
 **/*.backup
-snapshotter/modules/computes/settings/settings.json
+settings/settings.json
 .pre-commit-config.yaml

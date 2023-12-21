@@ -3,7 +3,8 @@
         "pool_contract":"snapshotter/modules/computes/static/abis/AaveV3Pool.json",
         "pool_data_provider_contract": "snapshotter/modules/computes/static/abis/AaveProtocolDataProvider.json",
         "erc20": "snapshotter/modules/computes/static/abis/IERC20.json",
-        "a_token": "snapshotter/modules/computes/static/abis/AToken.json"
+        "a_token": "snapshotter/modules/computes/static/abis/AToken.json",
+        "one_inch_quoter": "snapshotter/modules/computes/static/abis/OneInchQuoter.json"
     },
     "contract_addresses": {
         "USDT": "0xdac17f958d2ee523a2206206994597c13d831ec7",
@@ -12,10 +13,8 @@
         "WETH": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
         "MAKER": "0x9f8F72aA9304c8B593d555F12eF6589cC3A579A2",
         "FRAX": "0x853d955aCEf822Db058eb8505911ED77F175b99e",
+        "QUOTER_1INCH": "0x0AdDd25a91563696D8567Df78D5A01C9a991F9B8",
         "aave_v3_pool": "0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2",
         "pool_data_provider": "0x7B4EB56E7CD4b454BA8ff71E4518426369a138a3"
-
-      },
-    "aave_v3_whitelist": [
-    ]
+      }
 }
