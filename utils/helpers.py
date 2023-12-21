@@ -14,7 +14,7 @@ from ..redis_keys import uniswap_cached_block_height_token_eth_price
 from ..redis_keys import uniswap_pair_contract_tokens_data
 from ..redis_keys import uniswap_tokens_pair_map
 from ..settings.config import settings as worker_settings
-from .constants import ZERO_ADDRESS, current_node
+from .constants import current_node
 from .constants import erc20_abi
 from .constants import pair_contract_abi
 from .constants import quoter_1inch_contract_abi
@@ -309,7 +309,7 @@ async def  get_token_eth_price_dict(
             redis_conn=redis_conn,
         )
         block_counter = 0
-        helper_logger.debug(f"token_eth_quote moose : {token_eth_quote}")  
+
         # case to handle tokens that cannot be quoted by spot aggregator
         if len(token_eth_quote) == 0:
             # get addresses of uniswapv3 pools that contain token and weth
@@ -382,7 +382,7 @@ async def get_token_eth_quote_from_uniswap(
         get_pair(factory_contract_obj=factory_contract_obj, token0=token0, token1=token1, fee=int(100), redis_conn=redis_conn, rpc_helper=rpc_helper),
     ]
     pair_address_list = await asyncio.gather(*tasks)
-    pair_address_list = list(filter(ZERO_ADDRESS, pair_address_list))
+    pair_address_list = list(filter(str('0x' + '0' * 40), pair_address_list))
 
     token_eth_quote = []
 
@@ -411,10 +411,3 @@ async def get_token_eth_quote_from_uniswap(
     
 
     return token_eth_quote
-
-
-    
-
-
-
-        
