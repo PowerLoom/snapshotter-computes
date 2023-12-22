@@ -311,7 +311,7 @@ async def  get_token_eth_price_dict(
         block_counter = 0
         sum = reduce(lambda x, y: x + y[0], token_eth_quote, 0)
         # case to handle tokens that cannot be quoted by spot aggregator
-        uniswap_quote_flag = false
+        uniswap_quote_flag = False
         if len(token_eth_quote) == 0:
             # get addresses of uniswapv3 pools that contain token and weth
            
