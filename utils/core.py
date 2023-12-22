@@ -96,7 +96,7 @@ async def get_pair_reserves(
 
         ),
     )
-
+    
     core_logger.debug(
         f'Total reserves fetched token prices for: {pair_address}',
     )
@@ -153,7 +153,7 @@ async def get_pair_reserves(
     pair_reserves_dict = dict()
 
     block_event_dict = dict()
-
+    
     for block_num in range(from_block, to_block + 1):
         block_event_dict[block_num] = list(filter(lambda x: x if x.get('blockNumber') == block_num else None, events))
 
@@ -205,7 +205,7 @@ async def get_pair_reserves(
             f' {from_block} - {to_block} | pair_contract: {pair_address}'
         ),
     )
-
+    
     # here we store the final block in the epoch reserves in redis so they may be used as
     # a starting point in the next epoch
     end_block = pair_reserves_dict.get(to_block, None)
@@ -238,6 +238,7 @@ async def get_pair_reserves(
                 f' {pair_address} | epoch: {from_block} - {to_block}'
             ),
         )
+    
     return pair_reserves_dict
 
 
