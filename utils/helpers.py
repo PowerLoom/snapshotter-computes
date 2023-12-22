@@ -309,11 +309,12 @@ async def  get_token_eth_price_dict(
             redis_conn=redis_conn,
         )
         block_counter = 0
-
+        
+        sum_token_quote = reduce(lambda acc, price_tuple: acc + price_tuple[0], token_eth_quote, 0)
         # case to handle tokens that cannot be quoted by spot aggregator
-        if len(token_eth_quote) == 0:
+        if sum_token_quote  == 0:
             # get addresses of uniswapv3 pools that contain token and weth
-           
+            
             token_eth_quote = await get_token_eth_quote_from_uniswap(
                 token_address=token_address,
                 token_decimals=token_decimals,
@@ -322,7 +323,7 @@ async def  get_token_eth_price_dict(
                 redis_conn=redis_conn,
                 rpc_helper=rpc_helper,
             )
-        helper_logger.debug(f"token_eth_quote moose : {token_eth_quote}")
+            
         # parse token_eth_quote and store in dict
         if len(token_eth_quote) > 0:
             token_eth_quote = [(quote[0] * (10 ** (-36 + token_decimals))) for quote in token_eth_quote]
@@ -371,9 +372,13 @@ async def get_token_eth_quote_from_uniswap(
 
     token0 = token_address
     token1 = worker_settings.contract_addresses.WETH
-    token0, token1 = token0, token1 if int(token0, 16) < int(token1, 16) else token1, token0
-    token0_decimals, token1_decimals = int(token_decimals), int(18) \
-                                        if int(token0, 16) < int(token1, 16) else int(18), int(token_decimals)
+    token0_decimals = token_decimals
+    token1_decimals = int(18)
+    
+    if int(token0, 16) > int(token1, 16):
+        token0, token1 = token1, token0
+        token0_decimals, token1_decimals = token1_decimals, token0_decimals
+
     
     tasks = [
         get_pair(factory_contract_obj=factory_contract_obj, token0=token0, token1=token1, fee=int(10000), redis_conn=redis_conn, rpc_helper=rpc_helper),
@@ -382,12 +387,14 @@ async def get_token_eth_quote_from_uniswap(
         get_pair(factory_contract_obj=factory_contract_obj, token0=token0, token1=token1, fee=int(100), redis_conn=redis_conn, rpc_helper=rpc_helper),
     ]
     pair_address_list = await asyncio.gather(*tasks)
-    pair_address_list = list(filter(str('0x' + '0' * 40), pair_address_list))
+    
+    pair_address_list = [pair for pair in pair_address_list if pair != "0x" + "0" * 40]
 
     token_eth_quote = []
 
     if len(pair_address_list) == 0:
-        return token_eth_quote
+        
+        return [(0,) for i in range(from_block, to_block + 1)]
     
     response = await rpc_helper.batch_eth_call_on_block_range(
         abi_dict=get_contract_abi_dict(
@@ -402,6 +409,7 @@ async def get_token_eth_quote_from_uniswap(
     )
     sqrtP_list = [slot0[0] for slot0 in response]
     token_eth_quote = []
+    
     for sqrtP in sqrtP_list:
         price0, price1 = sqrtPriceX96ToTokenPrices(sqrtP, token0_decimals, token1_decimals)
         if token0 == token_address:
