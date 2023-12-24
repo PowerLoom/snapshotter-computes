@@ -15,10 +15,8 @@ from snapshotter.utils.rpc import RpcHelper
 
 
 class PairTotalReservesProcessor(GenericProcessorSnapshot):
-    transformation_lambdas = None
 
     def __init__(self) -> None:
-        self.transformation_lambdas = []
         self._logger = logger.bind(module='PairTotalReservesProcessor')
 
     async def compute(

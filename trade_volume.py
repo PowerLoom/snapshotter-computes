@@ -12,12 +12,8 @@ from snapshotter.utils.rpc import RpcHelper
 
 
 class TradeVolumeProcessor(GenericProcessorSnapshot):
-    transformation_lambdas = None
 
     def __init__(self) -> None:
-        self.transformation_lambdas = [
-            self.transform_processed_epoch_to_trade_volume,
-        ]
         self._logger = logger.bind(module='TradeVolumeProcessor')
 
     async def compute(
@@ -41,42 +37,30 @@ class TradeVolumeProcessor(GenericProcessorSnapshot):
             rpc_helper=rpc_helper,
         )
         self._logger.debug(f'trade volume {data_source_contract_address}, computation end time {time.time()}')
-        return result
-
-    def transform_processed_epoch_to_trade_volume(
-        self,
-        snapshot,
-        data_source_contract_address,
-        epoch_begin,
-        epoch_end,
-    ):
-        self._logger.debug(
-            'Trade volume processed snapshot: {}', snapshot,
-        )
 
         # Set effective trade volume at top level
-        total_trades_in_usd = snapshot['Trades'][
+        total_trades_in_usd = result['Trades'][
             'totalTradesUSD'
         ]
-        total_fee_in_usd = snapshot['Trades']['totalFeeUSD']
-        total_token0_vol = snapshot['Trades'][
+        total_fee_in_usd = result['Trades']['totalFeeUSD']
+        total_token0_vol = result['Trades'][
             'token0TradeVolume'
         ]
-        total_token1_vol = snapshot['Trades'][
+        total_token1_vol = result['Trades'][
             'token1TradeVolume'
         ]
-        total_token0_vol_usd = snapshot['Trades'][
+        total_token0_vol_usd = result['Trades'][
             'token0TradeVolumeUSD'
         ]
-        total_token1_vol_usd = snapshot['Trades'][
+        total_token1_vol_usd = result['Trades'][
             'token1TradeVolumeUSD'
         ]
 
-        max_block_timestamp = snapshot.get('timestamp')
-        snapshot.pop('timestamp', None)
+        max_block_timestamp = result.get('timestamp')
+        result.pop('timestamp', None)
         trade_volume_snapshot = UniswapTradesSnapshot(
             contract=data_source_contract_address,
-            chainHeightRange=EpochBaseSnapshot(begin=epoch_begin, end=epoch_end),
+            chainHeightRange=EpochBaseSnapshot(begin=epoch.begin, end=epoch.end),
             timestamp=max_block_timestamp,
             totalTrade=float(f'{total_trades_in_usd: .6f}'),
             totalFee=float(f'{total_fee_in_usd: .6f}'),
@@ -84,6 +68,7 @@ class TradeVolumeProcessor(GenericProcessorSnapshot):
             token1TradeVolume=float(f'{total_token1_vol: .6f}'),
             token0TradeVolumeUSD=float(f'{total_token0_vol_usd: .6f}'),
             token1TradeVolumeUSD=float(f'{total_token1_vol_usd: .6f}'),
-            events=snapshot,
+            events=result,
         )
         return trade_volume_snapshot
+

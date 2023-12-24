@@ -391,7 +391,6 @@ async def get_pair_trade_volume(
                 token1TradeVolume=float(),
                 token0TradeVolumeUSD=float(),
                 token1TradeVolumeUSD=float(),
-                recent_transaction_logs=list(),
             ),
         ),
         Mint=event_trade_data(
@@ -403,7 +402,6 @@ async def get_pair_trade_volume(
                 token1TradeVolume=float(),
                 token0TradeVolumeUSD=float(),
                 token1TradeVolumeUSD=float(),
-                recent_transaction_logs=list(),
             ),
         ),
         Burn=event_trade_data(
@@ -415,7 +413,6 @@ async def get_pair_trade_volume(
                 token1TradeVolume=float(),
                 token0TradeVolumeUSD=float(),
                 token1TradeVolumeUSD=float(),
-                recent_transaction_logs=list(),
             ),
         ),
         Trades=trade_data(
@@ -425,7 +422,6 @@ async def get_pair_trade_volume(
             token1TradeVolume=float(),
             token0TradeVolumeUSD=float(),
             token1TradeVolumeUSD=float(),
-            recent_transaction_logs=list(),
         ),
     )
 
@@ -439,7 +435,6 @@ async def get_pair_trade_volume(
             token1TradeVolume=float(),
             token0TradeVolumeUSD=float(),
             token1TradeVolumeUSD=float(),
-            recent_transaction_logs=list(),
         )
         # shift Burn logs in end of list to check if equal size of mint already exist
         # and then cancel out burn with mint

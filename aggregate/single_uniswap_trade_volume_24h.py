@@ -19,10 +19,8 @@ from snapshotter.utils.rpc import RpcHelper
 
 
 class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
-    transformation_lambdas = None
 
     def __init__(self) -> None:
-        self.transformation_lambdas = []
         self._logger = logger.bind(module='AggregateTradeVolumeProcessor24h')
 
     def _add_aggregate_snapshot(

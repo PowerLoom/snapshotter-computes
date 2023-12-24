@@ -16,10 +16,8 @@ from snapshotter.utils.rpc import RpcHelper
 
 
 class AggreagateTopTokensProcessor(GenericProcessorAggregate):
-    transformation_lambdas = None
 
     def __init__(self) -> None:
-        self.transformation_lambdas = []
         self._logger = logger.bind(module='AggregateTopTokensProcessor')
 
     async def compute(
