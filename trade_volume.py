@@ -57,7 +57,6 @@ class TradeVolumeProcessor(GenericProcessorSnapshot):
             'token1TradeVolumeUSD'
         ]
 
-        max_block_timestamp = result.get('timestamp')
         result.pop('timestamp', None)
         trade_volume_snapshot = UniswapTradesSnapshot(
             contract=data_source_contract_address,
@@ -70,5 +69,5 @@ class TradeVolumeProcessor(GenericProcessorSnapshot):
             token1TradeVolumeUSD=float(f'{total_token1_vol_usd: .6f}'),
             events=result,
         )
-        return trade_volume_snapshot
+        return [(data_source_contract_address, trade_volume_snapshot),]
 
