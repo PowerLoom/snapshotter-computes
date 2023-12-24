@@ -47,21 +47,9 @@ factory_contract_obj = current_node['web3_client'].eth.contract(
     ),
     abi=factory_contract_abi,
 )
-dai_eth_contract_obj = current_node['web3_client'].eth.contract(
+pair_contract_obj = current_node['web3_client'].eth.contract(
     address=Web3.toChecksumAddress(
-        worker_settings.contract_addresses.DAI_WETH_PAIR,
-    ),
-    abi=pair_contract_abi,
-)
-usdc_eth_contract_obj = current_node['web3_client'].eth.contract(
-    address=Web3.toChecksumAddress(
-        worker_settings.contract_addresses.USDC_WETH_PAIR,
-    ),
-    abi=pair_contract_abi,
-)
-eth_usdt_contract_obj = current_node['web3_client'].eth.contract(
-    address=Web3.toChecksumAddress(
-        worker_settings.contract_addresses.USDT_WETH_PAIR,
+        '0x'+ '1' * 40
     ),
     abi=pair_contract_abi,
 )
@@ -73,14 +61,9 @@ UNISWAP_TRADE_EVENT_SIGS = {
     'Mint': 'Mint(address,uint256,uint256)',
     'Burn': 'Burn(address,uint256,uint256,address)',
 }
+
 UNISWAP_EVENTS_ABI = {
-    'Swap': usdc_eth_contract_obj.events.Swap._get_event_abi(),
-    'Mint': usdc_eth_contract_obj.events.Mint._get_event_abi(),
-    'Burn': usdc_eth_contract_obj.events.Burn._get_event_abi(),
-}
-tokens_decimals = {
-    'USDT': 6,
-    'DAI': 18,
-    'USDC': 6,
-    'WETH': 18,
+    'Swap': pair_contract_obj.events.Swap._get_event_abi(),
+    'Mint': pair_contract_obj.events.Mint._get_event_abi(),
+    'Burn': pair_contract_obj.events.Burn._get_event_abi(),
 }

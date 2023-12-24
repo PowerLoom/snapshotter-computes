@@ -14,7 +14,6 @@ from ..settings.config import settings as worker_settings
 from .constants import factory_contract_obj
 from .constants import pair_contract_abi
 from .constants import router_contract_abi
-from .constants import tokens_decimals
 from .helpers import get_pair
 from .helpers import get_pair_metadata
 from snapshotter.utils.default_logger import logger
@@ -189,7 +188,7 @@ async def get_token_derived_eth(
 
         _, derivedEth = token_derived_eth_list[index][0]
         token_derived_eth_dict[block_num] = (
-            derivedEth / 10 ** tokens_decimals['WETH'] if derivedEth != 0 else 0
+            derivedEth / 10 ** 18 if derivedEth != 0 else 0
         )
         index += 1
 

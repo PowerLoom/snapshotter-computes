@@ -1,5 +1,6 @@
 from typing import Dict
 from typing import List
+from unittest.mock import Base
 
 from pydantic import BaseModel
 
@@ -10,14 +11,9 @@ class EpochBaseSnapshot(BaseModel):
     begin: int
     end: int
 
-
-class SnapshotBase(BaseModel):
+class UniswapPairTotalReservesSnapshot(BaseModel):
+    epoch: EpochBaseSnapshot
     contract: str
-    chainHeightRange: EpochBaseSnapshot
-    timestamp: int
-
-
-class UniswapPairTotalReservesSnapshot(SnapshotBase):
     token0Reserves: Dict[
         str,
         float,
@@ -44,7 +40,9 @@ class UniswapTradeEvents(BaseModel):
     Trades: Dict[str, float]
 
 
-class UniswapTradesSnapshot(SnapshotBase):
+class UniswapTradesSnapshot(BaseModel):
+    epoch: EpochBaseSnapshot
+    contract: str
     totalTrade: float  # in USD
     totalFee: float  # in USD
     token0TradeVolume: float  # in token native decimals supply

@@ -26,7 +26,8 @@ class TradeVolumeProcessor(GenericProcessorSnapshot):
         min_chain_height = epoch.begin
         max_chain_height = epoch.end
 
-        data_source_contract_address = epoch.data_source
+        # TODO: make it dynamic later, just a placeholder to clean things up for now
+        data_source_contract_address = "0xaae5f80bac0c7fa0cad6c2481771a3b17af21455"
 
         self._logger.debug(f'trade volume {data_source_contract_address}, computation init time {time.time()}')
         result = await get_pair_trade_volume(
@@ -60,8 +61,7 @@ class TradeVolumeProcessor(GenericProcessorSnapshot):
         result.pop('timestamp', None)
         trade_volume_snapshot = UniswapTradesSnapshot(
             contract=data_source_contract_address,
-            chainHeightRange=EpochBaseSnapshot(begin=epoch.begin, end=epoch.end),
-            timestamp=max_block_timestamp,
+            epoch=EpochBaseSnapshot(begin=epoch.begin, end=epoch.end),
             totalTrade=float(f'{total_trades_in_usd: .6f}'),
             totalFee=float(f'{total_fee_in_usd: .6f}'),
             token0TradeVolume=float(f'{total_token0_vol: .6f}'),

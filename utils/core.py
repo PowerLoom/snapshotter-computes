@@ -18,9 +18,6 @@ from snapshotter.utils.default_logger import logger
 from snapshotter.utils.rpc import get_contract_abi_dict
 from snapshotter.utils.rpc import get_event_sig_and_abi
 from snapshotter.utils.rpc import RpcHelper
-from snapshotter.utils.snapshot_utils import (
-    get_block_details_in_block_range,
-)
 
 core_logger = logger.bind(module='PowerLoom|UniswapCore')
 
@@ -31,34 +28,11 @@ async def get_pair_reserves(
     to_block,
     redis_conn: aioredis.Redis,
     rpc_helper: RpcHelper,
-    fetch_timestamp=False,
 ):
     core_logger.debug(
         f'Starting pair total reserves query for: {pair_address}',
     )
     pair_address = Web3.toChecksumAddress(pair_address)
-
-    if fetch_timestamp:
-        try:
-            block_details_dict = await get_block_details_in_block_range(
-                from_block,
-                to_block,
-                redis_conn=redis_conn,
-                rpc_helper=rpc_helper,
-            )
-        except Exception as err:
-            core_logger.opt(exception=True).error(
-                (
-                    'Error attempting to get block details of block-range'
-                    ' {}-{}: {}, retrying again'
-                ),
-                from_block,
-                to_block,
-                err,
-            )
-            raise err
-    else:
-        block_details_dict = dict()
 
     pair_per_token_metadata = await get_pair_metadata(
         pair_address=pair_address,
@@ -135,16 +109,6 @@ async def get_pair_reserves(
         token0Price = token0_price_map.get(block_num, 0)
         token1Price = token1_price_map.get(block_num, 0)
 
-        current_block_details = block_details_dict.get(block_num, None)
-        timestamp = (
-            current_block_details.get(
-                'timestamp',
-                None,
-            )
-            if current_block_details
-            else None
-        )
-
         pair_reserves_arr[block_num] = {
             'token0': token0Amount,
             'token1': token1Amount,
@@ -152,8 +116,8 @@ async def get_pair_reserves(
             'token1USD': token1USD,
             'token0Price': token0Price,
             'token1Price': token1Price,
-            'timestamp': timestamp,
         }
+
         block_count += 1
 
     core_logger.debug(
@@ -171,7 +135,6 @@ def extract_trade_volume_log(
     pair_per_token_metadata,
     token0_price_map,
     token1_price_map,
-    block_details_dict,
 ):
     token0_amount = 0
     token1_amount = 0
@@ -233,11 +196,9 @@ def extract_trade_volume_log(
     trade_volume_usd = 0
     trade_fee_usd = 0
 
-    block_details = block_details_dict.get(int(log.get('blockNumber', 0)), {})
     log = json.loads(Web3.toJSON(log))
     log['token0_amount'] = token0_amount
     log['token1_amount'] = token1_amount
-    log['timestamp'] = block_details.get('timestamp', '')
     # pop unused log props
     log.pop('blockHash', None)
     log.pop('transactionIndex', None)
@@ -303,32 +264,11 @@ async def get_pair_trade_volume(
     max_chain_height,
     redis_conn: aioredis.Redis,
     rpc_helper: RpcHelper,
-    fetch_timestamp=True,
 ):
 
     data_source_contract_address = Web3.toChecksumAddress(
         data_source_contract_address,
     )
-    block_details_dict = dict()
-
-    if fetch_timestamp:
-        try:
-            block_details_dict = await get_block_details_in_block_range(
-                from_block=min_chain_height,
-                to_block=max_chain_height,
-                redis_conn=redis_conn,
-                rpc_helper=rpc_helper,
-            )
-        except Exception as err:
-            core_logger.opt(exception=True).error(
-                (
-                    'Error attempting to get block details of to_block {}:'
-                    ' {}, retrying again'
-                ),
-                max_chain_height,
-                err,
-            )
-            raise err
 
     pair_per_token_metadata = await get_pair_metadata(
         pair_address=data_source_contract_address,
@@ -449,7 +389,6 @@ async def get_pair_trade_volume(
                 pair_per_token_metadata=pair_per_token_metadata,
                 token0_price_map=token0_price_map,
                 token1_price_map=token1_price_map,
-                block_details_dict=block_details_dict,
             )
 
             if log.event == 'Swap':
@@ -470,7 +409,4 @@ async def get_pair_trade_volume(
         # At the end of txHash logs we must normalize trade values, so it don't affect result of other txHash logs
         epoch_results.Trades += abs(tx_hash_trades)
     epoch_trade_logs = epoch_results.dict()
-    max_block_details = block_details_dict.get(max_chain_height, {})
-    max_block_timestamp = max_block_details.get('timestamp', None)
-    epoch_trade_logs.update({'timestamp': max_block_timestamp})
     return epoch_trade_logs
