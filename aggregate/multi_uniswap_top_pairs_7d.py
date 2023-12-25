@@ -10,7 +10,7 @@ from snapshotter.utils.data_utils import get_submission_data_bulk
 from snapshotter.utils.default_logger import logger
 from snapshotter.utils.models.message_models import PowerloomCalculateAggregateMessage
 from snapshotter.utils.rpc import RpcHelper
-
+from typing import List
 
 class AggreagateTopPairsProcessor(GenericProcessorAggregate):
 
@@ -25,24 +25,24 @@ class AggreagateTopPairsProcessor(GenericProcessorAggregate):
         anchor_rpc_helper: RpcHelper,
         ipfs_reader: AsyncIPFSClient,
         protocol_state_contract,
-        project_id: str,
+        project_ids: List[str],
 
     ):
         self._logger.info(f'Calculating 7d top pairs trade volume data for {msg_obj}')
-
+        project_id = project_ids[0]
         epoch_id = msg_obj.epochId
 
         snapshot_mapping = {}
         all_pair_metadata = {}
 
         snapshot_data = await get_submission_data_bulk(
-            redis, [msg.snapshotCid for msg in msg_obj.messages], ipfs_reader, [
-                msg.projectId for msg in msg_obj.messages
+            redis, [msg.snapshotCid for msg in msg_obj.messages[0].snapshotsSubmitted], ipfs_reader, [
+                msg.projectId for msg in msg_obj.messages[0].snapshotsSubmitted
             ],
         )
 
         complete_flags = []
-        for msg, data in zip(msg_obj.messages, snapshot_data):
+        for msg, data in zip(msg_obj.messages[0].snapshotsSubmitted, snapshot_data):
             if not data:
                 continue
             snapshot = UniswapTradesAggregateSnapshot.parse_obj(data)
@@ -91,4 +91,4 @@ class AggreagateTopPairsProcessor(GenericProcessorAggregate):
         if not all(complete_flags):
             top_pairs_snapshot.complete = False
 
-        return top_pairs_snapshot
+        return [(project_id, top_pairs_snapshot)]

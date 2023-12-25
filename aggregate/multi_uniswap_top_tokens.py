@@ -1,6 +1,6 @@
 from ipfs_client.main import AsyncIPFSClient
 from redis import asyncio as aioredis
-
+from typing import List
 from ..utils.helpers import get_pair_metadata
 from ..utils.models.message_models import UniswapPairTotalReservesSnapshot
 from ..utils.models.message_models import UniswapTopTokenSnapshot
@@ -28,24 +28,28 @@ class AggreagateTopTokensProcessor(GenericProcessorAggregate):
         anchor_rpc_helper: RpcHelper,
         ipfs_reader: AsyncIPFSClient,
         protocol_state_contract,
-        project_id: str,
+        project_ids: List[str],
 
     ):
 
         self._logger.info(f'Calculating top tokens data for {msg_obj}')
         epoch_id = msg_obj.epochId
-
+        project_id = project_ids[0]
         snapshot_mapping = {}
         projects_metadata = {}
 
+        submitted_snapshots = []
+        for msg in msg_obj.messages:
+            for snapshot in msg.snapshotsSubmitted:
+                submitted_snapshots.append(snapshot)
+
         snapshot_data = await get_submission_data_bulk(
-            redis, [msg.snapshotCid for msg in msg_obj.messages], ipfs_reader, [
-                msg.projectId for msg in msg_obj.messages
-            ],
+            redis, [snapshot.snapshotCid for snapshot in submitted_snapshots], ipfs_reader,
+            [snapshot.projectId for snapshot in submitted_snapshots],
         )
 
         complete_flags = []
-        for msg, data in zip(msg_obj.messages, snapshot_data):
+        for msg, data in zip(submitted_snapshots, snapshot_data):
             if not data:
                 continue
             if 'reserves' in msg.projectId:
@@ -98,7 +102,7 @@ class AggreagateTopTokensProcessor(GenericProcessorAggregate):
                 }
 
             if 'reserves' in snapshot_project_id:
-                max_epoch_block = snapshot.chainHeightRange.end
+                max_epoch_block = snapshot.epoch.end
 
                 token_data[token0['address']]['price'] = snapshot.token0Prices[f'block{max_epoch_block}']
                 token_data[token1['address']]['price'] = snapshot.token1Prices[f'block{max_epoch_block}']
@@ -144,4 +148,4 @@ class AggreagateTopTokensProcessor(GenericProcessorAggregate):
         if not all(complete_flags):
             top_tokens_snapshot.complete = False
 
-        return top_tokens_snapshot
+        return [(project_id, top_tokens_snapshot)]

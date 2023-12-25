@@ -11,7 +11,7 @@ from snapshotter.utils.data_utils import get_tail_epoch_id
 from snapshotter.utils.default_logger import logger
 from snapshotter.utils.models.message_models import PowerloomCalculateAggregateMessage
 from snapshotter.utils.rpc import RpcHelper
-
+from typing import List
 
 class AggreagateStatsProcessor(GenericProcessorAggregate):
 
@@ -26,23 +26,28 @@ class AggreagateStatsProcessor(GenericProcessorAggregate):
         anchor_rpc_helper: RpcHelper,
         ipfs_reader: AsyncIPFSClient,
         protocol_state_contract,
-        project_id: str,
+        project_ids: List[str],
+
 
     ):
         self._logger.info(f'Calculating unswap stats for {msg_obj}')
 
         epoch_id = msg_obj.epochId
-
+        project_id = project_ids[0]
         snapshot_mapping = {}
 
+        submitted_snapshots = []
+        for msg in msg_obj.messages:
+            for snapshot in msg.snapshotsSubmitted:
+                submitted_snapshots.append(snapshot)
+
         snapshot_data = await get_submission_data_bulk(
-            redis, [msg.snapshotCid for msg in msg_obj.messages], ipfs_reader, [
-                msg.projectId for msg in msg_obj.messages
-            ],
+            redis, [snapshot.snapshotCid for snapshot in submitted_snapshots], ipfs_reader,
+            [snapshot.projectId for snapshot in submitted_snapshots],
         )
 
         complete_flags = []
-        for msg, data in zip(msg_obj.messages, snapshot_data):
+        for msg, data in zip(submitted_snapshots, snapshot_data):
             if not data:
                 continue
             if 'reserves' in msg.projectId:
@@ -65,7 +70,7 @@ class AggreagateStatsProcessor(GenericProcessorAggregate):
             snapshot = snapshot_mapping[snapshot_project_id]
 
             if 'reserves' in snapshot_project_id:
-                max_epoch_block = snapshot.chainHeightRange.end
+                max_epoch_block = snapshot.epoch.end
 
                 stats_data['tvl'] += snapshot.token0ReservesUSD[f'block{max_epoch_block}'] + \
                     snapshot.token1ReservesUSD[f'block{max_epoch_block}']
@@ -109,4 +114,4 @@ class AggreagateStatsProcessor(GenericProcessorAggregate):
         if not all(complete_flags):
             stats_snapshot.complete = False
 
-        return stats_snapshot
+        return [(project_id, stats_snapshot)]
