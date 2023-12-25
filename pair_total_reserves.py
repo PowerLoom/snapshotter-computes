@@ -9,6 +9,7 @@ from snapshotter.utils.callback_helpers import GenericProcessorSnapshot
 from snapshotter.utils.default_logger import logger
 from snapshotter.utils.models.message_models import PowerloomSnapshotProcessMessage
 from snapshotter.utils.rpc import RpcHelper
+from .redis_keys import uniswap_v2_monitored_pairs
 
 
 class PairTotalReservesProcessor(GenericProcessorSnapshot):
@@ -16,20 +17,14 @@ class PairTotalReservesProcessor(GenericProcessorSnapshot):
     def __init__(self) -> None:
         self._logger = logger.bind(module='PairTotalReservesProcessor')
 
-    async def compute(
+    async def _compute_single(
         self,
-        epoch: PowerloomSnapshotProcessMessage,
+        data_source_contract_address: str,
+        min_chain_height: int,
+        max_chain_height: int,
         redis_conn: aioredis.Redis,
         rpc_helper: RpcHelper,
-
     ):
-
-        min_chain_height = epoch.begin
-        max_chain_height = epoch.end
-
-        # TODO: make it dynamic later, just a placeholder to clean things up for now
-        data_source_contract_address = "0xaae5f80bac0c7fa0cad6c2481771a3b17af21455"
-
         epoch_reserves_snapshot_map_token0 = dict()
         epoch_prices_snapshot_map_token0 = dict()
         epoch_prices_snapshot_map_token1 = dict()
@@ -37,7 +32,6 @@ class PairTotalReservesProcessor(GenericProcessorSnapshot):
         epoch_usd_reserves_snapshot_map_token0 = dict()
         epoch_usd_reserves_snapshot_map_token1 = dict()
 
-        self._logger.debug(f'pair reserves {data_source_contract_address} computation init time {time.time()}')
         pair_reserve_total = await get_pair_reserves(
             pair_address=data_source_contract_address,
             from_block=min_chain_height,
@@ -85,6 +79,42 @@ class PairTotalReservesProcessor(GenericProcessorSnapshot):
                 'contract': data_source_contract_address,
             },
         )
+        return pair_total_reserves_snapshot
+
+    async def compute(
+        self,
+        epoch: PowerloomSnapshotProcessMessage,
+        redis_conn: aioredis.Redis,
+        rpc_helper: RpcHelper,
+
+    ):
+
+        min_chain_height = epoch.begin
+        max_chain_height = epoch.end
+
+        # get monitored pairs from redis
+        monitored_pairs = await redis_conn.smembers(uniswap_v2_monitored_pairs)
+        if monitored_pairs:
+            monitored_pairs = set([pair.decode() for pair in monitored_pairs])
+        snapshots = list()
+        self._logger.debug(f'pair reserves computation init time {time.time()}')
+
+        for data_source_contract_address in monitored_pairs:
+            snapshot = await self._compute_single(
+                data_source_contract_address=data_source_contract_address,
+                min_chain_height=min_chain_height,
+                max_chain_height=max_chain_height,
+                redis_conn=redis_conn,
+                rpc_helper=rpc_helper,
+            )
+            if snapshot:
+                snapshots.append(
+                    (
+                        data_source_contract_address,
+                        snapshot,
+                    ),
+                )
+
         self._logger.debug(f'pair reserves {data_source_contract_address}, computation end time {time.time()}')
 
-        return [(data_source_contract_address, pair_total_reserves_snapshot),]
+        return snapshots

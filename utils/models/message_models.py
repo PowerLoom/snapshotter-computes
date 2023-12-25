@@ -111,3 +111,7 @@ class UniswapStatsSnapshot(AggregateBase):
     tvlChange24h: float = 0
     feeChange24h: float = 0
     complete: bool = True
+
+
+class MonitoredPairsSnapshot(BaseModel):
+    pairs: List[str] = []
