@@ -16,7 +16,7 @@ from snapshotter.utils.models.message_models import PowerloomProjectTypeProcessi
 from snapshotter.utils.redis.redis_keys import project_finalized_data_zset
 from snapshotter.utils.redis.redis_keys import submitted_base_snapshots_key
 from snapshotter.utils.rpc import RpcHelper
-
+from snapshotter.utils.data_utils import get_project_last_finalized_cid_and_epoch
 
 class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
 
@@ -119,151 +119,138 @@ class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
     ):
         self._logger.info(f'Building trade volume aggregate snapshot for {submitted_snapshot}')
 
-        # aggregate project first epoch
-        project_first_epoch = await get_project_first_epoch(
-            redis, protocol_state_contract, anchor_rpc_helper, project_id,
+        # get key with highest score
+        project_last_finalized = await redis.zrevrangebyscore(
+            project_finalized_data_zset(project_id),
+            max='+inf',
+            min='-inf',
+            withscores=True,
+            start=0,
+            num=1,
+        )
+        self._logger.error("project_last_finalized: {} for project id {} ", project_last_finalized, project_finalized_data_zset(project_id))
+
+        if project_last_finalized:
+            project_last_finalized_cid, project_last_finalized_epoch = project_last_finalized[0]
+            project_last_finalized_epoch = int(project_last_finalized_epoch)
+            project_last_finalized_cid = project_last_finalized_cid.decode('utf-8')
+        else:
+            self._logger.info('project_last_finalized is None, trying to fetch from contract')
+            project_last_finalized_cid, project_last_finalized_epoch = await get_project_last_finalized_cid_and_epoch(
+                redis, protocol_state_contract, anchor_rpc_helper, submitted_snapshot.projectId,
+            )
+
+        tail_epoch_id, extrapolated_flag = await get_tail_epoch_id(
+            redis, protocol_state_contract, anchor_rpc_helper, epoch_id, 86400, submitted_snapshot.projectId,
         )
 
-        # If no past snapshots exist, then aggregate will be current snapshot
-        if project_first_epoch == 0:
+        if extrapolated_flag:
+            aggregate_complete_flag = False
+        else:
+            aggregate_complete_flag = True
+
+        if project_last_finalized_epoch <= tail_epoch_id:
+            self._logger.error('last finalized epoch is too old, building aggregate from scratch')
             return await self._calculate_from_scratch(
                 submitted_snapshot, epoch_id, redis, rpc_helper, anchor_rpc_helper, ipfs_reader, protocol_state_contract, project_id,
             )
 
-        else:
-            self._logger.info('project_first_epoch is not 0, building aggregate from previous aggregate')
+        project_last_finalized_data = await get_submission_data(
+            redis, project_last_finalized_cid, ipfs_reader, project_id,
+        )
 
-            # get key with highest score
-            project_last_finalized = await redis.zrevrangebyscore(
-                project_finalized_data_zset(project_id),
-                max='+inf',
-                min='-inf',
-                withscores=True,
-                start=0,
-                num=1,
+        if not project_last_finalized_data:
+            self._logger.info('project_last_finalized_data is None, building aggregate from scratch')
+            return await self._calculate_from_scratch(
+                submitted_snapshot, epoch_id, redis, rpc_helper, anchor_rpc_helper, ipfs_reader, protocol_state_contract, project_id,
             )
 
-            if project_last_finalized:
-                project_last_finalized_cid, project_last_finalized_epoch = project_last_finalized[0]
-                project_last_finalized_epoch = int(project_last_finalized_epoch)
-                project_last_finalized_cid = project_last_finalized_cid.decode('utf-8')
-            else:
-                self._logger.info('project_last_finalized is None, trying to fetch from contract')
-                return await self._calculate_from_scratch(
-                    submitted_snapshot, epoch_id, redis, rpc_helper, anchor_rpc_helper, ipfs_reader, protocol_state_contract, project_id,
-                )
+        aggregate_snapshot = UniswapTradesAggregateSnapshot.parse_obj(project_last_finalized_data)
+        # updating epochId to current epoch
+        aggregate_snapshot.epochId = epoch_id
 
+        base_project_last_finalized = await redis.zrevrangebyscore(
+            project_finalized_data_zset(submitted_snapshot.projectId),
+            max='+inf',
+            min='-inf',
+            withscores=True,
+            start=0,
+            num=1,
+        )
+
+        if base_project_last_finalized:
+            _, base_project_last_finalized_epoch_ = base_project_last_finalized[0]
+            base_project_last_finalized_epoch = int(base_project_last_finalized_epoch_)
+        else:
+            base_project_last_finalized_epoch = 0
+
+        if base_project_last_finalized_epoch and project_last_finalized_epoch < base_project_last_finalized_epoch:
+            # fetch base finalized snapshots if they exist and are within 5 epochs of current epoch
+            base_finalized_snapshot_range = (
+                project_last_finalized_epoch + 1,
+                base_project_last_finalized_epoch,
+            )
+
+            base_finalized_snapshots = await get_project_epoch_snapshot_bulk(
+                redis, protocol_state_contract, anchor_rpc_helper, ipfs_reader,
+                base_finalized_snapshot_range[0], base_finalized_snapshot_range[1], submitted_snapshot.projectId,
+            )
+        else:
+            base_finalized_snapshots = []
+            base_finalized_snapshot_range = (0, project_last_finalized_epoch)
+
+        base_unfinalized_tasks = []
+        for epoch_id in range(base_finalized_snapshot_range[1] + 1, epoch_id + 1):
+            base_unfinalized_tasks.append(
+                redis.get(submitted_base_snapshots_key(epoch_id=epoch_id, project_id=submitted_snapshot.projectId)),
+            )
+
+        base_unfinalized_snapshots_raw = await asyncio.gather(*base_unfinalized_tasks, return_exceptions=True)
+
+        base_unfinalized_snapshots = []
+        for snapshot_data in base_unfinalized_snapshots_raw:
+            # check if not exception and not None
+            if not isinstance(snapshot_data, Exception) and snapshot_data:
+                base_unfinalized_snapshots.append(
+                    json.loads(snapshot_data),
+                )
+            else:
+                self._logger.error(
+                    f'Error fetching base unfinalized snapshot, cancelling aggregation for epoch {epoch_id}',
+                )
+                return
+
+        base_snapshots = base_finalized_snapshots + base_unfinalized_snapshots
+
+        for snapshot_data in base_snapshots:
+            if snapshot_data:
+                snapshot = UniswapTradesSnapshot.parse_obj(snapshot_data)
+                aggregate_snapshot = self._add_aggregate_snapshot(aggregate_snapshot, snapshot)
+
+        # Remove from tail if needed
+        tail_epochs_to_remove = []
+        for epoch_id in range(project_last_finalized_epoch, epoch_id):
             tail_epoch_id, extrapolated_flag = await get_tail_epoch_id(
                 redis, protocol_state_contract, anchor_rpc_helper, epoch_id, 86400, submitted_snapshot.projectId,
             )
-
-            if extrapolated_flag:
-                aggregate_complete_flag = False
-            else:
-                aggregate_complete_flag = True
-
-            if project_last_finalized_epoch <= tail_epoch_id:
-                self._logger.error('last finalized epoch is too old, building aggregate from scratch')
-                return await self._calculate_from_scratch(
-                    submitted_snapshot, epoch_id, redis, rpc_helper, anchor_rpc_helper, ipfs_reader, protocol_state_contract, project_id,
-                )
-
-            project_last_finalized_data = await get_submission_data(
-                redis, project_last_finalized_cid, ipfs_reader, project_id,
+            if not extrapolated_flag:
+                tail_epochs_to_remove.append(tail_epoch_id)
+        if tail_epochs_to_remove:
+            tail_epoch_snapshots = await get_project_epoch_snapshot_bulk(
+                redis, protocol_state_contract, anchor_rpc_helper, ipfs_reader,
+                tail_epochs_to_remove[0], tail_epochs_to_remove[-1], submitted_snapshot.projectId,
             )
 
-            if not project_last_finalized_data:
-                self._logger.info('project_last_finalized_data is None, building aggregate from scratch')
-                return await self._calculate_from_scratch(
-                    submitted_snapshot, epoch_id, redis, rpc_helper, anchor_rpc_helper, ipfs_reader, protocol_state_contract, project_id,
-                )
-
-            aggregate_snapshot = UniswapTradesAggregateSnapshot.parse_obj(project_last_finalized_data)
-            # updating epochId to current epoch
-            aggregate_snapshot.epochId = epoch_id
-
-            base_project_last_finalized = await redis.zrevrangebyscore(
-                project_finalized_data_zset(submitted_snapshot.projectId),
-                max='+inf',
-                min='-inf',
-                withscores=True,
-                start=0,
-                num=1,
-            )
-
-            if base_project_last_finalized:
-                _, base_project_last_finalized_epoch_ = base_project_last_finalized[0]
-                base_project_last_finalized_epoch = int(base_project_last_finalized_epoch_)
-            else:
-                base_project_last_finalized_epoch = 0
-
-            if base_project_last_finalized_epoch and project_last_finalized_epoch < base_project_last_finalized_epoch:
-                # fetch base finalized snapshots if they exist and are within 5 epochs of current epoch
-                base_finalized_snapshot_range = (
-                    project_last_finalized_epoch + 1,
-                    base_project_last_finalized_epoch,
-                )
-
-                base_finalized_snapshots = await get_project_epoch_snapshot_bulk(
-                    redis, protocol_state_contract, anchor_rpc_helper, ipfs_reader,
-                    base_finalized_snapshot_range[0], base_finalized_snapshot_range[1], submitted_snapshot.projectId,
-                )
-            else:
-                base_finalized_snapshots = []
-                base_finalized_snapshot_range = (0, project_last_finalized_epoch)
-
-            base_unfinalized_tasks = []
-            for epoch_id in range(base_finalized_snapshot_range[1] + 1, epoch_id + 1):
-                base_unfinalized_tasks.append(
-                    redis.get(submitted_base_snapshots_key(epoch_id=epoch_id, project_id=submitted_snapshot.projectId)),
-                )
-
-            base_unfinalized_snapshots_raw = await asyncio.gather(*base_unfinalized_tasks, return_exceptions=True)
-
-            base_unfinalized_snapshots = []
-            for snapshot_data in base_unfinalized_snapshots_raw:
-                # check if not exception and not None
-                if not isinstance(snapshot_data, Exception) and snapshot_data:
-                    base_unfinalized_snapshots.append(
-                        json.loads(snapshot_data),
-                    )
-                else:
-                    self._logger.error(
-                        f'Error fetching base unfinalized snapshot, cancelling aggregation for epoch {epoch_id}',
-                    )
-                    return
-
-            base_snapshots = base_finalized_snapshots + base_unfinalized_snapshots
-
-            for snapshot_data in base_snapshots:
+            for snapshot_data in tail_epoch_snapshots:
                 if snapshot_data:
                     snapshot = UniswapTradesSnapshot.parse_obj(snapshot_data)
-                    aggregate_snapshot = self._add_aggregate_snapshot(aggregate_snapshot, snapshot)
+                    aggregate_snapshot = self._remove_aggregate_snapshot(aggregate_snapshot, snapshot)
 
-            # Remove from tail if needed
-            tail_epochs_to_remove = []
-            for epoch_id in range(project_last_finalized_epoch, epoch_id):
-                tail_epoch_id, extrapolated_flag = await get_tail_epoch_id(
-                    redis, protocol_state_contract, anchor_rpc_helper, epoch_id, 86400, submitted_snapshot.projectId,
-                )
-                if not extrapolated_flag:
-                    tail_epochs_to_remove.append(tail_epoch_id)
-            if tail_epochs_to_remove:
-                tail_epoch_snapshots = await get_project_epoch_snapshot_bulk(
-                    redis, protocol_state_contract, anchor_rpc_helper, ipfs_reader,
-                    tail_epochs_to_remove[0], tail_epochs_to_remove[-1], submitted_snapshot.projectId,
-                )
-
-                for snapshot_data in tail_epoch_snapshots:
-                    if snapshot_data:
-                        snapshot = UniswapTradesSnapshot.parse_obj(snapshot_data)
-                        aggregate_snapshot = self._remove_aggregate_snapshot(aggregate_snapshot, snapshot)
-
-            if aggregate_complete_flag:
-                aggregate_snapshot.complete = True
-            else:
-                aggregate_snapshot.complete = False
-            return aggregate_snapshot
+        if aggregate_complete_flag:
+            aggregate_snapshot.complete = True
+        else:
+            aggregate_snapshot.complete = False
+        return aggregate_snapshot
 
     async def compute(
         self,

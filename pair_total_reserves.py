@@ -115,6 +115,6 @@ class PairTotalReservesProcessor(GenericProcessorSnapshot):
                     ),
                 )
 
-        self._logger.debug(f'pair reserves {data_source_contract_address}, computation end time {time.time()}')
+        self._logger.debug(f'pair reserves, computation end time {time.time()}')
 
         return snapshots
