@@ -409,9 +409,9 @@ async def get_token_eth_quote_from_uniswap(
     for sqrtP in sqrtP_list:
         price0, price1, _ = sqrtPriceX96ToTokenPrices(sqrtP, token0_decimals, token1_decimals)
         if token0 == token_address:
-            token_eth_quote.append(price0)
-        else:
             token_eth_quote.append(price1)
+        else:
+            token_eth_quote.append(price0)
     
 
     return token_eth_quote
