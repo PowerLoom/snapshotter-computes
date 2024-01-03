@@ -2,6 +2,10 @@ import asyncio
 import json
 
 from redis import asyncio as aioredis
+from snapshotter.utils.default_logger import logger
+from snapshotter.utils.rpc import get_contract_abi_dict
+from snapshotter.utils.rpc import get_event_sig_and_abi
+from snapshotter.utils.rpc import RpcHelper
 from web3 import Web3
 
 from .constants import pair_contract_abi
@@ -14,10 +18,6 @@ from .models.data_models import trade_data
 from .pricing import (
     get_token_price_in_block_range,
 )
-from snapshotter.utils.default_logger import logger
-from snapshotter.utils.rpc import get_contract_abi_dict
-from snapshotter.utils.rpc import get_event_sig_and_abi
-from snapshotter.utils.rpc import RpcHelper
 
 core_logger = logger.bind(module='PowerLoom|UniswapCore')
 

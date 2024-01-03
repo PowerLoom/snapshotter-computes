@@ -1,17 +1,19 @@
 import asyncio
+from typing import List
 
 import pydantic
 from ipfs_client.main import AsyncIPFSClient
 from redis import asyncio as aioredis
-from typing import List
-from ..utils.models.message_models import UniswapTradesAggregateSnapshot
 from snapshotter.utils.callback_helpers import GenericProcessorAggregate
 from snapshotter.utils.data_utils import get_project_epoch_snapshot
 from snapshotter.utils.data_utils import get_submission_data
 from snapshotter.utils.data_utils import get_tail_epoch_id
 from snapshotter.utils.default_logger import logger
-from snapshotter.utils.models.message_models import PowerloomProjectTypeProcessingCompleteMessage, PowerloomSnapshotSubmittedMessageLite
+from snapshotter.utils.models.message_models import PowerloomProjectTypeProcessingCompleteMessage
+from snapshotter.utils.models.message_models import PowerloomSnapshotSubmittedMessageLite
 from snapshotter.utils.rpc import RpcHelper
+
+from ..utils.models.message_models import UniswapTradesAggregateSnapshot
 
 
 class AggregateTradeVolumeProcessor(GenericProcessorAggregate):

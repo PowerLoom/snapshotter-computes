@@ -2,6 +2,11 @@ import asyncio
 import json
 
 from redis import asyncio as aioredis
+from snapshotter.utils.default_logger import logger
+from snapshotter.utils.redis.redis_keys import source_chain_epoch_size_key
+from snapshotter.utils.rpc import get_contract_abi_dict
+from snapshotter.utils.rpc import RpcHelper
+from snapshotter.utils.snapshot_utils import get_eth_price_usd
 from web3 import Web3
 
 from ..redis_keys import (
@@ -16,11 +21,6 @@ from .constants import pair_contract_abi
 from .constants import router_contract_abi
 from .helpers import get_pair
 from .helpers import get_pair_metadata
-from snapshotter.utils.default_logger import logger
-from snapshotter.utils.redis.redis_keys import source_chain_epoch_size_key
-from snapshotter.utils.rpc import get_contract_abi_dict
-from snapshotter.utils.rpc import RpcHelper
-from snapshotter.utils.snapshot_utils import get_eth_price_usd
 
 pricing_logger = logger.bind(module='PowerLoom|Uniswap|Pricing')
 

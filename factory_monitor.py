@@ -1,19 +1,21 @@
+import json
+
+from ipfs_client.main import AsyncIPFSClient
 from redis import asyncio as aioredis
 from snapshotter.settings.config import settings
-from .utils.models.message_models import MonitoredPairsSnapshot
 from snapshotter.utils.callback_helpers import GenericProcessor
-from snapshotter.utils.default_logger import logger
-from snapshotter.utils.models.message_models import PowerloomSnapshotProcessMessage
-from snapshotter.utils.rpc import RpcHelper
-from .settings.config import settings as module_settings
-from .redis_keys import uniswap_v2_monitored_pairs
-from snapshotter.utils.models.message_models import EthTransactionReceipt
-from snapshotter.utils.redis.redis_keys import epoch_txs_htable
 from snapshotter.utils.data_utils import get_project_last_finalized_cid_and_epoch
 from snapshotter.utils.data_utils import get_submission_data
+from snapshotter.utils.default_logger import logger
 from snapshotter.utils.event_log_decoder import EventLogDecoder
-import json
-from ipfs_client.main import AsyncIPFSClient
+from snapshotter.utils.models.message_models import EthTransactionReceipt
+from snapshotter.utils.models.message_models import PowerloomSnapshotProcessMessage
+from snapshotter.utils.redis.redis_keys import epoch_txs_htable
+from snapshotter.utils.rpc import RpcHelper
+
+from .redis_keys import uniswap_v2_monitored_pairs
+from .settings.config import settings as module_settings
+from .utils.models.message_models import MonitoredPairsSnapshot
 
 
 class FactoryMonitorProcessor(GenericProcessor):
@@ -32,20 +34,20 @@ class FactoryMonitorProcessor(GenericProcessor):
     ):
 
         project_id = f'pairContract_factory_monitor:{settings.namespace}'
-        
+
         last_finalized_pairs = set()
         project_last_finalized_cid, _ = await get_project_last_finalized_cid_and_epoch(
             redis, protocol_state_contract, anchor_rpc_helper, project_id,
         )
 
-        if project_last_finalized_cid:    
+        if project_last_finalized_cid:
             project_last_finalized_data = await get_submission_data(
                 redis, project_last_finalized_cid, ipfs_reader, project_id,
             )
 
             if project_last_finalized_data:
                 project_last_finalized = MonitoredPairsSnapshot.parse_raw(project_last_finalized_data)
-                last_finalized_pairs =  set(project_last_finalized.pairs)
+                last_finalized_pairs = set(project_last_finalized.pairs)
                 monitored_pairs = last_finalized_pairs.copy()
             else:
                 monitored_pairs = await redis.smembers(uniswap_v2_monitored_pairs)
@@ -98,4 +100,4 @@ class FactoryMonitorProcessor(GenericProcessor):
         await redis.sadd(uniswap_v2_monitored_pairs, *monitored_pairs)
 
         if not last_finalized_pairs or last_finalized_pairs != monitored_pairs:
-            return [("pairs", MonitoredPairsSnapshot(pairs=monitored_pairs)),]
+            return [('pairs', MonitoredPairsSnapshot(pairs=monitored_pairs))]

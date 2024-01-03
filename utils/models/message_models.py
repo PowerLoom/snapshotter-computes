@@ -3,13 +3,13 @@ from typing import List
 from unittest.mock import Base
 
 from pydantic import BaseModel
-
 from snapshotter.utils.models.message_models import AggregateBase
 
 
 class EpochBaseSnapshot(BaseModel):
     begin: int
     end: int
+
 
 class UniswapPairTotalReservesSnapshot(BaseModel):
     epoch: EpochBaseSnapshot

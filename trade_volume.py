@@ -1,16 +1,16 @@
 import time
 
+from ipfs_client.main import AsyncIPFSClient
 from redis import asyncio as aioredis
-
-from .utils.core import get_pair_trade_volume
-from .utils.models.message_models import EpochBaseSnapshot
-from .utils.models.message_models import UniswapTradesSnapshot
 from snapshotter.utils.callback_helpers import GenericProcessor
 from snapshotter.utils.default_logger import logger
 from snapshotter.utils.models.message_models import PowerloomSnapshotProcessMessage
 from snapshotter.utils.rpc import RpcHelper
+
 from .redis_keys import uniswap_v2_monitored_pairs
-from ipfs_client.main import AsyncIPFSClient
+from .utils.core import get_pair_trade_volume
+from .utils.models.message_models import EpochBaseSnapshot
+from .utils.models.message_models import UniswapTradesSnapshot
 
 
 class TradeVolumeProcessor(GenericProcessor):

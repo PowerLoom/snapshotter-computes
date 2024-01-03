@@ -1,6 +1,8 @@
 import asyncio
 
 from redis import asyncio as aioredis
+from snapshotter.utils.default_logger import logger
+from snapshotter.utils.rpc import RpcHelper
 from web3 import Web3
 
 from ..redis_keys import uniswap_pair_contract_tokens_addresses
@@ -10,8 +12,6 @@ from ..settings.config import settings as worker_settings
 from .constants import current_node
 from .constants import erc20_abi
 from .constants import pair_contract_abi
-from snapshotter.utils.default_logger import logger
-from snapshotter.utils.rpc import RpcHelper
 
 
 helper_logger = logger.bind(module='PowerLoom|Uniswap|Helpers')

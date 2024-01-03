@@ -1,16 +1,18 @@
+from typing import List
+
 from ipfs_client.main import AsyncIPFSClient
 from redis import asyncio as aioredis
-
-from ..utils.helpers import get_pair_metadata
-from ..utils.models.message_models import UniswapTopPair7dSnapshot
-from ..utils.models.message_models import UniswapTopPairs7dSnapshot
-from ..utils.models.message_models import UniswapTradesAggregateSnapshot
 from snapshotter.utils.callback_helpers import GenericProcessorAggregate
 from snapshotter.utils.data_utils import get_submission_data_bulk
 from snapshotter.utils.default_logger import logger
 from snapshotter.utils.models.message_models import PowerloomCalculateAggregateMessage
 from snapshotter.utils.rpc import RpcHelper
-from typing import List
+
+from ..utils.helpers import get_pair_metadata
+from ..utils.models.message_models import UniswapTopPair7dSnapshot
+from ..utils.models.message_models import UniswapTopPairs7dSnapshot
+from ..utils.models.message_models import UniswapTradesAggregateSnapshot
+
 
 class AggreagateTopPairsProcessor(GenericProcessorAggregate):
 

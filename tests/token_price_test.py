@@ -3,14 +3,14 @@ import json
 from functools import partial
 
 from redis import asyncio as aioredis
+from snapshotter.utils.redis.rate_limiter import load_rate_limiter_scripts
+from snapshotter.utils.redis.redis_conn import provide_async_redis_conn_insta
 from web3 import Web3
 
 from ..settings.config import enabled_projects
 from ..settings.config import settings
 from ..settings.config import settings as worker_settings
 from ..utils.helpers import get_pair_metadata
-from snapshotter.utils.redis.rate_limiter import load_rate_limiter_scripts
-from snapshotter.utils.redis.redis_conn import provide_async_redis_conn_insta
 
 w3 = Web3(Web3.HTTPProvider(settings.rpc.full_nodes[0].url))
 pair_address = Web3.toChecksumAddress(

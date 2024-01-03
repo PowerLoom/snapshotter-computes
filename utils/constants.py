@@ -1,9 +1,9 @@
-from web3 import Web3
-
-from ..settings.config import settings as worker_settings
 from snapshotter.utils.default_logger import logger
 from snapshotter.utils.file_utils import read_json_file
 from snapshotter.utils.rpc import RpcHelper
+from web3 import Web3
+
+from ..settings.config import settings as worker_settings
 
 constants_logger = logger.bind(module='PowerLoom|Uniswap|Constants')
 # Getting current node
@@ -49,7 +49,7 @@ factory_contract_obj = current_node['web3_client'].eth.contract(
 )
 pair_contract_obj = current_node['web3_client'].eth.contract(
     address=Web3.toChecksumAddress(
-        '0x'+ '1' * 40
+        '0x' + '1' * 40,
     ),
     abi=pair_contract_abi,
 )

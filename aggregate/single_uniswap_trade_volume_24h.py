@@ -1,13 +1,12 @@
 import asyncio
 import json
+from typing import List
 
 from ipfs_client.main import AsyncIPFSClient
 from redis import asyncio as aioredis
-from typing import List
-from ..utils.models.message_models import UniswapTradesAggregateSnapshot
-from ..utils.models.message_models import UniswapTradesSnapshot
 from snapshotter.utils.callback_helpers import GenericProcessorAggregate
 from snapshotter.utils.data_utils import get_project_epoch_snapshot_bulk
+from snapshotter.utils.data_utils import get_project_last_finalized_cid_and_epoch
 from snapshotter.utils.data_utils import get_submission_data
 from snapshotter.utils.data_utils import get_tail_epoch_id
 from snapshotter.utils.default_logger import logger
@@ -16,7 +15,9 @@ from snapshotter.utils.models.message_models import PowerloomSnapshotSubmittedMe
 from snapshotter.utils.redis.redis_keys import project_finalized_data_zset
 from snapshotter.utils.redis.redis_keys import submitted_base_snapshots_key
 from snapshotter.utils.rpc import RpcHelper
-from snapshotter.utils.data_utils import get_project_last_finalized_cid_and_epoch
+
+from ..utils.models.message_models import UniswapTradesAggregateSnapshot
+from ..utils.models.message_models import UniswapTradesSnapshot
 
 
 class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
@@ -129,7 +130,10 @@ class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
             start=0,
             num=1,
         )
-        self._logger.error("project_last_finalized: {} for project id {} ", project_last_finalized, project_finalized_data_zset(project_id))
+        self._logger.error(
+            'project_last_finalized: {} for project id {} ',
+            project_last_finalized, project_finalized_data_zset(project_id),
+        )
 
         if project_last_finalized:
             project_last_finalized_cid, project_last_finalized_epoch = project_last_finalized[0]
@@ -263,7 +267,7 @@ class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
         protocol_state_contract,
         project_ids: List[str],
 
-    ):  
+    ):
         snapshots = []
         for submitted_snapshot, project_id in zip(msg_obj.snapshotsSubmitted, project_ids):
 
