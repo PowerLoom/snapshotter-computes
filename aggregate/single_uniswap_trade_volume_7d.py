@@ -9,8 +9,8 @@ from snapshotter.utils.data_utils import get_project_epoch_snapshot
 from snapshotter.utils.data_utils import get_submission_data
 from snapshotter.utils.data_utils import get_tail_epoch_id
 from snapshotter.utils.default_logger import logger
-from snapshotter.utils.models.message_models import PowerloomProjectTypeProcessingCompleteMessage
-from snapshotter.utils.models.message_models import PowerloomSnapshotSubmittedMessageLite
+from snapshotter.utils.models.message_models import ProjectTypeProcessingCompleteMessage
+from snapshotter.utils.models.message_models import SnapshotSubmittedMessageLite
 from snapshotter.utils.rpc import RpcHelper
 
 from ..utils.models.message_models import UniswapTradesAggregateSnapshot
@@ -53,7 +53,7 @@ class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
 
     async def _compute_single(
         self,
-        submitted_snapshot: PowerloomSnapshotSubmittedMessageLite,
+        submitted_snapshot: SnapshotSubmittedMessageLite,
         epoch_id: int,
         redis: aioredis.Redis,
         rpc_helper: RpcHelper,
@@ -125,7 +125,7 @@ class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
 
     async def compute(
         self,
-        msg_obj: PowerloomProjectTypeProcessingCompleteMessage,
+        msg_obj: ProjectTypeProcessingCompleteMessage,
         redis: aioredis.Redis,
         rpc_helper: RpcHelper,
         anchor_rpc_helper: RpcHelper,

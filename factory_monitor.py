@@ -9,7 +9,7 @@ from snapshotter.utils.data_utils import get_submission_data
 from snapshotter.utils.default_logger import logger
 from snapshotter.utils.event_log_decoder import EventLogDecoder
 from snapshotter.utils.models.message_models import EthTransactionReceipt
-from snapshotter.utils.models.message_models import PowerloomSnapshotProcessMessage
+from snapshotter.utils.models.message_models import SnapshotProcessMessage
 from snapshotter.utils.redis.redis_keys import epoch_txs_htable
 from snapshotter.utils.rpc import RpcHelper
 
@@ -25,7 +25,7 @@ class FactoryMonitorProcessor(GenericProcessor):
 
     async def compute(
         self,
-        msg_obj: PowerloomSnapshotProcessMessage,
+        msg_obj: SnapshotProcessMessage,
         redis: aioredis.Redis,
         rpc_helper: RpcHelper,
         anchor_rpc_helper: RpcHelper,

@@ -22,7 +22,7 @@ from .constants import router_contract_abi
 from .helpers import get_pair
 from .helpers import get_pair_metadata
 
-pricing_logger = logger.bind(module='PowerLoom|Uniswap|Pricing')
+pricing_logger = logger.bind(module='Uniswap|Pricing')
 
 
 async def get_token_pair_price_and_white_token_reserves(

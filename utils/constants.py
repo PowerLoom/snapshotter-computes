@@ -5,7 +5,7 @@ from web3 import Web3
 
 from ..settings.config import settings as worker_settings
 
-constants_logger = logger.bind(module='PowerLoom|Uniswap|Constants')
+constants_logger = logger.bind(module='Uniswap|Constants')
 # Getting current node
 
 rpc_helper = RpcHelper()

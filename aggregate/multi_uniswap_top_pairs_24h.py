@@ -5,7 +5,7 @@ from redis import asyncio as aioredis
 from snapshotter.utils.callback_helpers import GenericProcessorAggregate
 from snapshotter.utils.data_utils import get_submission_data_bulk
 from snapshotter.utils.default_logger import logger
-from snapshotter.utils.models.message_models import PowerloomCalculateAggregateMessage
+from snapshotter.utils.models.message_models import CalculateAggregateMessage
 from snapshotter.utils.rpc import RpcHelper
 
 from ..utils.helpers import get_pair_metadata
@@ -22,7 +22,7 @@ class AggreagateTopPairsProcessor(GenericProcessorAggregate):
 
     async def compute(
         self,
-        msg_obj: PowerloomCalculateAggregateMessage,
+        msg_obj: CalculateAggregateMessage,
         redis: aioredis.Redis,
         rpc_helper: RpcHelper,
         anchor_rpc_helper: RpcHelper,

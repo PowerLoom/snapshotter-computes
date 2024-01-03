@@ -14,7 +14,7 @@ from .constants import erc20_abi
 from .constants import pair_contract_abi
 
 
-helper_logger = logger.bind(module='PowerLoom|Uniswap|Helpers')
+helper_logger = logger.bind(module='Uniswap|Helpers')
 
 
 def get_maker_pair_data(prop):

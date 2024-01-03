@@ -19,7 +19,7 @@ from .pricing import (
     get_token_price_in_block_range,
 )
 
-core_logger = logger.bind(module='PowerLoom|UniswapCore')
+core_logger = logger.bind(module='UniswapCore')
 
 
 async def get_pair_reserves(

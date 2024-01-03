@@ -10,8 +10,8 @@ from snapshotter.utils.data_utils import get_project_last_finalized_cid_and_epoc
 from snapshotter.utils.data_utils import get_submission_data
 from snapshotter.utils.data_utils import get_tail_epoch_id
 from snapshotter.utils.default_logger import logger
-from snapshotter.utils.models.message_models import PowerloomProjectTypeProcessingCompleteMessage
-from snapshotter.utils.models.message_models import PowerloomSnapshotSubmittedMessageLite
+from snapshotter.utils.models.message_models import ProjectTypeProcessingCompleteMessage
+from snapshotter.utils.models.message_models import SnapshotSubmittedMessageLite
 from snapshotter.utils.redis.redis_keys import project_finalized_data_zset
 from snapshotter.utils.redis.redis_keys import submitted_base_snapshots_key
 from snapshotter.utils.rpc import RpcHelper
@@ -57,7 +57,7 @@ class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
 
     async def _calculate_from_scratch(
         self,
-        msg_obj: PowerloomSnapshotSubmittedMessageLite,
+        msg_obj: SnapshotSubmittedMessageLite,
         epoch_id: int,
         redis: aioredis.Redis,
         rpc_helper: RpcHelper,
@@ -110,7 +110,7 @@ class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
 
     async def _compute_single(
         self,
-        submitted_snapshot: PowerloomSnapshotSubmittedMessageLite,
+        submitted_snapshot: SnapshotSubmittedMessageLite,
         epoch_id: int,
         redis: aioredis.Redis,
         rpc_helper: RpcHelper,
@@ -153,6 +153,11 @@ class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
             aggregate_complete_flag = False
         else:
             aggregate_complete_flag = True
+        if project_last_finalized_epoch == 0:
+            self._logger.info('project_last_finalized_epoch is 0, building aggregate from scratch')
+            return await self._calculate_from_scratch(
+                submitted_snapshot, epoch_id, redis, rpc_helper, anchor_rpc_helper, ipfs_reader, protocol_state_contract, project_id,
+            )
 
         if project_last_finalized_epoch <= tail_epoch_id:
             self._logger.error('last finalized epoch is too old, building aggregate from scratch')
@@ -259,7 +264,7 @@ class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
 
     async def compute(
         self,
-        msg_obj: PowerloomProjectTypeProcessingCompleteMessage,
+        msg_obj: ProjectTypeProcessingCompleteMessage,
         redis: aioredis.Redis,
         rpc_helper: RpcHelper,
         anchor_rpc_helper: RpcHelper,

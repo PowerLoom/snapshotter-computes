@@ -4,7 +4,7 @@ from ipfs_client.main import AsyncIPFSClient
 from redis import asyncio as aioredis
 from snapshotter.utils.callback_helpers import GenericProcessor
 from snapshotter.utils.default_logger import logger
-from snapshotter.utils.models.message_models import PowerloomSnapshotProcessMessage
+from snapshotter.utils.models.message_models import SnapshotProcessMessage
 from snapshotter.utils.rpc import RpcHelper
 
 from .redis_keys import uniswap_v2_monitored_pairs
@@ -69,7 +69,7 @@ class TradeVolumeProcessor(GenericProcessor):
 
     async def compute(
         self,
-        msg_obj: PowerloomSnapshotProcessMessage,
+        msg_obj: SnapshotProcessMessage,
         redis: aioredis.Redis,
         rpc_helper: RpcHelper,
         anchor_rpc_helper: RpcHelper,
@@ -81,7 +81,7 @@ class TradeVolumeProcessor(GenericProcessor):
         max_chain_height = msg_obj.end
 
         # get monitored pairs from redis
-        monitored_pairs = await msg_obj.smembers(uniswap_v2_monitored_pairs)
+        monitored_pairs = await redis.smembers(uniswap_v2_monitored_pairs)
         if monitored_pairs:
             monitored_pairs = set([pair.decode() for pair in monitored_pairs])
         snapshots = list()
