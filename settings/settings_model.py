@@ -35,3 +35,4 @@ class Settings(BaseModel):
     contract_addresses: ContractAddresses
     uniswap_v2_whitelist: List[str]
     initial_pairs: List[str]
+    static_pairs: bool

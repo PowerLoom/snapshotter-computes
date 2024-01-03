@@ -5,14 +5,15 @@ from redis import asyncio as aioredis
 from .utils.core import get_pair_trade_volume
 from .utils.models.message_models import EpochBaseSnapshot
 from .utils.models.message_models import UniswapTradesSnapshot
-from snapshotter.utils.callback_helpers import GenericProcessorSnapshot
+from snapshotter.utils.callback_helpers import GenericProcessor
 from snapshotter.utils.default_logger import logger
 from snapshotter.utils.models.message_models import PowerloomSnapshotProcessMessage
 from snapshotter.utils.rpc import RpcHelper
 from .redis_keys import uniswap_v2_monitored_pairs
+from ipfs_client.main import AsyncIPFSClient
 
 
-class TradeVolumeProcessor(GenericProcessorSnapshot):
+class TradeVolumeProcessor(GenericProcessor):
 
     def __init__(self) -> None:
         self._logger = logger.bind(module='TradeVolumeProcessor')
@@ -68,16 +69,19 @@ class TradeVolumeProcessor(GenericProcessorSnapshot):
 
     async def compute(
         self,
-        epoch: PowerloomSnapshotProcessMessage,
-        redis_conn: aioredis.Redis,
+        msg_obj: PowerloomSnapshotProcessMessage,
+        redis: aioredis.Redis,
         rpc_helper: RpcHelper,
+        anchor_rpc_helper: RpcHelper,
+        ipfs_reader: AsyncIPFSClient,
+        protocol_state_contract,
     ):
 
-        min_chain_height = epoch.begin
-        max_chain_height = epoch.end
+        min_chain_height = msg_obj.begin
+        max_chain_height = msg_obj.end
 
         # get monitored pairs from redis
-        monitored_pairs = await redis_conn.smembers(uniswap_v2_monitored_pairs)
+        monitored_pairs = await msg_obj.smembers(uniswap_v2_monitored_pairs)
         if monitored_pairs:
             monitored_pairs = set([pair.decode() for pair in monitored_pairs])
         snapshots = list()
@@ -90,7 +94,7 @@ class TradeVolumeProcessor(GenericProcessorSnapshot):
                 data_source_contract_address=data_source_contract_address,
                 min_chain_height=min_chain_height,
                 max_chain_height=max_chain_height,
-                redis_conn=redis_conn,
+                redis_conn=redis,
                 rpc_helper=rpc_helper,
             )
             if snapshot:

@@ -52,5 +52,6 @@
         "0xe1573b9d29e2183b1af0e743dc2754979a40d237",
         "0x819f3450da6f110ba6ea52195b3beafa246062de",
         "0xbb2b8038a1640196fbe3e38816f3e67cba72d940"
-    ]
+    ],
+    "static_pairs": true
 }

@@ -8,15 +8,16 @@ from ..utils.models.message_models import UniswapTradesAggregateSnapshot
 from ..utils.models.message_models import UniswapTradesSnapshot
 from snapshotter.utils.callback_helpers import GenericProcessorAggregate
 from snapshotter.utils.data_utils import get_project_epoch_snapshot_bulk
-from snapshotter.utils.data_utils import get_project_first_epoch
 from snapshotter.utils.data_utils import get_submission_data
 from snapshotter.utils.data_utils import get_tail_epoch_id
 from snapshotter.utils.default_logger import logger
-from snapshotter.utils.models.message_models import PowerloomProjectTypeProcessingCompleteMessage, PowerloomSnapshotSubmittedMessageLite
+from snapshotter.utils.models.message_models import PowerloomProjectTypeProcessingCompleteMessage
+from snapshotter.utils.models.message_models import PowerloomSnapshotSubmittedMessageLite
 from snapshotter.utils.redis.redis_keys import project_finalized_data_zset
 from snapshotter.utils.redis.redis_keys import submitted_base_snapshots_key
 from snapshotter.utils.rpc import RpcHelper
 from snapshotter.utils.data_utils import get_project_last_finalized_cid_and_epoch
+
 
 class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
 
