@@ -121,28 +121,14 @@ class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
     ):
         self._logger.info(f'Building trade volume aggregate snapshot for {submitted_snapshot}')
 
-        # get key with highest score
-        project_last_finalized = await redis.zrevrangebyscore(
-            project_finalized_data_zset(project_id),
-            max='+inf',
-            min='-inf',
-            withscores=True,
-            start=0,
-            num=1,
-        )
-        self._logger.error(
-            'project_last_finalized: {} for project id {} ',
-            project_last_finalized, project_finalized_data_zset(project_id),
+        project_last_finalized_cid, project_last_finalized_epoch = await get_project_last_finalized_cid_and_epoch(
+            redis, protocol_state_contract, anchor_rpc_helper, project_id,
         )
 
-        if project_last_finalized:
-            project_last_finalized_cid, project_last_finalized_epoch = project_last_finalized[0]
-            project_last_finalized_epoch = int(project_last_finalized_epoch)
-            project_last_finalized_cid = project_last_finalized_cid.decode('utf-8')
-        else:
-            self._logger.info('project_last_finalized is None, trying to fetch from contract')
-            project_last_finalized_cid, project_last_finalized_epoch = await get_project_last_finalized_cid_and_epoch(
-                redis, protocol_state_contract, anchor_rpc_helper, submitted_snapshot.projectId,
+        if not project_last_finalized_cid:
+            self._logger.info('project_last_finalized_cid is None, building aggregate from scratch')
+            return await self._calculate_from_scratch(
+                submitted_snapshot, epoch_id, redis, rpc_helper, anchor_rpc_helper, ipfs_reader, protocol_state_contract, project_id,
             )
 
         tail_epoch_id, extrapolated_flag = await get_tail_epoch_id(
@@ -179,20 +165,9 @@ class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
         # updating epochId to current epoch
         aggregate_snapshot.epochId = epoch_id
 
-        base_project_last_finalized = await redis.zrevrangebyscore(
-            project_finalized_data_zset(submitted_snapshot.projectId),
-            max='+inf',
-            min='-inf',
-            withscores=True,
-            start=0,
-            num=1,
+        _, base_project_last_finalized_epoch = await get_project_last_finalized_cid_and_epoch(
+            redis, protocol_state_contract, anchor_rpc_helper, submitted_snapshot.projectId,
         )
-
-        if base_project_last_finalized:
-            _, base_project_last_finalized_epoch_ = base_project_last_finalized[0]
-            base_project_last_finalized_epoch = int(base_project_last_finalized_epoch_)
-        else:
-            base_project_last_finalized_epoch = 0
 
         if base_project_last_finalized_epoch and project_last_finalized_epoch < base_project_last_finalized_epoch:
             # fetch base finalized snapshots if they exist and are within 5 epochs of current epoch
