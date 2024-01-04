@@ -19,14 +19,14 @@ async def test_calculate_reserves():
     # Mock your parameters
     
     pair_address = Web3.to_checksum_address(
-        "0x69d91b94f0aaf8e8a2586909fa77a5c2c89818d5"
+        "0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640"
     )
-    from_block = 18928130
+    from_block = 18931130
 
     rpc_helper = RpcHelper()
     aioredis_pool = RedisPoolCache()
     query = """{
-    pool(id: "0x69d91b94f0aaf8e8a2586909fa77a5c2c89818d5", block: {number: 18928130}) {
+    pool(id: "0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640", block: {number: 18931130}) {
         ticks(first: 1000, where: {liquidityGross_not: 0}, orderBy: tickIdx, orderDirection: asc) {
         tickIdx
         liquidityNet
@@ -51,7 +51,7 @@ async def test_calculate_reserves():
 
     gql_response = await client.execute_async(gql(query))
     gql_ticks = [{'idx': int(tick['tickIdx']), 'liquidity_net': int(tick['liquidityNet'])} for tick in gql_response['pool']['ticks']]
-    print(len(gql_response['pool']['ticks']), 'gql ticks')
+    
     # Call your async function
     reserves = await calculate_reserves(
         pair_address, from_block, pair_per_token_metadata, rpc_helper, redis_conn
@@ -141,8 +141,8 @@ async def test_calculate_reserves():
     token1_contract = w3.eth.contract(address=token1, abi=erc20_abi)
     # Fetch actual reserves from blockchain
     # The function name 'getReserves' and the field names may differ based on the actual ABI
-    token0_actual_reserve = token0_contract.functions.balanceOf(pair_address).call()
-    token1_actual_reserve = token1_contract.functions.balanceOf(pair_address).call()
+    token0_actual_reserve = token0_contract.functions.balanceOf(pair_address).call(block_identifier=from_block)
+    token1_actual_reserve = token1_contract.functions.balanceOf(pair_address).call(block_identifier=from_block)
 
     print(reserves)
     print(token0_actual_reserve, token1_actual_reserve)
