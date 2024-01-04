@@ -375,10 +375,14 @@ async def get_token_eth_quote_from_uniswap(
 
     token0 = token_address
     token1 = worker_settings.contract_addresses.WETH
-    token0, token1 = token0, token1 if int(token0, 16) < int(token1, 16) else token1, token0
-    token0_decimals, token1_decimals = int(token_decimals), int(18) \
-                                        if int(token0, 16) < int(token1, 16) else int(18), int(token_decimals)
-    
+    token0_decimals = token_decimals
+    token1_decimals = 18
+    if int(token1, 16) < int(token0, 16):
+        token0,token1 = token1, token0
+        token0_decimals, token1_decimals = token1_decimals, token0_decimals
+
+
+
     tasks = [
         get_pair(factory_contract_obj=factory_contract_obj, token0=token0, token1=token1, fee=int(10000), redis_conn=redis_conn, rpc_helper=rpc_helper),
         get_pair(factory_contract_obj=factory_contract_obj, token0=token0, token1=token1, fee=int(3000), redis_conn=redis_conn, rpc_helper=rpc_helper),
@@ -392,7 +396,7 @@ async def get_token_eth_quote_from_uniswap(
 
     if len(pair_address_list) == 0:
         return [(0,) for i in range(from_block, to_block + 1)]
-    
+
     response = await rpc_helper.batch_eth_call_on_block_range(
         abi_dict=get_contract_abi_dict(
             abi=pair_contract_abi
@@ -407,11 +411,13 @@ async def get_token_eth_quote_from_uniswap(
     sqrtP_list = [slot0[0] for slot0 in response]
     token_eth_quote = []
     for sqrtP in sqrtP_list:
-        price0, price1, _ = sqrtPriceX96ToTokenPrices(sqrtP, token0_decimals, token1_decimals)
+        price0, price1 = sqrtPriceX96ToTokenPrices(sqrtP, token0_decimals, token1_decimals)
+
+
         if token0 == token_address:
-            token_eth_quote.append(price1)
+            token_eth_quote.append((price1,))
         else:
-            token_eth_quote.append(price0)
-    
+            token_eth_quote.append((price0,))
+
 
     return token_eth_quote
