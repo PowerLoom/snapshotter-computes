@@ -183,7 +183,7 @@ async def calculate_reserves(
         pair_per_token_metadata=pair_per_token_metadata,
 
     )
-
+    
     sqrt_price = slot0[0]
 
     t0_reserves, t1_reserves = calculate_tvl_from_ticks(
@@ -265,6 +265,7 @@ async def get_tick_info(
     ticks_list = functools.reduce(lambda x, y: x + y, ticks_list)
     
     slot0 = slot0Response[0]
+    
 
     if len(ticks_list) > 0:
         redis_cache_mapping = {

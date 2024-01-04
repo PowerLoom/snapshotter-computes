@@ -7,7 +7,7 @@ import json
 from redis import asyncio as aioredis
 from web3 import Web3
 
-from snapshotter.utils.snapshot_utils import sqrtPriceX96ToTokenPrices
+from snapshotter.utils.snapshot_utils import get_eth_price_usd, sqrtPriceX96ToTokenPrices
 
 from ..redis_keys import uniswap_pair_contract_tokens_addresses
 from ..redis_keys import uniswap_cached_block_height_token_eth_price
@@ -312,7 +312,7 @@ async def  get_token_eth_price_dict(
         sum = reduce(lambda x, y: x + y[0], token_eth_quote, 0)
         # case to handle tokens that cannot be quoted by spot aggregator
         uniswap_quote_flag = False
-        if len(token_eth_quote) == 0:
+        if sum == 0:
             # get addresses of uniswapv3 pools that contain token and weth
            
             token_eth_quote = await get_token_eth_quote_from_uniswap(
@@ -381,7 +381,7 @@ async def get_token_eth_quote_from_uniswap(
         token0,token1 = token1, token0
         token0_decimals, token1_decimals = token1_decimals, token0_decimals
 
-
+    # first attempt to price from a token weth pool
 
     tasks = [
         get_pair(factory_contract_obj=factory_contract_obj, token0=token0, token1=token1, fee=int(10000), redis_conn=redis_conn, rpc_helper=rpc_helper),
@@ -394,30 +394,130 @@ async def get_token_eth_quote_from_uniswap(
 
     token_eth_quote = []
 
-    if len(pair_address_list) == 0:
-        return [(0,) for i in range(from_block, to_block + 1)]
-
-    response = await rpc_helper.batch_eth_call_on_block_range(
-        abi_dict=get_contract_abi_dict(
-            abi=pair_contract_abi
-        ),
-        contract_address=pair_address_list[0],
-        from_block=from_block,
-        to_block=to_block,
-        function_name="slot0",
-        params=[],
-        redis_conn=redis_conn,
-    )
-    sqrtP_list = [slot0[0] for slot0 in response]
-    token_eth_quote = []
-    for sqrtP in sqrtP_list:
-        price0, price1 = sqrtPriceX96ToTokenPrices(sqrtP, token0_decimals, token1_decimals)
+    if len(pair_address_list) > 0:
+        response = await rpc_helper.batch_eth_call_on_block_range(
+            abi_dict=get_contract_abi_dict(
+                abi=pair_contract_abi
+            ),
+            contract_address=pair_address_list[0],
+            from_block=from_block,
+            to_block=to_block,
+            function_name="slot0",
+            params=[],
+            redis_conn=redis_conn,
+        )
+        sqrtP_list = [slot0[0] for slot0 in response]
+        token_eth_quote = []
+        for sqrtP in sqrtP_list:
+            price0, price1 = sqrtPriceX96ToTokenPrices(sqrtP, token0_decimals, token1_decimals)
 
 
-        if token0 == token_address:
-            token_eth_quote.append((price1,))
+            if token0 == token_address:
+                token_eth_quote.append((price1,))
+            else:
+                token_eth_quote.append((price0,))
+
+
+        return token_eth_quote
+    else: 
+        # since we couldnt find a token/weth pool, attempt to find a token/stable pool
+        #  TODO -- rewrite with multicall
+
+        token0 = token_address
+        token1 = worker_settings.contract_addresses.USDC
+        token0_decimals = token_decimals
+        token1_decimals = 6
+
+        eth_usd_price_dict = await get_eth_price_usd(
+            from_block=from_block,
+            to_block=to_block,
+            redis_conn=redis_conn,
+            rpc_helper=rpc_helper,
+        )
+
+        if int(token1, 16) < int(token0, 16):
+            token0,token1 = token1, token0
+            token0_decimals, token1_decimals = token1_decimals, token0_decimals
+        
+        tasks = [
+            get_pair(factory_contract_obj=factory_contract_obj, token0=token0, token1=token1, fee=int(10000), redis_conn=redis_conn, rpc_helper=rpc_helper),
+            get_pair(factory_contract_obj=factory_contract_obj, token0=token0, token1=token1, fee=int(3000), redis_conn=redis_conn, rpc_helper=rpc_helper),
+            get_pair(factory_contract_obj=factory_contract_obj, token0=token0, token1=token1, fee=int(500), redis_conn=redis_conn, rpc_helper=rpc_helper),
+            get_pair(factory_contract_obj=factory_contract_obj, token0=token0, token1=token1, fee=int(100), redis_conn=redis_conn, rpc_helper=rpc_helper),
+        ]
+
+        pair_address_list = await asyncio.gather(*tasks)
+        pair_address_list = [pair for pair in pair_address_list if pair != "0x" + "0" * 40]
+
+        if len(pair_address_list) == 0:
+            token0 = token_address
+            token1 = worker_settings.contract_addresses.USDT
+            token0_decimals = token_decimals
+            token1_decimals = 6
+
+            if int(token1, 16) < int(token0, 16):
+                token0,token1 = token1, token0
+                token0_decimals, token1_decimals = token1_decimals, token0_decimals
+            
+            tasks = [
+                get_pair(factory_contract_obj=factory_contract_obj, token0=token0, token1=token1, fee=int(10000), redis_conn=redis_conn, rpc_helper=rpc_helper),
+                get_pair(factory_contract_obj=factory_contract_obj, token0=token0, token1=token1, fee=int(3000), redis_conn=redis_conn, rpc_helper=rpc_helper),
+                get_pair(factory_contract_obj=factory_contract_obj, token0=token0, token1=token1, fee=int(500), redis_conn=redis_conn, rpc_helper=rpc_helper),
+                get_pair(factory_contract_obj=factory_contract_obj, token0=token0, token1=token1, fee=int(100), redis_conn=redis_conn, rpc_helper=rpc_helper),
+            ]
+
+            pair_address_list = await asyncio.gather(*tasks)
+            pair_address_list = [pair for pair in pair_address_list if pair != "0x" + "0" * 40]
+
+        if len(pair_address_list) == 0:
+            token0 = token_address
+            token1 = worker_settings.contract_addresses.DAI
+            token0_decimals = token_decimals
+            token1_decimals = 18
+
+            if int(token1, 16) < int(token0, 16):
+                token0,token1 = token1, token0
+                token0_decimals, token1_decimals = token1_decimals, token0_decimals
+            
+            tasks = [
+                get_pair(factory_contract_obj=factory_contract_obj, token0=token0, token1=token1, fee=int(10000), redis_conn=redis_conn, rpc_helper=rpc_helper),
+                get_pair(factory_contract_obj=factory_contract_obj, token0=token0, token1=token1, fee=int(3000), redis_conn=redis_conn, rpc_helper=rpc_helper),
+                get_pair(factory_contract_obj=factory_contract_obj, token0=token0, token1=token1, fee=int(500), redis_conn=redis_conn, rpc_helper=rpc_helper),
+                get_pair(factory_contract_obj=factory_contract_obj, token0=token0, token1=token1, fee=int(100), redis_conn=redis_conn, rpc_helper=rpc_helper),
+            ]
+
+            pair_address_list = await asyncio.gather(*tasks)
+            pair_address_list = [pair for pair in pair_address_list if pair != "0x" + "0" * 40]
+
+        if len(pair_address_list) > 0:
+            response = await rpc_helper.batch_eth_call_on_block_range(
+                abi_dict=get_contract_abi_dict(
+                    abi=pair_contract_abi
+                ),
+                contract_address=pair_address_list[0],
+                from_block=from_block,
+                to_block=to_block,
+                function_name="slot0",
+                params=[],
+                redis_conn=redis_conn,
+            )
+            sqrtP_list = [slot0[0] for slot0 in response]
+            sqrtP_eth_list = [block_price for block_price in eth_usd_price_dict.values()]
+            token_eth_quote = []
+
+            for i in range(len(sqrtP_list)):
+                sqrtP = sqrtP_list[i] 
+                eth_price = sqrtP_eth_list[i]
+                price0, price1 = sqrtPriceX96ToTokenPrices(sqrtP, token0_decimals, token1_decimals)
+                if token0 == token_address:
+                    token_eth_quote.append((price1 / eth_price,))
+                else:
+                    token_eth_quote.append((price0 / eth_price,))
+
+
+            return token_eth_quote
         else:
-            token_eth_quote.append((price0,))
+            return [(0,) for _ in range(from_block, to_block + 1)]
+        
 
 
-    return token_eth_quote
