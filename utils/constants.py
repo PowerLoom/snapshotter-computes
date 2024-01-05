@@ -36,19 +36,19 @@ factory_contract_abi = read_json_file(
 
 # Init Uniswap V2 Core contract Objects
 router_contract_obj = current_node['web3_client'].eth.contract(
-    address=Web3.toChecksumAddress(
+    address=Web3.to_checksum_address(
         worker_settings.contract_addresses.iuniswap_v2_router,
     ),
     abi=router_contract_abi,
 )
 factory_contract_obj = current_node['web3_client'].eth.contract(
-    address=Web3.toChecksumAddress(
+    address=Web3.to_checksum_address(
         worker_settings.contract_addresses.iuniswap_v2_factory,
     ),
     abi=factory_contract_abi,
 )
 pair_contract_obj = current_node['web3_client'].eth.contract(
-    address=Web3.toChecksumAddress(
+    address=Web3.to_checksum_address(
         '0x' + '1' * 40,
     ),
     abi=pair_contract_abi,

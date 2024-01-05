@@ -89,7 +89,7 @@ async def get_token_pair_price_and_white_token_reserves(
             token_price_dict[block_num] = token_price
             white_token_reserves_dict[block_num] = 0
         elif (
-            Web3.toChecksumAddress(pair_metadata['token0']['address']) ==
+            Web3.to_checksum_address(pair_metadata['token0']['address']) ==
             white_token
         ):
             token_price_dict[block_num] = float(
@@ -115,10 +115,10 @@ async def get_token_derived_eth(
     rpc_helper: RpcHelper,
 ):
     token_derived_eth_dict = dict()
-    token_address = Web3.toChecksumAddress(
+    token_address = Web3.to_checksum_address(
         token_metadata['address'],
     )
-    if token_address == Web3.toChecksumAddress(worker_settings.contract_addresses.WETH):
+    if token_address == Web3.to_checksum_address(worker_settings.contract_addresses.WETH):
         # set derived eth as 1 if token is weth
         for block_num in range(from_block, to_block + 1):
             token_derived_eth_dict[block_num] = 1
@@ -158,8 +158,8 @@ async def get_token_derived_eth(
         params=[
             10 ** int(token_metadata['decimals']),
             [
-                Web3.toChecksumAddress(token_metadata['address']),
-                Web3.toChecksumAddress(worker_settings.contract_addresses.WETH),
+                Web3.to_checksum_address(token_metadata['address']),
+                Web3.to_checksum_address(worker_settings.contract_addresses.WETH),
             ],
         ],
     )
@@ -236,7 +236,7 @@ async def get_token_price_in_block_range(
     """
     try:
         token_price_dict = dict()
-        token_address = Web3.toChecksumAddress(token_metadata['address'])
+        token_address = Web3.to_checksum_address(token_metadata['address'])
         # check if cahce exist for given epoch
         cached_price_dict = await redis_conn.zrangebyscore(
             name=uniswap_pair_cached_block_height_token_price.format(
@@ -255,7 +255,7 @@ async def get_token_price_in_block_range(
             }
             return price_dict
 
-        if token_address == Web3.toChecksumAddress(worker_settings.contract_addresses.WETH):
+        if token_address == Web3.to_checksum_address(worker_settings.contract_addresses.WETH):
             token_price_dict = await get_eth_price_usd(
                 from_block=from_block, to_block=to_block,
                 redis_conn=redis_conn, rpc_helper=rpc_helper,
@@ -264,7 +264,7 @@ async def get_token_price_in_block_range(
             token_eth_price_dict = dict()
 
             for white_token in worker_settings.uniswap_v2_whitelist:
-                white_token = Web3.toChecksumAddress(white_token)
+                white_token = Web3.to_checksum_address(white_token)
                 pairAddress = await get_pair(
                     factory_contract_obj, white_token, token_metadata['address'],
                     redis_conn, rpc_helper,
@@ -345,7 +345,7 @@ async def get_token_price_in_block_range(
 
             await redis_conn.zadd(
                 name=uniswap_pair_cached_block_height_token_price.format(
-                    Web3.toChecksumAddress(token_metadata['address']),
+                    Web3.to_checksum_address(token_metadata['address']),
                 ),
                 mapping=redis_cache_mapping,  # timestamp so zset do not ignore same height on multiple heights
             )

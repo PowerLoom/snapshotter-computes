@@ -32,7 +32,7 @@ async def get_pair_reserves(
     core_logger.debug(
         f'Starting pair total reserves query for: {pair_address}',
     )
-    pair_address = Web3.toChecksumAddress(pair_address)
+    pair_address = Web3.to_checksum_address(pair_address)
 
     pair_per_token_metadata = await get_pair_metadata(
         pair_address=pair_address,
@@ -196,7 +196,7 @@ def extract_trade_volume_log(
     trade_volume_usd = 0
     trade_fee_usd = 0
 
-    log = json.loads(Web3.toJSON(log))
+    log = json.loads(Web3.to_json(log))
     log['token0_amount'] = token0_amount
     log['token1_amount'] = token1_amount
     # pop unused log props
@@ -266,7 +266,7 @@ async def get_pair_trade_volume(
     rpc_helper: RpcHelper,
 ):
 
-    data_source_contract_address = Web3.toChecksumAddress(
+    data_source_contract_address = Web3.to_checksum_address(
         data_source_contract_address,
     )
 
