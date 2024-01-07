@@ -1,13 +1,12 @@
 import time
 
 from ipfs_client.main import AsyncIPFSClient
-from redis import asyncio as aioredis
 from snapshotter.utils.callback_helpers import GenericProcessor
 from snapshotter.utils.default_logger import logger
 from snapshotter.utils.models.message_models import SnapshotProcessMessage
 from snapshotter.utils.rpc import RpcHelper
 
-from .redis_keys import uniswap_v2_monitored_pairs
+from .settings.config import settings as module_settings
 from .utils.core import get_pair_reserves
 from .utils.models.message_models import EpochBaseSnapshot
 from .utils.models.message_models import UniswapPairTotalReservesSnapshot
@@ -23,7 +22,6 @@ class PairTotalReservesProcessor(GenericProcessor):
         data_source_contract_address: str,
         min_chain_height: int,
         max_chain_height: int,
-        redis_conn: aioredis.Redis,
         rpc_helper: RpcHelper,
     ):
         epoch_reserves_snapshot_map_token0 = dict()
@@ -37,7 +35,6 @@ class PairTotalReservesProcessor(GenericProcessor):
             pair_address=data_source_contract_address,
             from_block=min_chain_height,
             to_block=max_chain_height,
-            redis_conn=redis_conn,
             rpc_helper=rpc_helper,
         )
 
@@ -84,7 +81,6 @@ class PairTotalReservesProcessor(GenericProcessor):
     async def compute(
         self,
         msg_obj: SnapshotProcessMessage,
-        redis: aioredis.Redis,
         rpc_helper: RpcHelper,
         anchor_rpc_helper: RpcHelper,
         ipfs_reader: AsyncIPFSClient,
@@ -94,10 +90,7 @@ class PairTotalReservesProcessor(GenericProcessor):
         min_chain_height = msg_obj.begin
         max_chain_height = msg_obj.end
 
-        # get monitored pairs from redis
-        monitored_pairs = await redis.smembers(uniswap_v2_monitored_pairs)
-        if monitored_pairs:
-            monitored_pairs = set([pair.decode() for pair in monitored_pairs])
+        monitored_pairs = module_settings.initial_pairs
         snapshots = list()
         self._logger.debug(f'pair reserves computation init time {time.time()}')
 
@@ -106,7 +99,6 @@ class PairTotalReservesProcessor(GenericProcessor):
                 data_source_contract_address=data_source_contract_address,
                 min_chain_height=min_chain_height,
                 max_chain_height=max_chain_height,
-                redis_conn=redis,
                 rpc_helper=rpc_helper,
             )
             if snapshot:

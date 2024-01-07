@@ -2,9 +2,6 @@ import asyncio
 import json
 from functools import partial
 
-from redis import asyncio as aioredis
-from snapshotter.utils.redis.rate_limiter import load_rate_limiter_scripts
-from snapshotter.utils.redis.redis_conn import provide_async_redis_conn_insta
 from web3 import Web3
 
 from ..settings.config import enabled_projects
@@ -44,7 +41,6 @@ async def get_token_price_at_block_height(
     token_metadata,
     block_height,
     loop: asyncio.AbstractEventLoop,
-    redis_conn=None,
     debug_log=True,
 ):
     """
@@ -392,21 +388,18 @@ async def get_token_price_at_block_height(
         return float(token_price)
 
 
-async def get_all_pairs_token_price(loop, redis_conn: aioredis.Redis = None):
+async def get_all_pairs_token_price(loop):
     router_contract_obj = w3.eth.contract(
         address=Web3.to_checksum_address(
             worker_settings.contract_addresses.iuniswap_v2_router,
         ),
         abi=router_contract_abi,
     )
-    rate_limiting_lua_scripts = await load_rate_limiter_scripts(redis_conn)
 
     for contract in all_contracts:
         pair_per_token_metadata = await get_pair_metadata(
-            rate_limit_lua_script_shas=rate_limiting_lua_scripts,
             pair_address=contract,
             loop=loop,
-            redis_conn=redis_conn,
         )
         token0, token1 = await asyncio.gather(
             get_token_price_at_block_height(
@@ -414,14 +407,12 @@ async def get_all_pairs_token_price(loop, redis_conn: aioredis.Redis = None):
                 pair_per_token_metadata['token0'],
                 'latest',
                 loop,
-                redis_conn,
             ),
             get_token_price_at_block_height(
                 router_contract_obj,
                 pair_per_token_metadata['token1'],
                 'latest',
                 loop,
-                redis_conn,
             ),
         )
         print('\n')
@@ -435,8 +426,7 @@ async def get_all_pairs_token_price(loop, redis_conn: aioredis.Redis = None):
         print('\n')
 
 
-@provide_async_redis_conn_insta
-async def get_pair_tokens_price(pair, loop, redis_conn: aioredis.Redis = None):
+async def get_pair_tokens_price(pair, loop):
     router_contract_obj = w3.eth.contract(
         address=Web3.to_checksum_address(
             worker_settings.contract_addresses.iuniswap_v2_router,
@@ -445,12 +435,9 @@ async def get_pair_tokens_price(pair, loop, redis_conn: aioredis.Redis = None):
     )
 
     pair_address = Web3.to_checksum_address(pair)
-    rate_limiting_lua_scripts = await load_rate_limiter_scripts(redis_conn)
     pair_per_token_metadata = await get_pair_metadata(
-        rate_limit_lua_script_shas=rate_limiting_lua_scripts,
         pair_address=pair_address,
         loop=loop,
-        redis_conn=redis_conn,
     )
     print('\n')
     print('\n')
@@ -460,14 +447,12 @@ async def get_pair_tokens_price(pair, loop, redis_conn: aioredis.Redis = None):
             pair_per_token_metadata['token0'],
             'latest',
             loop,
-            redis_conn,
         ),
         get_token_price_at_block_height(
             router_contract_obj,
             pair_per_token_metadata['token1'],
             'latest',
             loop,
-            redis_conn,
         ),
     )
     print('\n')
@@ -478,7 +463,6 @@ async def get_pair_tokens_price(pair, loop, redis_conn: aioredis.Redis = None):
         },
     )
     print('\n')
-    await redis_conn.close()
 
 
 if __name__ == '__main__':

@@ -1,7 +1,6 @@
 import asyncio
 import json
 
-from redis import asyncio as aioredis
 from snapshotter.utils.default_logger import logger
 from snapshotter.utils.rpc import get_contract_abi_dict
 from snapshotter.utils.rpc import get_event_sig_and_abi
@@ -26,7 +25,6 @@ async def get_pair_reserves(
     pair_address,
     from_block,
     to_block,
-    redis_conn: aioredis.Redis,
     rpc_helper: RpcHelper,
 ):
     core_logger.debug(
@@ -36,7 +34,6 @@ async def get_pair_reserves(
 
     pair_per_token_metadata = await get_pair_metadata(
         pair_address=pair_address,
-        redis_conn=redis_conn,
         rpc_helper=rpc_helper,
     )
 
@@ -52,7 +49,6 @@ async def get_pair_reserves(
             token_metadata=pair_per_token_metadata['token0'],
             from_block=from_block,
             to_block=to_block,
-            redis_conn=redis_conn,
             rpc_helper=rpc_helper,
             debug_log=False,
         ),
@@ -60,7 +56,6 @@ async def get_pair_reserves(
             token_metadata=pair_per_token_metadata['token1'],
             from_block=from_block,
             to_block=to_block,
-            redis_conn=redis_conn,
             rpc_helper=rpc_helper,
             debug_log=False,
         ),
@@ -72,7 +67,6 @@ async def get_pair_reserves(
 
     # create dictionary of ABI {function_name -> {signature, abi, input, output}}
     pair_abi_dict = get_contract_abi_dict(pair_contract_abi)
-    # get token price function takes care of its own rate limit
 
     reserves_array = await rpc_helper.batch_eth_call_on_block_range(
         abi_dict=pair_abi_dict,
@@ -80,7 +74,6 @@ async def get_pair_reserves(
         contract_address=pair_address,
         from_block=from_block,
         to_block=to_block,
-        redis_conn=redis_conn,
     )
 
     core_logger.debug(
@@ -262,7 +255,6 @@ async def get_pair_trade_volume(
     data_source_contract_address,
     min_chain_height,
     max_chain_height,
-    redis_conn: aioredis.Redis,
     rpc_helper: RpcHelper,
 ):
 
@@ -272,7 +264,6 @@ async def get_pair_trade_volume(
 
     pair_per_token_metadata = await get_pair_metadata(
         pair_address=data_source_contract_address,
-        redis_conn=redis_conn,
         rpc_helper=rpc_helper,
     )
     token0_price_map, token1_price_map = await asyncio.gather(
@@ -280,7 +271,6 @@ async def get_pair_trade_volume(
             token_metadata=pair_per_token_metadata['token0'],
             from_block=min_chain_height,
             to_block=max_chain_height,
-            redis_conn=redis_conn,
             rpc_helper=rpc_helper,
             debug_log=False,
         ),
@@ -288,7 +278,6 @@ async def get_pair_trade_volume(
             token_metadata=pair_per_token_metadata['token1'],
             from_block=min_chain_height,
             to_block=max_chain_height,
-            redis_conn=redis_conn,
             rpc_helper=rpc_helper,
             debug_log=False,
         ),
@@ -307,7 +296,6 @@ async def get_pair_trade_volume(
             'from_block': min_chain_height,
             'topics': [event_sig],
             'event_abi': event_abi,
-            'redis_conn': redis_conn,
         },
     )
 
