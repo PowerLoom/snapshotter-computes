@@ -68,7 +68,7 @@ AAVE_EVENTS_ABI = {
     'ReserveDataUpdated': pool_contract_obj.events.ReserveDataUpdated._get_event_abi(),
     'Borrow': pool_contract_obj.events.Borrow._get_event_abi(),
 }
-AAVE_CORE_EVENTS = ('Withdraw', 'Supply')
+AAVE_CORE_EVENTS = ('Withdraw', 'Supply', 'Borrow', 'Repay')
 tokens_decimals = {
     'USDT': 6,
     'DAI': 18,
