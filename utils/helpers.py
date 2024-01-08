@@ -301,10 +301,11 @@ async def  get_token_eth_price_dict(
             contract_address=worker_settings.contract_addresses.QUOTER_1INCH,
             from_block=from_block,
             to_block=to_block,
-            function_name="getRateToEth",
+            function_name="getRateToEthWithThreshold",
             params=[
                 token_address,
-                True
+                True, 
+                int(5)
             ],
             redis_conn=redis_conn,
         )
@@ -509,10 +510,10 @@ async def get_token_eth_quote_from_uniswap(
                 sqrtP = sqrtP_list[i] 
                 eth_price = sqrtP_eth_list[i]
                 price0, price1 = sqrtPriceX96ToTokenPrices(sqrtP, token0_decimals, token1_decimals)
-                if token0 == token_address:
-                    token_eth_quote.append((price1 / eth_price,))
+                if token0.lower() == token_address.lower():
+                    token_eth_quote.append((price0 * eth_price,))
                 else:
-                    token_eth_quote.append((price0 / eth_price,))
+                    token_eth_quote.append((price1 * eth_price,))
 
 
             return token_eth_quote
