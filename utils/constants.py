@@ -11,7 +11,7 @@ constants_logger = logger.bind(module='PowerLoom|Aave|Constants')
 rpc_helper = RpcHelper()
 current_node = rpc_helper.get_current_node()
 
-# LOAD ABIs
+# LOAD AAVE ABIs
 pool_contract_abi = read_json_file(
     worker_settings.aave_contract_abis.pool_contract,
     constants_logger,
@@ -32,6 +32,11 @@ a_token_abi = read_json_file(
     constants_logger,
 )
 
+# 1 inch quoter
+quoter_1inch_contract_abi = read_json_file(
+    worker_settings.aave_contract_abis.one_inch_quoter,
+    constants_logger,
+)
 
 # Init Aave V3 Core contract Objects
 pool_contract_obj = current_node['web3_client'].eth.contract(
@@ -48,7 +53,6 @@ pool_data_provider_contract_obj = current_node['web3_client'].eth.contract(
     abi=pool_data_provider_abi,
 )
 
-
 # FUNCTION SIGNATURES and OTHER CONSTANTS
 AAVE_EVENT_SIGS = {
     'Withdraw': 'Withdraw(address,address,address,uint256)',
@@ -64,7 +68,7 @@ AAVE_EVENTS_ABI = {
     'ReserveDataUpdated': pool_contract_obj.events.ReserveDataUpdated._get_event_abi(),
     'Borrow': pool_contract_obj.events.Borrow._get_event_abi(),
 }
-AAVE_CORE_EVENTS = ('Withdraw', 'Supply')
+AAVE_CORE_EVENTS = ('Withdraw', 'Supply', 'Borrow', 'Repay')
 tokens_decimals = {
     'USDT': 6,
     'DAI': 18,

@@ -69,6 +69,7 @@ async def get_asset_metadata(
             )
 
         return {
+            'address': asset_address,
             'decimals': asset_decimals,
             'symbol': asset_symbol,
             'name': asset_name,

@@ -23,6 +23,7 @@ class data_provider_reserve_data():
     liquidityIndex: int
     variableBorrowIndex: int
     lastUpdateTimestamp: int
+    timestamp: int = None
 
 
 @dataclass
