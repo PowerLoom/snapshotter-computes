@@ -182,7 +182,7 @@ async def get_token_eth_price_dict(
             abi_dict=get_contract_abi_dict(
                 abi=quoter_1inch_contract_abi,
             ),
-            contract_address=worker_settings.contract_addresses.QUOTER_1INCH,
+            contract_address=worker_settings.contract_addresses.one_inch_quoter,
             from_block=from_block,
             to_block=to_block,
             function_name='getRateToEth',
