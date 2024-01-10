@@ -39,3 +39,17 @@ class AavePoolTotalAssetSnapshot(SnapshotBase):
     stableBorrowRate: Dict[str, float]
     variableBorrowIndex: Dict[str, float]
     lastUpdateTimestamp: Dict[str, int]
+
+class AaveTopAssetSnapshot(BaseModel):
+    name: str
+    symbol: str
+    decimals: int
+    address: str
+    totalAToken: AaveSupplyData
+    liquidityApy: float
+    totalVariableDebt: AaveDebtData
+    variableApy: float
+
+class AaveTopAssetsSnapshot(AggregateBase):
+    tokens: List[AaveTopAssetSnapshot] = []
+    complete: bool = True
