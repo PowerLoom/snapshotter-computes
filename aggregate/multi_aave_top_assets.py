@@ -80,8 +80,8 @@ class AggreagateTopAssetsProcessor(GenericProcessorAggregate):
             supply_apr = snapshot.liquidityRate[f'block{max_epoch_block}'] / ray
             variable_apr = snapshot.variableBorrowRate[f'block{max_epoch_block}'] / ray
 
-            supply_apy = ((1 + (supply_apr / seconds_in_year)) ** seconds_in_year) - 1
-            variable_apy = ((1 + (variable_apr / seconds_in_year)) ** seconds_in_year) - 1
+            supply_apy = (((1 + (supply_apr / seconds_in_year)) ** seconds_in_year) - 1) * 100
+            variable_apy = (((1 + (variable_apr / seconds_in_year)) ** seconds_in_year) - 1) * 100
 
             asset_data[asset_metadata['address']]['totalAToken'] = snapshot.totalAToken[f'block{max_epoch_block}']
             asset_data[asset_metadata['address']]['liquidityApy'] = supply_apy
@@ -98,7 +98,7 @@ class AggreagateTopAssetsProcessor(GenericProcessorAggregate):
 
         top_assets_snapshot = AaveTopAssetsSnapshot(
             epochId=epoch_id,
-            tokens=top_assets,
+            assets=top_assets,
         )
 
         self._logger.info(f'Got top asset data: {top_assets_snapshot}')

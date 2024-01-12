@@ -51,5 +51,5 @@ class AaveTopAssetSnapshot(BaseModel):
     variableApy: float
 
 class AaveTopAssetsSnapshot(AggregateBase):
-    tokens: List[AaveTopAssetSnapshot] = []
+    assets: List[AaveTopAssetSnapshot] = []
     complete: bool = True
