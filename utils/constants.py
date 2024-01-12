@@ -22,6 +22,11 @@ pool_data_provider_abi = read_json_file(
     constants_logger,
 )
 
+aave_oracle_abi = read_json_file(
+    worker_settings.aave_contract_abis.aave_oracle,
+    constants_logger,
+)
+
 erc20_abi = read_json_file(
     worker_settings.aave_contract_abis.erc20,
     constants_logger,
@@ -29,12 +34,6 @@ erc20_abi = read_json_file(
 
 a_token_abi = read_json_file(
     worker_settings.aave_contract_abis.a_token,
-    constants_logger,
-)
-
-# 1 inch quoter
-quoter_1inch_contract_abi = read_json_file(
-    worker_settings.aave_contract_abis.one_inch_quoter,
     constants_logger,
 )
 
@@ -51,6 +50,13 @@ pool_data_provider_contract_obj = current_node['web3_client'].eth.contract(
         worker_settings.contract_addresses.pool_data_provider,
     ),
     abi=pool_data_provider_abi,
+)
+
+aave_oracle_contract_obj = current_node['web3_client'].eth.contract(
+    address=Web3.toChecksumAddress(
+        worker_settings.contract_addresses.aave_oracle,
+    ),
+    abi=aave_oracle_abi,
 )
 
 # FUNCTION SIGNATURES and OTHER CONSTANTS

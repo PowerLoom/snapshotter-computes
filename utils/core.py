@@ -16,7 +16,7 @@ from .constants import seconds_in_year
 from .helpers import get_asset_metadata
 from .helpers import get_supply_events
 from .models.data_models import data_provider_reserve_data
-from .pricing import get_token_price_in_block_range
+from .pricing import get_asset_price_in_block_range
 
 core_logger = logger.bind(module='PowerLoom|AaveCore')
 
@@ -85,8 +85,8 @@ async def get_asset_supply_and_debt(
         rpc_helper=rpc_helper,
     )
 
-    asset_price_map = await get_token_price_in_block_range(
-        token_metadata=asset_metadata,
+    asset_price_map = await get_asset_price_in_block_range(
+        asset_metadata=asset_metadata,
         from_block=from_block,
         to_block=to_block,
         redis_conn=redis_conn,

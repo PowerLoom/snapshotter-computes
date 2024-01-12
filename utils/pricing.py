@@ -4,19 +4,17 @@ from redis import asyncio as aioredis
 from snapshotter.utils.default_logger import logger
 from snapshotter.utils.rpc import get_contract_abi_dict
 from snapshotter.utils.rpc import RpcHelper
-from snapshotter.utils.snapshot_utils import get_eth_price_usd
 from web3 import Web3
 
-from ..redis_keys import uniswap_cached_block_height_token_eth_price
-from ..redis_keys import uniswap_pair_cached_block_height_token_price
+from ..redis_keys import aave_cached_block_height_asset_price
 from ..settings.config import settings as worker_settings
-from .constants import quoter_1inch_contract_abi
+from .constants import aave_oracle_abi
 
 pricing_logger = logger.bind(module='PowerLoom|Aave|Pricing')
 
 
-async def get_token_price_in_block_range(
-    token_metadata,
+async def get_asset_price_in_block_range(
+    asset_metadata,
     from_block,
     to_block,
     redis_conn: aioredis.Redis,
@@ -27,13 +25,12 @@ async def get_token_price_in_block_range(
     returns the price of a token at a given block range
     """
     try:
-        token_price_dict = dict()
-        token_address = Web3.to_checksum_address(token_metadata['address'])
-        token_decimals = int(token_metadata['decimals'])
+        asset_price_dict = dict()
+        asset_address = Web3.to_checksum_address(asset_metadata['address'])
         # check if cahce exist for given epoch
         cached_price_dict = await redis_conn.zrangebyscore(
-            name=uniswap_pair_cached_block_height_token_price.format(
-                token_address,
+            name=aave_cached_block_height_asset_price.format(
+                asset_address,
             ),
             min=int(from_block),
             max=int(to_block),
@@ -53,176 +50,55 @@ async def get_token_price_in_block_range(
 
             return price_dict
 
-        if token_address == Web3.to_checksum_address(
-            worker_settings.contract_addresses.WETH,
-        ):
+        abi_dict = get_contract_abi_dict(
+            abi=aave_oracle_abi,
+        )
 
-            token_price_dict = await get_eth_price_usd(
-                from_block=from_block,
-                to_block=to_block,
-                redis_conn=redis_conn,
-                rpc_helper=rpc_helper,
+        asset_usd_quote = await rpc_helper.batch_eth_call_on_block_range(
+            abi_dict=abi_dict,
+            contract_address=worker_settings.contract_addresses.aave_oracle,
+            from_block=from_block,
+            to_block=to_block,
+            function_name='getAssetPrice',
+            params=[asset_address],
+            redis_conn=redis_conn,
+        )
+
+        # all asset prices are returned in 8 decimal format
+        asset_usd_quote = [(quote[0] * (10 ** -8)) for quote in asset_usd_quote]
+        for i, block_num in enumerate(range(from_block, to_block + 1)):
+            asset_price_dict[block_num] = asset_usd_quote[i]
+
+        if debug_log:
+            pricing_logger.debug(
+                f"{asset_metadata['symbol']}: usd price is {asset_price_dict}"
             )
-        else:
-
-            # Technically we just need max of 4 checks to get the price, that too only first time.
-            # Check against WETH pair, if not found, check against USDC pair, if not found, check against USDT pair, if not found, check against DAI pair.
-            # price = quoter.functions.quoteExactInputSingle(
-            # "0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640", "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2", 3000, 1, sqrtPriceLimitX96
-            # ).call()
-            # we want to get the price of token in terms of eth vs on chain resources.
-            # so we need to call the 1inchQuoter contract and transform it to either token/eth or eth/token, lets find out
-            # token_eth_price_dict = await get_token_eth_price(
-            #  amount eth per 1 token
-            token_eth_price_dict = await get_token_eth_price_dict(
-                token_address=token_address,
-                token_decimals=token_decimals,
-                from_block=from_block,
-                to_block=to_block,
-                redis_conn=redis_conn,
-                rpc_helper=rpc_helper,
-            )
-
-            # need if token is usd, we have amt per 1 eth  and if we get eth_usd_price_dict we  have amt eth per 1 usd
-
-            if len(token_eth_price_dict) > 0:
-
-                eth_usd_price_dict = await get_eth_price_usd(
-                    from_block=from_block,
-                    to_block=to_block,
-                    redis_conn=redis_conn,
-                    rpc_helper=rpc_helper,
-
-                )
-
-                pricing_logger.debug(
-                    f'token_eth_price_dict: {token_eth_price_dict}',
-                )
-                pricing_logger.debug(
-                    f'eth_usd_price_dict: {eth_usd_price_dict}',
-                )
-                for block_num in range(from_block, to_block + 1):
-                    token_price_dict[block_num] = token_eth_price_dict.get(
-                        block_num,
-                        0,
-                    ) * (eth_usd_price_dict.get(block_num, 0))
-            else:
-                for block_num in range(from_block, to_block + 1):
-
-                    token_price_dict[block_num] = 0
-
-            if debug_log:
-                pricing_logger.debug(
-                    f"{token_metadata['symbol']}: price is {token_price_dict}"
-                    f' | its eth price is {token_eth_price_dict}',
-                )
 
         # cache price at height
-        if len(token_price_dict) > 0:
+        if len(asset_price_dict) > 0:
             redis_cache_mapping = {
                 json.dumps({'blockHeight': height, 'price': price}): int(
                     height,
                 )
-                for height, price in token_price_dict.items()
+                for height, price in asset_price_dict.items()
             }
 
             await redis_conn.zadd(
-                name=uniswap_pair_cached_block_height_token_price.format(
-                    Web3.to_checksum_address(token_metadata['address']),
+                name=aave_cached_block_height_asset_price.format(
+                    Web3.to_checksum_address(asset_metadata['address']),
                 ),
                 mapping=redis_cache_mapping,  # timestamp so zset do not ignore same height on multiple heights
             )
 
-        return token_price_dict
+        return asset_price_dict
 
     except Exception as err:
         pricing_logger.opt(exception=True, lazy=True).trace(
             (
-                'Error while calculating price of token:'
-                f" {token_metadata['symbol']} | {token_metadata['address']}|"
+                'Error while calculating price of asset:'
+                f" {asset_metadata['symbol']} | {asset_metadata['address']}|"
                 ' err: {err}'
             ),
             err=lambda: str(err),
         )
         raise err
-
-
-async def get_token_eth_price_dict(
-    token_address: str,
-    token_decimals: int,
-    from_block,
-    to_block,
-    redis_conn,
-    rpc_helper: RpcHelper,
-):
-    """
-    returns a dict of token price in eth for each block and stores it in redis
-    """
-
-    token_address = Web3.to_checksum_address(token_address)
-    # check if cache exists
-    token_eth_price_dict = dict()
-    cached_token_price_dict = await redis_conn.zrangebyscore(
-        name=uniswap_cached_block_height_token_eth_price.format(token_address),
-        min=from_block,
-        max=to_block,
-    )
-    if len(cached_token_price_dict) > 0:
-        token_eth_price_dict = {
-            int(json.loads(price)['blockHeight']): json.loads(price)['price']
-            for price in cached_token_price_dict
-        }
-
-        return token_eth_price_dict
-
-    # get token price function takes care of its own rate limit
-    try:
-        # 1 token / x token
-        token_eth_quote = await rpc_helper.batch_eth_call_on_block_range(
-            abi_dict=get_contract_abi_dict(
-                abi=quoter_1inch_contract_abi,
-            ),
-            contract_address=worker_settings.contract_addresses.one_inch_quoter,
-            from_block=from_block,
-            to_block=to_block,
-            function_name='getRateToEth',
-            params=[
-                token_address,
-                True,
-            ],
-            redis_conn=redis_conn,
-        )
-        block_counter = 0
-        # parse token_eth_quote and store in dict
-        if len(token_eth_quote) > 0:
-            token_eth_quote = [(quote[0] * (10 ** (-36 + token_decimals))) for quote in token_eth_quote]
-            for block_num in range(from_block, to_block + 1):
-                token_eth_price_dict[block_num] = token_eth_quote[block_counter]
-                block_counter += 1
-
-                # cache price at height
-        if len(token_eth_price_dict) > 0:
-
-            redis_cache_mapping = {
-                json.dumps({'blockHeight': height, 'price': price}): int(
-                    height,
-                )
-                for height, price in token_eth_price_dict.items()
-            }
-
-            await redis_conn.zadd(
-                name=uniswap_cached_block_height_token_eth_price.format(
-                    Web3.to_checksum_address(token_address),
-                ),
-                mapping=redis_cache_mapping,  # timestamp so zset do not ignore same height on multiple heights
-            )
-
-            return token_eth_price_dict
-
-        else:
-            return token_eth_price_dict
-
-    except Exception as e:
-        # TODO BETTER ERROR HANDLING
-        pricing_logger.debug(f'error while fetching token price for {token_address}, error_msg:{e}')
-        raise e

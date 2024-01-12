@@ -4,12 +4,12 @@
         "pool_data_provider_contract": "snapshotter/modules/computes/static/abis/AaveProtocolDataProvider.json",
         "erc20": "snapshotter/modules/computes/static/abis/IERC20.json",
         "a_token": "snapshotter/modules/computes/static/abis/AToken.json",
-        "one_inch_quoter": "snapshotter/modules/computes/static/abis/OneInchQuoter.json"
+        "aave_oracle": "snapshotter/modules/computes/static/abis/AaveOracle.json"
     },
     "contract_addresses": {
         "WETH": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
-        "one_inch_quoter": "0x0AdDd25a91563696D8567Df78D5A01C9a991F9B8",
         "aave_v3_pool": "0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2",
-        "pool_data_provider": "0x7B4EB56E7CD4b454BA8ff71E4518426369a138a3"
+        "pool_data_provider": "0x7B4EB56E7CD4b454BA8ff71E4518426369a138a3",
+        "aave_oracle": "0x54586bE62E3c3580375aE3723C145253060Ca0C2"
       }
 }

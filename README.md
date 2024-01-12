@@ -58,7 +58,7 @@ This compute submodule is used with [Powerloom:pooler](https://github.com/powerl
 
   * Copy `aggregator.example.json` to `aggregator.json` and `auth_settings.example.json` to `auth_settings.json`.
 
-    - There are currently no aggregates for Aave V3.
+    - `aggregator.example.json` contains an example aggregate snapshot for the aave pooler-frontend
     - No changes need to be made to auth_settings.
 
   * Navigate to this computes settings directory: `pooler/snapshotter/modules/computes/settings/` and copy `settings_example.json` to `settings.json`
