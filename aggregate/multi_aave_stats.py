@@ -1,8 +1,5 @@
 from ipfs_client.main import AsyncIPFSClient
 from redis import asyncio as aioredis
-
-from ..utils.models.message_models import AavePoolTotalAssetSnapshot
-from ..utils.models.message_models import AaveMarketStatsSnapshot
 from snapshotter.utils.callback_helpers import GenericProcessorAggregate
 from snapshotter.utils.data_utils import get_project_epoch_snapshot
 from snapshotter.utils.data_utils import get_submission_data_bulk
@@ -10,6 +7,9 @@ from snapshotter.utils.data_utils import get_tail_epoch_id
 from snapshotter.utils.default_logger import logger
 from snapshotter.utils.models.message_models import PowerloomCalculateAggregateMessage
 from snapshotter.utils.rpc import RpcHelper
+
+from ..utils.models.message_models import AaveMarketStatsSnapshot
+from ..utils.models.message_models import AavePoolTotalAssetSnapshot
 
 
 class AggreagateMarketStatsProcessor(GenericProcessorAggregate):
@@ -57,7 +57,7 @@ class AggreagateMarketStatsProcessor(GenericProcessorAggregate):
             'totalBorrows': 0,
             'marketChange24h': 0,
             'availableChange24h': 0,
-            'borrowChange24h': 0
+            'borrowChange24h': 0,
         }
 
         # iterate over all snapshots and generate asset data
@@ -65,15 +65,16 @@ class AggreagateMarketStatsProcessor(GenericProcessorAggregate):
             snapshot = snapshot_mapping[snapshot_project_id]
             max_epoch_block = snapshot.chainHeightRange.end
 
-            stats_data['totalAvailable'] += snapshot.totalAToken[f'block{max_epoch_block}'].usd_supply
+            stats_data['totalAvailable'] += snapshot.totalAToken[f'block{max_epoch_block}'].usd_supply - \
+                snapshot.totalVariableDebt[f'block{max_epoch_block}'].usd_debt
             stats_data['totalBorrows'] += snapshot.totalVariableDebt[f'block{max_epoch_block}'].usd_debt
-            stats_data['totalMarketSize'] += snapshot.totalAToken[f'block{max_epoch_block}'].usd_supply + snapshot.totalVariableDebt[f'block{max_epoch_block}'].usd_debt
+            stats_data['totalMarketSize'] += snapshot.totalAToken[f'block{max_epoch_block}'].usd_supply
 
         # source project tail epoch
         tail_epoch_id, extrapolated_flag = await get_tail_epoch_id(
             redis, protocol_state_contract, anchor_rpc_helper, msg_obj.epochId, 86400, project_id,
         )
-        
+
         if not extrapolated_flag:
             previous_stats_snapshot_data = await get_project_epoch_snapshot(
                 redis, protocol_state_contract, anchor_rpc_helper, ipfs_reader, tail_epoch_id, project_id,
@@ -91,7 +92,7 @@ class AggreagateMarketStatsProcessor(GenericProcessorAggregate):
 
                 stats_data['borrowChange24h'] = (stats_data['totalBorrows'] - previous_stats_snapshot.totalBorrows) / \
                     previous_stats_snapshot.totalBorrows * 100
-                
+
                 complete = True
 
         aave_market_stats_snapshot = AaveMarketStatsSnapshot(
@@ -102,10 +103,10 @@ class AggreagateMarketStatsProcessor(GenericProcessorAggregate):
             marketChange24h=stats_data['marketChange24h'],
             availableChange24h=stats_data['availableChange24h'],
             borrowChange24h=stats_data['borrowChange24h'],
-            complete=complete
+            complete=complete,
 
         )
-        
+
         self._logger.info(f'Got market stats data: {aave_market_stats_snapshot}')
-        
+
         return aave_market_stats_snapshot
