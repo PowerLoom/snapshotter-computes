@@ -53,3 +53,14 @@ class AaveTopAssetSnapshot(BaseModel):
 class AaveTopAssetsSnapshot(AggregateBase):
     assets: List[AaveTopAssetSnapshot] = []
     complete: bool = True
+
+class AaveMarketStatsSnapshot(AggregateBase):
+    totalMarketSize: float
+    totalAvailable: float
+    totalBorrows: float
+    marketChange24h: float
+    availableChange24h: float
+    borrowChange24h: float
+    complete: bool = True
+
+
