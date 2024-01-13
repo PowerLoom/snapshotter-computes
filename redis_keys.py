@@ -5,6 +5,10 @@ aave_asset_contract_data = (
 )
 
 aave_cached_block_height_asset_price = (
-    'aavev3:assetContract:' + settings.namespace +
+    'aave:assetContract:' + settings.namespace +
     ':{}:cachedAaveBlockHeightAssetPrice'
+)
+
+aave_pool_asset_list_data = (
+    'aave:poolContract:assetListData'
 )

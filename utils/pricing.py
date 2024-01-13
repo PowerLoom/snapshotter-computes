@@ -7,8 +7,10 @@ from snapshotter.utils.rpc import RpcHelper
 from web3 import Web3
 
 from ..redis_keys import aave_cached_block_height_asset_price
+from ..redis_keys import aave_pool_asset_list_data
 from ..settings.config import settings as worker_settings
 from .constants import aave_oracle_abi
+from .constants import pool_contract_obj
 
 pricing_logger = logger.bind(module='PowerLoom|Aave|Pricing')
 
@@ -71,7 +73,7 @@ async def get_asset_price_in_block_range(
 
         if debug_log:
             pricing_logger.debug(
-                f"{asset_metadata['symbol']}: usd price is {asset_price_dict}"
+                f"{asset_metadata['symbol']}: usd price is {asset_price_dict}",
             )
 
         # cache price at height
@@ -102,3 +104,77 @@ async def get_asset_price_in_block_range(
             err=lambda: str(err),
         )
         raise err
+
+
+async def get_all_asset_prices(
+    from_block,
+    to_block,
+    redis_conn: aioredis.Redis,
+    rpc_helper: RpcHelper,
+    debug_log=True,
+):
+
+    # check if asset list cache exist
+    asset_list_data_cache = await redis_conn.lrange(
+        aave_pool_asset_list_data, 0, -1,
+    )
+
+    if asset_list_data_cache:
+        asset_list = [asset.decode('utf-8') for asset in reversed(asset_list_data_cache)]
+    else:
+        [asset_list] = await rpc_helper.web3_call(
+            tasks=[pool_contract_obj.functions.getReservesList()],
+            redis_conn=redis_conn,
+        )
+
+        await redis_conn.lpush(
+            aave_pool_asset_list_data, *asset_list,
+        )
+
+    abi_dict = get_contract_abi_dict(
+        abi=aave_oracle_abi,
+    )
+
+    asset_prices_bulk = await rpc_helper.batch_eth_call_on_block_range(
+        abi_dict=abi_dict,
+        contract_address=worker_settings.contract_addresses.aave_oracle,
+        from_block=from_block,
+        to_block=to_block,
+        function_name='getAssetsPrices',
+        params=[asset_list],
+        redis_conn=redis_conn,
+    )
+
+    if debug_log:
+        pricing_logger.debug(
+            f'Retrieved bulk prices for aave assets: {asset_prices_bulk}',
+        )
+
+    all_assets_price_dict = {asset: {} for asset in asset_list}
+
+    for i, block_num in enumerate(range(from_block, to_block + 1)):
+        matches = zip(asset_list, asset_prices_bulk[i][0])
+
+        for match in matches:
+            # all asset prices are returned with 8 decimal format
+            all_assets_price_dict[match[0]][block_num] = match[1] * (10 ** -8)
+
+    # cache each price dict for later retrieval by snapshotter
+    for address, price_dict in all_assets_price_dict.items():
+        # cache price at height
+        if len(price_dict) > 0:
+            redis_cache_mapping = {
+                json.dumps({'blockHeight': height, 'price': price}): int(
+                    height,
+                )
+                for height, price in price_dict.items()
+            }
+
+            await redis_conn.zadd(
+                name=aave_cached_block_height_asset_price.format(
+                    Web3.to_checksum_address(address),
+                ),
+                mapping=redis_cache_mapping,  # timestamp so zset do not ignore same height on multiple heights
+            )
+
+    return all_assets_price_dict
