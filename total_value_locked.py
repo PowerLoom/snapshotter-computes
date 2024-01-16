@@ -267,25 +267,25 @@ async def get_tick_info(
     slot0 = slot0Response[0]
     
 
-    if len(ticks_list) > 0:
-        redis_cache_mapping = {
-            json.dumps({"blockHeight": from_block, "slot0": slot0, "ticks_list": ticks_list,}): int(from_block)
-        }
+    # if len(ticks_list) > 0:
+    #     redis_cache_mapping = {
+    #         json.dumps({"blockHeight": from_block, "slot0": slot0, "ticks_list": ticks_list,}): int(from_block)
+    #     }
 
-        await asyncio.gather(
-            redis_conn.zadd(
-                name=uniswap_cached_tick_data_block_height.format(
-                    Web3.to_checksum_address(pair_address),
-                ),
-                mapping=redis_cache_mapping,
-            ),
-            redis_conn.zremrangebyscore(
-                name=uniswap_cached_tick_data_block_height.format(
-                    Web3.to_checksum_address(pair_address),
-                ),
-                min=0,
-                max=from_block - 20, # shouldn't need to keep all tick data in this implementation
-            ),
-        )
+    #     await asyncio.gather(
+    #         redis_conn.zadd(
+    #             name=uniswap_cached_tick_data_block_height.format(
+    #                 Web3.to_checksum_address(pair_address),
+    #             ),
+    #             mapping=redis_cache_mapping,
+    #         ),
+    #         redis_conn.zremrangebyscore(
+    #             name=uniswap_cached_tick_data_block_height.format(
+    #                 Web3.to_checksum_address(pair_address),
+    #             ),
+    #             min=0,
+    #             max=from_block - 20, # shouldn't need to keep all tick data in this implementation
+    #         ),
+    #     )
         
     return ticks_list, slot0
