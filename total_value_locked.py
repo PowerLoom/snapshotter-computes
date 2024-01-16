@@ -147,7 +147,7 @@ async def get_events(
         contract_address=pair_address,
         to_block=to_block,
         from_block=from_block,
-        topics=event_sig,
+        topics=[event_sig],
         event_abi=event_abi,
         redis_conn=redis_con,
         )
