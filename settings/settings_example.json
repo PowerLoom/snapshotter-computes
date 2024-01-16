@@ -4,6 +4,8 @@
         "pool_data_provider_contract": "snapshotter/modules/computes/static/abis/AaveProtocolDataProvider.json",
         "erc20": "snapshotter/modules/computes/static/abis/IERC20.json",
         "a_token": "snapshotter/modules/computes/static/abis/AToken.json",
+        "stable_token": "snapshotter/modules/computes/static/abis/StableDebtToken.json",
+        "variable_token": "snapshotter/modules/computes/static/abis/VariableDebtToken.json",
         "aave_oracle": "snapshotter/modules/computes/static/abis/AaveOracle.json"
     },
     "contract_addresses": {

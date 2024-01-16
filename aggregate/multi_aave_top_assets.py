@@ -1,16 +1,17 @@
 from ipfs_client.main import AsyncIPFSClient
 from redis import asyncio as aioredis
-
-from ..utils.models.message_models import AavePoolTotalAssetSnapshot
-from ..utils.models.message_models import AaveTopAssetSnapshot
-from ..utils.models.message_models import AaveTopAssetsSnapshot
-from ..utils.constants import ray, seconds_in_year
-from ..utils.helpers import get_asset_metadata
 from snapshotter.utils.callback_helpers import GenericProcessorAggregate
 from snapshotter.utils.data_utils import get_submission_data_bulk
 from snapshotter.utils.default_logger import logger
 from snapshotter.utils.models.message_models import PowerloomCalculateAggregateMessage
 from snapshotter.utils.rpc import RpcHelper
+
+from ..utils.constants import RAY
+from ..utils.constants import SECONDS_IN_YEAR
+from ..utils.helpers import get_asset_metadata
+from ..utils.models.message_models import AavePoolTotalAssetSnapshot
+from ..utils.models.message_models import AaveTopAssetSnapshot
+from ..utils.models.message_models import AaveTopAssetsSnapshot
 
 
 class AggreagateTopAssetsProcessor(GenericProcessorAggregate):
@@ -75,16 +76,18 @@ class AggreagateTopAssetsProcessor(GenericProcessorAggregate):
                 'decimals': asset_metadata['decimals'],
             }
 
-            supply_apr = snapshot.liquidityRate[f'block{max_epoch_block}'] / ray
-            variable_apr = snapshot.variableBorrowRate[f'block{max_epoch_block}'] / ray
+            supply_apr = snapshot.liquidityRate[f'block{max_epoch_block}'] / RAY
+            variable_apr = snapshot.variableBorrowRate[f'block{max_epoch_block}'] / RAY
 
-            supply_apy = (((1 + (supply_apr / seconds_in_year)) ** seconds_in_year) - 1) * 100
-            variable_apy = (((1 + (variable_apr / seconds_in_year)) ** seconds_in_year) - 1) * 100
+            supply_apy = (((1 + (supply_apr / SECONDS_IN_YEAR)) ** SECONDS_IN_YEAR) - 1) * 100
+            variable_apy = (((1 + (variable_apr / SECONDS_IN_YEAR)) ** SECONDS_IN_YEAR) - 1) * 100
 
             asset_data[asset_metadata['address']]['totalAToken'] = snapshot.totalAToken[f'block{max_epoch_block}']
             asset_data[asset_metadata['address']]['liquidityApy'] = supply_apy
 
-            asset_data[asset_metadata['address']]['totalVariableDebt'] = snapshot.totalVariableDebt[f'block{max_epoch_block}']
+            asset_data[
+                asset_metadata['address']
+            ]['totalVariableDebt'] = snapshot.totalVariableDebt[f'block{max_epoch_block}']
             asset_data[asset_metadata['address']]['variableApy'] = variable_apy
 
         top_assets = []
@@ -100,5 +103,5 @@ class AggreagateTopAssetsProcessor(GenericProcessorAggregate):
         )
 
         self._logger.info(f'Got top asset data: {top_assets_snapshot}')
-        
+
         return top_assets_snapshot

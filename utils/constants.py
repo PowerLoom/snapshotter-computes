@@ -1,6 +1,7 @@
 from snapshotter.utils.default_logger import logger
 from snapshotter.utils.file_utils import read_json_file
 from snapshotter.utils.rpc import RpcHelper
+from web3 import constants as web3_constants
 from web3 import Web3
 
 from ..settings.config import settings as worker_settings
@@ -37,6 +38,16 @@ a_token_abi = read_json_file(
     constants_logger,
 )
 
+stable_debt_token_abi = read_json_file(
+    worker_settings.aave_contract_abis.stable_token,
+    constants_logger,
+)
+
+vaiable_debt_token_abi = read_json_file(
+    worker_settings.aave_contract_abis.variable_token,
+    constants_logger,
+)
+
 # Init Aave V3 Core contract Objects
 pool_contract_obj = current_node['web3_client'].eth.contract(
     address=Web3.toChecksumAddress(
@@ -59,6 +70,20 @@ aave_oracle_contract_obj = current_node['web3_client'].eth.contract(
     abi=aave_oracle_abi,
 )
 
+dummy_stable_debt_contract_obj = current_node['web3_client'].eth.contract(
+    address=Web3.toChecksumAddress(
+        web3_constants.ADDRESS_ZERO,
+    ),
+    abi=stable_debt_token_abi,
+)
+
+dummy_variable_debt_contract_obj = current_node['web3_client'].eth.contract(
+    address=Web3.toChecksumAddress(
+        web3_constants.ADDRESS_ZERO,
+    ),
+    abi=vaiable_debt_token_abi,
+)
+
 # FUNCTION SIGNATURES and OTHER CONSTANTS
 AAVE_EVENT_SIGS = {
     'Withdraw': 'Withdraw(address,address,address,uint256)',
@@ -75,6 +100,27 @@ AAVE_EVENTS_ABI = {
     'Borrow': pool_contract_obj.events.Borrow._get_event_abi(),
 }
 AAVE_CORE_EVENTS = ('Withdraw', 'Supply', 'Borrow', 'Repay')
+
+VARIABLE_BURN_MINT_EVENT_SIGS = {
+    'Mint': 'Mint(address,address,uint256,uint256,uint256)',
+    'Burn': 'Burn(address,address,uint256,uint256,uint256)',
+}
+
+VARIABLE_BURN_MINT_EVENT_ABI = {
+    'Mint': dummy_variable_debt_contract_obj.events.Mint._get_event_abi(),
+    'Burn': dummy_variable_debt_contract_obj.events.Burn._get_event_abi(),
+}
+
+STABLE_BURN_MINT_EVENT_SIGS = {
+    'Mint': 'Mint(address,address,uint256,uint256,uint256,uint256,uint256,uint256)',
+    'Burn': 'Burn(address,uint256,uint256,uint256,uint256,uint256)',
+}
+
+STABLE_BURN_MINT_EVENT_ABI = {
+    'Mint': dummy_stable_debt_contract_obj.events.Mint._get_event_abi(),
+    'Burn': dummy_stable_debt_contract_obj.events.Burn._get_event_abi(),
+}
+
 tokens_decimals = {
     'USDT': 6,
     'DAI': 18,
@@ -82,5 +128,6 @@ tokens_decimals = {
     'WETH': 18,
 }
 
-ray = 1e27
-seconds_in_year = 31536000
+RAY = 1e27
+HALF_RAY = 0.5e27
+SECONDS_IN_YEAR = 31536000

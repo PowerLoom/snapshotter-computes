@@ -17,6 +17,12 @@ class AaveContractAbis(BaseModel):
     a_token: str = Field(
         ..., example='snapshotter/modules/computes/static/abis/AToken.json',
     )
+    stable_token: str = Field(
+        ..., example='snapshotter/modules/computes/static/abis/OneInchQuoter.json',
+    )
+    variable_token: str = Field(
+        ..., example='snapshotter/modules/computes/static/abis/OneInchQuoter.json',
+    )
     aave_oracle: str = Field(
         ..., example='snapshotter/modules/computes/static/abis/OneInchQuoter.json',
     )

@@ -9,6 +9,16 @@ aave_cached_block_height_asset_price = (
     ':{}:cachedAaveBlockHeightAssetPrice'
 )
 
+aave_cached_block_height_burn_mint_data = (
+    'aave:assetContract:' + settings.namespace +
+    ':{}:cachedAaveBlockHeightBurnMintData'
+)
+
 aave_pool_asset_list_data = (
-    'aave:poolContract:assetListData'
+    'aave:poolContract:' + settings.namespace + ':assetListData'
+)
+
+aave_cached_block_height_core_event_data = (
+    'aave:poolContract:' + settings.namespace +
+    ':cachedAaveBlockHeightEventData'
 )
