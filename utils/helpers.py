@@ -62,19 +62,32 @@ async def get_asset_metadata(
                 abi=erc20_abi,
             )
 
-            tasks = [
-                asset_contract_obj.functions.decimals(),
-                asset_contract_obj.functions.symbol(),
-                asset_contract_obj.functions.name(),
-                pool_data_provider_contract_obj.functions.getReserveTokensAddresses(asset_address),
-            ]
+            tasks = []
 
-            [
-                asset_decimals,
-                asset_symbol,
-                asset_name,
-                reserve_addresses,
-            ] = await rpc_helper.web3_call(tasks, redis_conn=redis_conn)
+            if Web3.toChecksumAddress(
+                worker_settings.contract_addresses.MAKER,
+            ) == Web3.toChecksumAddress(asset_address):
+                asset_name = get_maker_pair_data('name')
+                asset_symbol = get_maker_pair_data('symbol')
+                tasks.append(asset_contract_obj.functions.decimals())
+                tasks.append(pool_data_provider_contract_obj.functions.getReserveTokensAddresses(asset_address))
+
+                [
+                    asset_decimals,
+                    reserve_addresses,
+                ] = await rpc_helper.web3_call(tasks, redis_conn=redis_conn)
+
+            else:
+                tasks.append(asset_contract_obj.functions.decimals())
+                tasks.append(asset_contract_obj.functions.symbol())
+                tasks.append(asset_contract_obj.functions.name())
+                tasks.append(pool_data_provider_contract_obj.functions.getReserveTokensAddresses(asset_address))
+                [
+                    asset_decimals,
+                    asset_symbol,
+                    asset_name,
+                    reserve_addresses,
+                ] = await rpc_helper.web3_call(tasks, redis_conn=redis_conn)
 
             reserve_address_dict = {
                 'a_token': reserve_addresses[0],
@@ -290,3 +303,13 @@ async def get_debt_burn_mint_events(
             ),
         )
         raise err
+
+
+def get_maker_pair_data(prop):
+    prop = prop.lower()
+    if prop.lower() == 'name':
+        return 'Maker'
+    elif prop.lower() == 'symbol':
+        return 'MKR'
+    else:
+        return 'Maker'

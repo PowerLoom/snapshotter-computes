@@ -10,6 +10,7 @@
     },
     "contract_addresses": {
         "WETH": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+        "MAKER": "0x9f8F72aA9304c8B593d555F12eF6589cC3A579A2",
         "aave_v3_pool": "0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2",
         "pool_data_provider": "0x7B4EB56E7CD4b454BA8ff71E4518426369a138a3",
         "aave_oracle": "0x54586bE62E3c3580375aE3723C145253060Ca0C2"
