@@ -209,7 +209,7 @@ async def get_pair_reserves(
     # here we store the final block in the epoch reserves in redis so they may be used as
     # a starting point in the next epoch
     end_block = pair_reserves_dict.get(to_block, None)
-    print(end_block, 'end_block')
+    
     if end_block:
         redis_cache_mapping = {
             json.dumps({'blockHeight': to_block, 'token0_reserves': end_block['token0']['reserves'], 'token1_reserves': end_block['token1']['reserves']}): int(to_block),

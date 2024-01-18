@@ -21,9 +21,10 @@ from .utils.constants import MAX_TICK, MIN_TICK
 from .redis_keys import uniswap_cached_tick_data_block_height
 
 from snapshotter.utils.rpc import RpcHelper, get_event_sig_and_abi
-
+from snapshotter.utils.default_logger import logger
 AddressLike = Union[Address, ChecksumAddress]
-getcontext().prec = 100
+getcontext().prec = 36
+tvl_logger = logger.bind(module='PowerLoom|UniswapTotalValueLocked')
 
 def transform_tick_bytes_to_list(tickData: bytes):
     if tickData == b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00 \x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00':
@@ -44,7 +45,7 @@ def transform_tick_bytes_to_list(tickData: bytes):
 
 
 def calculate_tvl_from_ticks(ticks, pair_metadata, sqrt_price):
-    sqrt_price = Decimal(sqrt_price) / 2 ** 96
+    sqrt_price = Decimal(sqrt_price) / Decimal(2 ** 96)
     
     liquidity_total = Decimal(0)
     token0_liquidity = Decimal(0)
@@ -155,12 +156,6 @@ async def get_events(
     return events
 
 
-@functools.lru_cache()
-def _load_contract(w3: Web3, abi_name: str, address: AddressLike) -> Contract:
-    address = Web3.to_checksum_address(address)
-    return w3.eth.contract(address=address, abi=_load_abi(abi_name))
-
-
 def _load_abi(path: str) -> str:
     with open(path) as f:
         abi: str = json.load(f)
@@ -204,6 +199,8 @@ async def get_tick_info(
     
 ):
     
+    ticks_list = []
+    slot0 = 0
     cached_tick_dict = await redis_conn.zrangebyscore(
         name=uniswap_cached_tick_data_block_height.format(
                 Web3.to_checksum_address(pair_address),
@@ -217,75 +214,77 @@ async def get_tick_info(
         return tick_dict["ticks_list"], tick_dict["slot0"]
     
         # get token price function takes care of its own rate limit
-    overrides = {
-        override_address: {"code": univ3_helper_bytecode},
-    }
-    current_node = rpc_helper.get_current_node()
-    pair_contract = current_node['web3_client'].eth.contract(address=pair_address, abi=pair_contract_abi)
+    try: 
+        overrides = {
+            override_address: {"code": univ3_helper_bytecode},
+        }
+        current_node = rpc_helper.get_current_node()
+        pair_contract = current_node['web3_client'].eth.contract(address=pair_address, abi=pair_contract_abi)
 
-    # batch rpc calls for tick data to prevent oog errors
-    # step must be a divisor of 887272 * 2
-    fee = pair_per_token_metadata["pair"]["fee"]
+        # batch rpc calls for tick data to prevent oog errors
+        # step must be a divisor of 887272 * 2
+        fee = pair_per_token_metadata["pair"]["fee"]
 
-    # if fee is 100
-    step = (MAX_TICK - MIN_TICK) // 16
+        # if fee is 100
+        step = (MAX_TICK - MIN_TICK) // 16
 
-    # we can cut down on rpc requests by increasing step size for higher fees
-    if fee == 500:
-        step = (MAX_TICK - MIN_TICK) // 4
-    elif fee == 3000:
-        step = MAX_TICK - MIN_TICK  // 2
-    elif fee == 10000:
-        step = MAX_TICK - MIN_TICK
+        # we can cut down on rpc requests by increasing step size for higher fees
+        if fee == 500:
+            step = (MAX_TICK - MIN_TICK) // 4
+        elif fee == 3000:
+            step = MAX_TICK - MIN_TICK  // 2
+        elif fee == 10000:
+            step = MAX_TICK - MIN_TICK
 
-    tick_tasks = []
-   
-    # getTicks() is inclusive for start and end ticks
-    for idx in range(MIN_TICK, MAX_TICK+1, step):
-        tick_tasks.append(
-            helper_contract.functions.getTicks(
-                pair_address, idx, min(idx + step - 1, MAX_TICK),
-            ),
-        )
+        tick_tasks = []
     
-    slot0_tasks = [
-        pair_contract.functions.slot0(),
-    ]
-    
-    # cant batch these tasks due to implementation of web3_call re: state override
-    tickDataResponse, slot0Response = await asyncio.gather(
-        rpc_helper.web3_call(tick_tasks, redis_conn, overrides=overrides, block=from_block),
-        rpc_helper.web3_call(slot0_tasks, redis_conn, block=from_block,),
-        )
+        # getTicks() is inclusive for start and end ticks
+        for idx in range(MIN_TICK, MAX_TICK+1, step):
+            tick_tasks.append(
+                helper_contract.functions.getTicks(
+                    pair_address, idx, min(idx + step - 1, MAX_TICK),
+                ),
+            )
         
-    ticks_list = []
-    for ticks in tickDataResponse:
-        ticks_list.append(transform_tick_bytes_to_list(ticks))
-
-    ticks_list = functools.reduce(lambda x, y: x + y, ticks_list)
-    
-    slot0 = slot0Response[0]
-    
-
-    # if len(ticks_list) > 0:
-    #     redis_cache_mapping = {
-    #         json.dumps({"blockHeight": from_block, "slot0": slot0, "ticks_list": ticks_list,}): int(from_block)
-    #     }
-
-    #     await asyncio.gather(
-    #         redis_conn.zadd(
-    #             name=uniswap_cached_tick_data_block_height.format(
-    #                 Web3.to_checksum_address(pair_address),
-    #             ),
-    #             mapping=redis_cache_mapping,
-    #         ),
-    #         redis_conn.zremrangebyscore(
-    #             name=uniswap_cached_tick_data_block_height.format(
-    #                 Web3.to_checksum_address(pair_address),
-    #             ),
-    #             min=0,
-    #             max=from_block - 20, # shouldn't need to keep all tick data in this implementation
-    #         ),
-    #     )
+        slot0_tasks = [
+            pair_contract.functions.slot0(),
+        ]
         
-    return ticks_list, slot0
+        # cant batch these tasks due to implementation of web3_call re: state override
+        tickDataResponse, slot0Response = await asyncio.gather(
+            rpc_helper.web3_call(tick_tasks, redis_conn, overrides=overrides, block=from_block),
+            rpc_helper.web3_call(slot0_tasks, redis_conn, block=from_block,),
+            )
+            
+        for ticks in tickDataResponse:
+            ticks_list.append(transform_tick_bytes_to_list(ticks))
+
+        ticks_list = functools.reduce(lambda x, y: x + y, ticks_list)
+        
+        slot0 = slot0Response[0]
+        
+
+        # if len(ticks_list) > 0:
+        #     redis_cache_mapping = {
+        #         json.dumps({"blockHeight": from_block, "slot0": slot0, "ticks_list": ticks_list,}): int(from_block)
+        #     }
+
+        #     await asyncio.gather(
+        #         redis_conn.zadd(
+        #             name=uniswap_cached_tick_data_block_height.format(
+        #                 Web3.to_checksum_address(pair_address),
+        #             ),
+        #             mapping=redis_cache_mapping,
+        #         ),
+        #         redis_conn.zremrangebyscore(
+        #             name=uniswap_cached_tick_data_block_height.format(
+        #                 Web3.to_checksum_address(pair_address),
+        #             ),
+        #             min=0,
+        #             max=from_block - 20, # shouldn't need to keep all tick data in this implementation
+        #         ),
+        #     )
+    except Exception as err:
+        tvl_logger.warning('Failed to get tick data for pair {} at block {} with error {}', pair_address, from_block, err)
+        # if we erred, set ticks list and slot0 to empty
+        raise err
