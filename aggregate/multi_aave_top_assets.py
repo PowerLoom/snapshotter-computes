@@ -12,6 +12,8 @@ from ..utils.helpers import get_asset_metadata
 from ..utils.models.message_models import AavePoolTotalAssetSnapshot
 from ..utils.models.message_models import AaveTopAssetSnapshot
 from ..utils.models.message_models import AaveTopAssetsSnapshot
+from ..utils.models.message_models import AaveTopDebtData
+from ..utils.models.message_models import AaveTopSupplyData
 
 
 class AggreagateTopAssetsProcessor(GenericProcessorAggregate):
@@ -82,13 +84,24 @@ class AggreagateTopAssetsProcessor(GenericProcessorAggregate):
             supply_apy = (((1 + (supply_apr / SECONDS_IN_YEAR)) ** SECONDS_IN_YEAR) - 1) * 100
             variable_apy = (((1 + (variable_apr / SECONDS_IN_YEAR)) ** SECONDS_IN_YEAR) - 1) * 100
 
-            asset_data[asset_metadata['address']]['totalAToken'] = snapshot.totalAToken[f'block{max_epoch_block}']
-            asset_data[asset_metadata['address']]['liquidityApy'] = supply_apy
+            token_supply_conv = snapshot.totalAToken[f'block{max_epoch_block}'].token_supply / (
+                10 ** int(asset_metadata['decimals'])
+            )
+            token_debt_conv = snapshot.totalVariableDebt[f'block{max_epoch_block}'].token_debt / (
+                10 ** int(asset_metadata['decimals'])
+            )
 
-            asset_data[
-                asset_metadata['address']
-            ]['totalVariableDebt'] = snapshot.totalVariableDebt[f'block{max_epoch_block}']
+            asset_data[asset_metadata['address']]['liquidityApy'] = supply_apy
+            asset_data[asset_metadata['address']]['totalAToken'] = AaveTopSupplyData(
+                token_supply=token_supply_conv,
+                usd_supply=snapshot.totalAToken[f'block{max_epoch_block}'].usd_supply,
+            )
+
             asset_data[asset_metadata['address']]['variableApy'] = variable_apy
+            asset_data[asset_metadata['address']]['totalVariableDebt'] = AaveTopDebtData(
+                token_debt=token_debt_conv,
+                usd_debt=snapshot.totalVariableDebt[f'block{max_epoch_block}'].usd_debt,
+            )
 
         top_assets = []
         for asset in asset_data.values():

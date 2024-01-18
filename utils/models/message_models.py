@@ -17,12 +17,12 @@ class SnapshotBase(BaseModel):
 
 
 class AaveSupplyData(BaseModel):
-    token_supply: float
+    token_supply: int
     usd_supply: float
 
 
 class AaveDebtData(BaseModel):
-    token_debt: float
+    token_debt: int
     usd_debt: float
 
 
@@ -31,28 +31,41 @@ class AavePoolTotalAssetSnapshot(SnapshotBase):
         str,
         AaveSupplyData,
     ]  # block number to corresponding total supply
-    liquidityRate: Dict[str, float]
-    liquidityIndex: Dict[str, float]
+    liquidityRate: Dict[str, int]
+    liquidityIndex: Dict[str, int]
     totalVariableDebt: Dict[str, AaveDebtData]
     totalStableDebt: Dict[str, AaveDebtData]
-    variableBorrowRate: Dict[str, float]
-    stableBorrowRate: Dict[str, float]
-    variableBorrowIndex: Dict[str, float]
+    variableBorrowRate: Dict[str, int]
+    stableBorrowRate: Dict[str, int]
+    variableBorrowIndex: Dict[str, int]
     lastUpdateTimestamp: Dict[str, int]
+
+
+class AaveTopSupplyData(BaseModel):
+    token_supply: float
+    usd_supply: float
+
+
+class AaveTopDebtData(BaseModel):
+    token_debt: float
+    usd_debt: float
+
 
 class AaveTopAssetSnapshot(BaseModel):
     name: str
     symbol: str
     decimals: int
     address: str
-    totalAToken: AaveSupplyData
+    totalAToken: AaveTopSupplyData
     liquidityApy: float
-    totalVariableDebt: AaveDebtData
+    totalVariableDebt: AaveTopDebtData
     variableApy: float
+
 
 class AaveTopAssetsSnapshot(AggregateBase):
     assets: List[AaveTopAssetSnapshot] = []
     complete: bool = True
+
 
 class AaveMarketStatsSnapshot(AggregateBase):
     totalMarketSize: float
@@ -62,5 +75,3 @@ class AaveMarketStatsSnapshot(AggregateBase):
     availableChange24h: float
     borrowChange24h: float
     complete: bool = True
-
-

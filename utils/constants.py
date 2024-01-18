@@ -23,6 +23,11 @@ pool_data_provider_abi = read_json_file(
     constants_logger,
 )
 
+ui_pool_data_provider_abi = read_json_file(
+    worker_settings.aave_contract_abis.ui_pool_data_provider,
+    constants_logger,
+)
+
 aave_oracle_abi = read_json_file(
     worker_settings.aave_contract_abis.aave_oracle,
     constants_logger,
@@ -61,6 +66,13 @@ pool_data_provider_contract_obj = current_node['web3_client'].eth.contract(
         worker_settings.contract_addresses.pool_data_provider,
     ),
     abi=pool_data_provider_abi,
+)
+
+ui_pool_data_provider_contract_obj = current_node['web3_client'].eth.contract(
+    address=Web3.toChecksumAddress(
+        worker_settings.contract_addresses.ui_pool_data_provider,
+    ),
+    abi=ui_pool_data_provider_abi,
 )
 
 aave_oracle_contract_obj = current_node['web3_client'].eth.contract(
@@ -131,3 +143,4 @@ tokens_decimals = {
 RAY = 1e27
 HALF_RAY = 0.5e27
 SECONDS_IN_YEAR = 31536000
+ORACLE_DECIMALS = 8

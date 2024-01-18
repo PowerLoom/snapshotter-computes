@@ -1,26 +1,33 @@
 import asyncio
 import json
 
+from eth_abi import abi
 from redis import asyncio as aioredis
 from snapshotter.utils.default_logger import logger
 from snapshotter.utils.redis.redis_keys import source_chain_epoch_size_key
+from snapshotter.utils.rpc import get_contract_abi_dict
 from snapshotter.utils.rpc import get_event_sig_and_abi
 from snapshotter.utils.rpc import RpcHelper
 from web3 import Web3
 
 from ..redis_keys import aave_asset_contract_data
+from ..redis_keys import aave_cached_block_height_asset_data
 from ..redis_keys import aave_cached_block_height_burn_mint_data
 from ..redis_keys import aave_cached_block_height_core_event_data
+from ..redis_keys import aave_pool_asset_list_data
 from ..settings.config import settings as worker_settings
 from .constants import AAVE_EVENT_SIGS
 from .constants import AAVE_EVENTS_ABI
 from .constants import current_node
 from .constants import erc20_abi
+from .constants import pool_contract_obj
 from .constants import pool_data_provider_contract_obj
 from .constants import STABLE_BURN_MINT_EVENT_ABI
 from .constants import STABLE_BURN_MINT_EVENT_SIGS
+from .constants import ui_pool_data_provider_contract_obj
 from .constants import VARIABLE_BURN_MINT_EVENT_ABI
 from .constants import VARIABLE_BURN_MINT_EVENT_SIGS
+from .models.data_models import ui_data_provider_reserve_data
 
 
 helper_logger = logger.bind(module='PowerLoom|Aave|Helpers')
@@ -313,3 +320,130 @@ def get_maker_pair_data(prop):
         return 'MKR'
     else:
         return 'Maker'
+
+async def get_bulk_asset_data(
+    redis_conn: aioredis.Redis,
+    rpc_helper: RpcHelper,
+    from_block: int,
+    to_block: int,
+):
+    try:
+
+        # check if asset list cache exist
+        asset_list_data_cache = await redis_conn.lrange(
+            aave_pool_asset_list_data, 0, -1,
+        )
+
+        if asset_list_data_cache:
+            asset_list = [asset.decode('utf-8') for asset in reversed(asset_list_data_cache)]
+        else:
+            [asset_list] = await rpc_helper.web3_call(
+                tasks=[pool_contract_obj.functions.getReservesList()],
+                redis_conn=redis_conn,
+            )
+
+            await redis_conn.lpush(
+                aave_pool_asset_list_data, *asset_list,
+            )
+
+        param = Web3.toChecksumAddress(worker_settings.contract_addresses.pool_address_provider)
+        function = ui_pool_data_provider_contract_obj.functions.getReservesData(param)
+        source_chain_epoch_size = int(await redis_conn.get(source_chain_epoch_size_key()))
+
+        abi_dict = get_contract_abi_dict(
+            abi=ui_pool_data_provider_contract_obj.abi,
+        )
+
+        asset_prices_bulk = await rpc_helper.batch_eth_call_on_block_range_hex_data(
+            abi_dict=abi_dict,
+            contract_address=worker_settings.contract_addresses.ui_pool_data_provider,
+            from_block=from_block,
+            to_block=to_block,
+            function_name='getReservesData',
+            params=[param],
+            redis_conn=redis_conn,
+        )
+
+        output_type = [
+            str(
+                tuple(
+                    component['type']
+                    for component in output['components']
+                ),
+            ).replace(' ', '').replace("'", '')
+            for output in function.abi['outputs']
+        ]
+
+        type_str = output_type[0]+'[]'
+
+        all_assets_data_dict = {Web3.toChecksumAddress(asset): {} for asset in asset_list}
+
+        for i, block_num in enumerate(range(from_block, to_block + 1)):
+            decoded_assets_data = abi.decode(
+                (type_str, output_type[1]), asset_prices_bulk[i],
+            )
+
+            for asset_data in decoded_assets_data[0]:
+
+                asset = Web3.toChecksumAddress(asset_data[0])
+
+                data_dict = {
+                    'liquidityIndex': asset_data[13],
+                    'variableBorrowIndex': asset_data[14],
+                    'liquidityRate': asset_data[15],
+                    'variableBorrowRate': asset_data[16],
+                    'stableBorrowRate': asset_data[17],
+                    'lastUpdateTimestamp': asset_data[18],
+                    'availableLiquidity': asset_data[23],
+                    'totalPrincipalStableDebt': asset_data[24],
+                    'averageStableRate': asset_data[25],
+                    'stableDebtLastUpdateTimestamp': asset_data[26],
+                    'totalScaledVariableDebt': asset_data[27],
+                    'priceInMarketReferenceCurrency': asset_data[28],
+                    'accruedToTreasury': asset_data[39],
+                }
+
+                all_assets_data_dict[asset][block_num] = data_dict
+
+        # cache each price dict for later retrieval by snapshotter
+        for address, data_dict in all_assets_data_dict.items():
+            # cache price at height
+            if len(data_dict) > 0:
+                redis_cache_mapping = {
+                    json.dumps({'blockHeight': height, 'data': data}): int(
+                        height,
+                    )
+                    for height, data in data_dict.items()
+                }
+
+                await asyncio.gather(
+                    redis_conn.zadd(
+                        name=aave_cached_block_height_asset_data.format(
+                            Web3.to_checksum_address(address),
+                        ),
+                        mapping=redis_cache_mapping,
+                    ),
+                    redis_conn.zremrangebyscore(
+                        name=aave_cached_block_height_asset_data.format(
+                            Web3.to_checksum_address(address),
+                        ),
+                        min=0,
+                        max=from_block - source_chain_epoch_size * 3,
+                    ),
+                )
+
+        return all_assets_data_dict
+
+
+
+
+
+    except Exception as err:
+        # this will be retried in next cycle
+        helper_logger.opt(exception=True).error(
+            (
+                f'RPC error while fetcing bulk asset data,'
+                f' error_msg:{err}'
+            ),
+        )
+        raise err

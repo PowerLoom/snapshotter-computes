@@ -24,3 +24,20 @@ class data_provider_reserve_data():
     variableBorrowIndex: int
     lastUpdateTimestamp: int
     timestamp: int = None
+
+
+@dataclass
+class ui_data_provider_reserve_data():
+    liquidityIndex: int
+    variableBorrowIndex: int
+    liquidityRate: int
+    variableBorrowRate: int
+    stableBorrowRate: int
+    lastUpdateTimestamp: int
+    availableLiquidity: int
+    totalPrincipalStableDebt: int
+    averageStableRate: int
+    stableDebtLastUpdateTimestamp: int
+    totalScaledVariableDebt: int
+    priceInMarketReferenceCurrency: int
+    accruedToTreasury: int

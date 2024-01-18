@@ -1,4 +1,5 @@
 import asyncio
+import json
 from decimal import Decimal
 
 from redis import asyncio as aioredis
@@ -10,8 +11,9 @@ from snapshotter.utils.snapshot_utils import (
 )
 from web3 import Web3
 
-from .constants import AAVE_CORE_EVENTS
+from ..redis_keys import aave_cached_block_height_asset_data
 from .constants import HALF_RAY
+from .constants import ORACLE_DECIMALS
 from .constants import pool_data_provider_contract_obj
 from .constants import RAY
 from .constants import SECONDS_IN_YEAR
@@ -19,9 +21,148 @@ from .helpers import get_asset_metadata
 from .helpers import get_debt_burn_mint_events
 from .helpers import get_pool_data_events
 from .models.data_models import data_provider_reserve_data
+from .models.data_models import ui_data_provider_reserve_data
 from .pricing import get_asset_price_in_block_range
 
 core_logger = logger.bind(module='PowerLoom|AaveCore')
+
+
+async def get_asset_supply_and_debt_bulk(
+    asset_address,
+    from_block,
+    to_block,
+    redis_conn: aioredis.Redis,
+    rpc_helper: RpcHelper,
+    fetch_timestamp=True,
+):
+    core_logger.debug(
+        f'Starting bulk asset total supply query for: {asset_address}',
+    )
+    asset_address = Web3.toChecksumAddress(asset_address)
+
+    asset_metadata = await get_asset_metadata(
+        asset_address=asset_address,
+        redis_conn=redis_conn,
+        rpc_helper=rpc_helper,
+    )
+
+    if fetch_timestamp:
+        try:
+            block_details_dict = await get_block_details_in_block_range(
+                from_block,
+                to_block,
+                redis_conn=redis_conn,
+                rpc_helper=rpc_helper,
+            )
+        except Exception as err:
+            core_logger.opt(exception=True).error(
+                (
+                    'Error attempting to get block details of block-range'
+                    ' {}-{}: {}, retrying again'
+                ),
+                from_block,
+                to_block,
+                err,
+            )
+            raise err
+
+    else:
+        block_details_dict = dict()
+        asset_data = list()
+
+    core_logger.debug(
+        (
+            'get asset supply bulk fetched block details for epoch for:'
+            f' {asset_address}'
+        ),
+    )
+
+    data_dict = {}
+    # get cached asset data from redis
+    cached_data_dict = await redis_conn.zrangebyscore(
+        name=aave_cached_block_height_asset_data.format(
+            asset_address,
+        ),
+        min=int(from_block),
+        max=int(to_block),
+    )
+
+    if cached_data_dict and len(cached_data_dict) == to_block - (from_block - 1):
+        data_dict = {
+            json.loads(
+                data.decode(
+                    'utf-8',
+                ),
+            )['blockHeight']: json.loads(
+                data.decode('utf-8'),
+            )['data']
+            for data in cached_data_dict
+        }
+
+    asset_supply_debt_dict = dict()
+
+    for block_num in range(from_block, to_block + 1):
+        current_block_details = block_details_dict.get(block_num, None)
+        timestamp = current_block_details.get('timestamp')
+        asset_data = data_dict.get(block_num, None)
+        asset_data = ui_data_provider_reserve_data(
+            *asset_data.values(),
+        )
+
+        variable_interest = calculate_compound_interest(
+            rate=asset_data.variableBorrowRate,
+            current_timestamp=timestamp,
+            last_update_timestamp=asset_data.lastUpdateTimestamp,
+
+        )
+
+        stable_interest = calculate_compound_interest(
+            rate=asset_data.averageStableRate,
+            current_timestamp=timestamp,
+            last_update_timestamp=asset_data.stableDebtLastUpdateTimestamp,
+
+        )
+
+        total_variable_debt = calculate_current_from_scaled(
+            scaled_value=asset_data.totalScaledVariableDebt,
+            index=asset_data.variableBorrowIndex,
+            interest=variable_interest,
+        )
+
+        total_stable_debt = rayMul(asset_data.totalPrincipalStableDebt, stable_interest)
+        total_supply = asset_data.availableLiquidity + total_variable_debt + total_stable_debt
+
+        asset_usd_price = asset_data.priceInMarketReferenceCurrency * (10 ** -ORACLE_DECIMALS)
+
+        total_supply_usd = total_supply * asset_usd_price
+        total_variable_debt_usd = total_variable_debt * asset_usd_price
+        total_stable_debt_usd = total_stable_debt * asset_usd_price
+
+        total_supply_usd = total_supply_usd / (10 ** int(asset_metadata['decimals']))
+        total_variable_debt_usd = total_variable_debt_usd / (10 ** int(asset_metadata['decimals']))
+        total_stable_debt_usd = total_stable_debt_usd / (10 ** int(asset_metadata['decimals']))
+
+        asset_supply_debt_dict[block_num] = {
+            'total_supply': {'token_supply': total_supply, 'usd_supply': total_supply_usd},
+            'total_stable_debt': {'token_debt': total_stable_debt, 'usd_debt': total_stable_debt_usd},
+            'total_variable_debt': {'token_debt': total_variable_debt, 'usd_debt': total_variable_debt_usd},
+            'liquidity_rate': asset_data.liquidityRate,
+            'liquidity_index': asset_data.liquidityIndex,
+            'variable_borrow_rate': asset_data.variableBorrowRate,
+            'stable_borrow_rate': asset_data.stableBorrowRate,
+            'variable_borrow_index': asset_data.variableBorrowIndex,
+            'last_update_timestamp': asset_data.lastUpdateTimestamp,
+            'timestamp': timestamp,
+        }
+
+    core_logger.debug(
+        (
+            'Calculated asset total supply and debt for epoch-range:'
+            f' {from_block} - {to_block} | asset_contract: {asset_address}'
+        ),
+    )
+
+    return asset_supply_debt_dict
 
 
 async def get_asset_supply_and_debt(
@@ -117,13 +258,16 @@ async def get_asset_supply_and_debt(
     asset_supply_debt_dict = dict()
 
     for i, block_num in enumerate(range(from_block, to_block + 1)):
-        total_supply = asset_data[i].totalAToken / (10 ** int(asset_metadata['decimals']))
+        total_supply = asset_data[i].totalAToken
         total_supply_usd = total_supply * asset_price_map.get(block_num, 0)
+        total_supply_usd = total_supply_usd / (10 ** int(asset_metadata['decimals']))
 
-        total_stable_debt = asset_data[i].totalStableDebt / (10 ** int(asset_metadata['decimals']))
-        total_variable_debt = asset_data[i].totalVariableDebt / (10 ** int(asset_metadata['decimals']))
+        total_stable_debt = asset_data[i].totalStableDebt
+        total_variable_debt = asset_data[i].totalVariableDebt
         total_stable_debt_usd = total_stable_debt * asset_price_map.get(block_num, 0)
         total_variable_debt_usd = total_variable_debt * asset_price_map.get(block_num, 0)
+        total_stable_debt_usd = total_stable_debt_usd / (10 ** int(asset_metadata['decimals']))
+        total_variable_debt_usd = total_variable_debt_usd / (10 ** int(asset_metadata['decimals']))
 
         asset_supply_debt_dict[block_num] = {
             'total_supply': {'token_supply': total_supply, 'usd_supply': total_supply_usd},
@@ -363,7 +507,7 @@ async def calculate_asset_event_data(
 
     core_logger.debug(
         (
-            'Calculated asset total supply for epoch-range:'
+            'Calculated asset event data for epoch-range:'
             f' {from_block} - {to_block} | asset_contract: {asset_address}'
         ),
     )
@@ -464,14 +608,17 @@ def calculate_linear_interest(
     current_timestamp: int,
     liquidity_rate: int,
 ):
-    time_dif = current_timestamp - last_update_timestamp
-    return ((liquidity_rate * time_dif) / SECONDS_IN_YEAR) + RAY
+    result = Decimal(liquidity_rate) * Decimal(current_timestamp - last_update_timestamp)
+    result = result / SECONDS_IN_YEAR
+
+    return Decimal(RAY) + result
 
 # https://github.com/aave/aave-v3-core/blob/master/contracts/protocol/libraries/math/MathUtils.sol line 50
 
 
-def calculate_compound_interest(rate: int, current_timestamp: int, last_update_timestamp: int) -> int:
+def calculate_compound_interest(rate: int, current_timestamp: int, last_update_timestamp: int) -> Decimal:
     exp = current_timestamp - last_update_timestamp
+    base = Decimal(rate) / Decimal(SECONDS_IN_YEAR)
 
     if exp == 0:
         return int(RAY)
@@ -479,12 +626,13 @@ def calculate_compound_interest(rate: int, current_timestamp: int, last_update_t
     expMinusOne = exp - 1
     expMinusTwo = max(0, exp - 2)
 
-    basePowerTwo = int(rayMul(rate, rate) / (SECONDS_IN_YEAR * SECONDS_IN_YEAR))
-    basePowerThree = int(rayMul(basePowerTwo, rate) / SECONDS_IN_YEAR)
+    basePowerTwo = rayMul(base, base)
+    basePowerThree = rayMul(basePowerTwo, base)
 
-    secondTerm = (exp * expMinusOne * basePowerTwo) / 2
-    thirdTerm = (exp * expMinusOne * expMinusTwo * basePowerThree) / 6
+    firstTerm = exp * base
+    secondTerm = Decimal(exp * expMinusOne * basePowerTwo) / Decimal(2)
+    thirdTerm = Decimal(exp * expMinusOne * expMinusTwo * basePowerThree) / Decimal(6)
 
-    interest = Decimal(RAY) + Decimal(rate * exp) / Decimal(SECONDS_IN_YEAR) + Decimal(secondTerm + thirdTerm)
+    interest = Decimal(RAY) + firstTerm + secondTerm + thirdTerm
 
     return interest

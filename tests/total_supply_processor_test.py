@@ -5,6 +5,7 @@ from snapshotter.utils.redis.redis_conn import RedisPoolCache
 from snapshotter.utils.rpc import RpcHelper
 
 from ..pool_total_supply import AssetTotalSupplyProcessor
+from ..utils.helpers import get_bulk_asset_data
 from ..utils.models.message_models import AavePoolTotalAssetSnapshot
 
 
@@ -24,6 +25,14 @@ async def test_total_supply_processor():
     aioredis_pool = RedisPoolCache()
     await aioredis_pool.populate()
     redis_conn = aioredis_pool._aioredis_pool
+
+    # simulate preloader call
+    await get_bulk_asset_data(
+        redis_conn=redis_conn,
+        rpc_helper=rpc_helper,
+        from_block=from_block,
+        to_block=to_block,
+    )
 
     asset_total_snapshot = await processor.compute(
         epoch=snapshot_process_message,

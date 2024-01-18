@@ -9,6 +9,11 @@ aave_cached_block_height_asset_price = (
     ':{}:cachedAaveBlockHeightAssetPrice'
 )
 
+aave_cached_block_height_asset_data = (
+    'aave:assetContract:' + settings.namespace +
+    ':{}:cachedAaveBlockHeightAssetData'
+)
+
 aave_cached_block_height_burn_mint_data = (
     'aave:assetContract:' + settings.namespace +
     ':{}:cachedAaveBlockHeightBurnMintData'

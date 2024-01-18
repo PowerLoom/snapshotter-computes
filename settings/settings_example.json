@@ -6,13 +6,16 @@
         "a_token": "snapshotter/modules/computes/static/abis/AToken.json",
         "stable_token": "snapshotter/modules/computes/static/abis/StableDebtToken.json",
         "variable_token": "snapshotter/modules/computes/static/abis/VariableDebtToken.json",
-        "aave_oracle": "snapshotter/modules/computes/static/abis/AaveOracle.json"
+        "aave_oracle": "snapshotter/modules/computes/static/abis/AaveOracle.json",
+        "ui_pool_data_provider": "snapshotter/modules/computes/static/abis/UiPoolDataProvider.json"
     },
     "contract_addresses": {
         "WETH": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
         "MAKER": "0x9f8F72aA9304c8B593d555F12eF6589cC3A579A2",
         "aave_v3_pool": "0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2",
         "pool_data_provider": "0x7B4EB56E7CD4b454BA8ff71E4518426369a138a3",
-        "aave_oracle": "0x54586bE62E3c3580375aE3723C145253060Ca0C2"
+        "aave_oracle": "0x54586bE62E3c3580375aE3723C145253060Ca0C2",
+        "ui_pool_data_provider": "0x91c0eA31b49B69Ea18607702c5d9aC360bf3dE7d",
+        "pool_address_provider": "0x2f39d218133AFaB8F2B819B1066c7E434Ad94E9e"
       }
 }

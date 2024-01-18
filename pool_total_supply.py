@@ -9,7 +9,7 @@ from snapshotter.utils.default_logger import logger
 from snapshotter.utils.models.message_models import PowerloomSnapshotProcessMessage
 from snapshotter.utils.rpc import RpcHelper
 
-from .utils.core import get_asset_supply_and_debt
+from .utils.core import get_asset_supply_and_debt_bulk
 from .utils.models.message_models import AavePoolTotalAssetSnapshot
 from .utils.models.message_models import EpochBaseSnapshot
 
@@ -50,13 +50,13 @@ class AssetTotalSupplyProcessor(GenericProcessorSnapshot):
         max_block_timestamp = int(time.time())
 
         self._logger.debug(f'asset supply {data_source_contract_address} computation init time {time.time()}')
-        asset_supply_debt_total = await get_asset_supply_and_debt(
+        asset_supply_debt_total = await get_asset_supply_and_debt_bulk(
             asset_address=data_source_contract_address,
             from_block=min_chain_height,
             to_block=max_chain_height,
             redis_conn=redis_conn,
             rpc_helper=rpc_helper,
-            fetch_timestamp=False,
+            fetch_timestamp=True,
         )
 
         for block_num in range(min_chain_height, max_chain_height + 1):

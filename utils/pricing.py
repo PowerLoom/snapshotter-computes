@@ -1,7 +1,9 @@
 import json
+from asyncio import gather
 
 from redis import asyncio as aioredis
 from snapshotter.utils.default_logger import logger
+from snapshotter.utils.redis.redis_keys import source_chain_epoch_size_key
 from snapshotter.utils.rpc import get_contract_abi_dict
 from snapshotter.utils.rpc import RpcHelper
 from web3 import Web3
@@ -170,11 +172,22 @@ async def get_all_asset_prices(
                     for height, price in price_dict.items()
                 }
 
-                await redis_conn.zadd(
-                    name=aave_cached_block_height_asset_price.format(
-                        Web3.to_checksum_address(address),
+                source_chain_epoch_size = int(await redis_conn.get(source_chain_epoch_size_key()))
+
+                await gather(
+                    redis_conn.zadd(
+                        name=aave_cached_block_height_asset_price.format(
+                            Web3.to_checksum_address(address),
+                        ),
+                        mapping=redis_cache_mapping,
                     ),
-                    mapping=redis_cache_mapping,  # timestamp so zset do not ignore same height on multiple heights
+                    redis_conn.zremrangebyscore(
+                        name=aave_cached_block_height_asset_price.format(
+                            Web3.to_checksum_address(address),
+                        ),
+                        min=0,
+                        max=from_block - source_chain_epoch_size * 3,
+                    ),
                 )
 
         return all_assets_price_dict
