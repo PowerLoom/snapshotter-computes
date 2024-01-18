@@ -284,6 +284,7 @@ async def get_tick_info(
         #             max=from_block - 20, # shouldn't need to keep all tick data in this implementation
         #         ),
         #     )
+        return ticks_list, slot0
     except Exception as err:
         tvl_logger.warning('Failed to get tick data for pair {} at block {} with error {}', pair_address, from_block, err)
         # if we erred, set ticks list and slot0 to empty
