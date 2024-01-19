@@ -20,8 +20,10 @@ from .utils.constants import UNISWAP_EVENTS_ABI
 from .utils.constants import MAX_TICK, MIN_TICK
 from .redis_keys import uniswap_cached_tick_data_block_height
 
+from snapshotter.settings.config import settings
 from snapshotter.utils.rpc import RpcHelper, get_event_sig_and_abi
 from snapshotter.utils.default_logger import logger
+
 AddressLike = Union[Address, ChecksumAddress]
 getcontext().prec = 36
 tvl_logger = logger.bind(module='PowerLoom|UniswapTotalValueLocked')
@@ -143,7 +145,21 @@ async def get_events(
         UNISWAP_EVENTS_ABI,
     )
     
+    rate_limit = rpc._nodes[0].get('rate_limit', [])
+    if len(rate_limit) == 3:
+        sem_limit = rate_limit[2].amount / (
+                settings.callback_worker_config.num_snapshot_workers +
+                settings.callback_worker_config.num_aggregation_workers +
+                settings.callback_worker_config.num_delegate_workers
+            )
+    else:
+        sem_limit = 2000 / (
+                settings.callback_worker_config.num_snapshot_workers +
+                settings.callback_worker_config.num_aggregation_workers +
+                settings.callback_worker_config.num_delegate_workers
+            )
     
+    semaphore = asyncio.BoundedSemaphore(sem_limit)
     events = await rpc.get_events_logs(
         contract_address=pair_address,
         to_block=to_block,
@@ -151,6 +167,7 @@ async def get_events(
         topics=[event_sig],
         event_abi=event_abi,
         redis_conn=redis_con,
+        semaphore=semaphore,
         )
     
     return events
@@ -251,6 +268,7 @@ async def get_tick_info(
         ]
         
         # cant batch these tasks due to implementation of web3_call re: state override
+
         tickDataResponse, slot0Response = await asyncio.gather(
             rpc_helper.web3_call(tick_tasks, redis_conn, overrides=overrides, block=from_block),
             rpc_helper.web3_call(slot0_tasks, redis_conn, block=from_block,),
