@@ -71,14 +71,22 @@ This compute submodule is used with [Powerloom:pooler](https://github.com/powerl
                 "pool_data_provider_contract": "snapshotter/modules/computes/static/abis/AaveProtocolDataProvider.json",
                 "erc20": "snapshotter/modules/computes/static/abis/IERC20.json",
                 "a_token": "snapshotter/modules/computes/static/abis/AToken.json",
-                "one_inch_quoter": "snapshotter/modules/computes/static/abis/OneInchQuoter.json"
+                "stable_token": "snapshotter/modules/computes/static/abis/StableDebtToken.json",
+                "variable_token": "snapshotter/modules/computes/static/abis/VariableDebtToken.json",
+                "aave_oracle": "snapshotter/modules/computes/static/abis/AaveOracle.json",
+                "ui_pool_data_provider": "snapshotter/modules/computes/static/abis/UiPoolDataProvider.json"
             },
             "contract_addresses": {
-                "one_inch_quoter": "0x0AdDd25a91563696D8567Df78D5A01C9a991F9B8",
-                "aave_v3_pool": "0x794a61358D6845594F94dc1DB02A252b5b4814aD",
-                "pool_data_provider": "0x69FA688f1Dc47d4B5d8029D5a35FB7a548310654"
+                "WETH": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+                "MAKER": "0x9f8F72aA9304c8B593d555F12eF6589cC3A579A2",
+                "aave_v3_pool": "0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2",
+                "pool_data_provider": "0x7B4EB56E7CD4b454BA8ff71E4518426369a138a3",
+                "aave_oracle": "0x54586bE62E3c3580375aE3723C145253060Ca0C2",
+                "ui_pool_data_provider": "0x91c0eA31b49B69Ea18607702c5d9aC360bf3dE7d",
+                "pool_address_provider": "0x2f39d218133AFaB8F2B819B1066c7E434Ad94E9e"
               }
         }
+
       ```
 
       This config file contains the contract addresses and ABIs of on-chain data sources used for the compute
@@ -93,7 +101,11 @@ This compute submodule is used with [Powerloom:pooler](https://github.com/powerl
 
         `aave_data_provider`: Helper contract deployed by Aave used to query an Aave V3 Pool's reserve and interest data.
 
-        `one_inch_quoter`: Token pricing contract created by 1inch used to fetch Aave asset prices in USD. Deployments by chain can be found in the [1inch-Docs](https://docs.1inch.io/docs/spot-price-aggregator/introduction).
+        `aave_oracle`: Chainlink oracle aggregator deployed by Aave. Helper contract used for getting current USD price of Aave assets.
+
+        `ui_pool_data_provider`: Asset data aggregator contract deployed by Aave. Used for querying asset data for multiple assets.
+
+        `pool_address_provider`: Helper contract deployed by Aave that aggregates the supply and debt token addresses for retrieval. Used by `ui_pool_data_provider`.
 
 ## Internal Snapshotter APIs
 
@@ -143,20 +155,16 @@ This compute submodule is used with [Powerloom:pooler](https://github.com/powerl
     "contract": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
     "lastUpdateTimestamp": {
       "block18952780": 1704600743,
-      "block18952781": 1704600743,
-      // ...rest of the blocks 
+      "block18952781": 1704600743, 
     },
     "liquidityIndex": {
       "block18952780": 1.0352401067878407,
-      // ...
     },
     "liquidityRate": {
       "block18952780": 0.051288963871044674,
-      // ...
     },
     "stableBorrowRate": {
       "block18952780": 0.07816570459257716,
-      // ...
     },
     "timestamp": 1704601047,
     "totalAToken": {
@@ -164,29 +172,24 @@ This compute submodule is used with [Powerloom:pooler](https://github.com/powerl
         "token_supply": 532462335.846578,
         "usd_supply": 532387120.96223295
       },
-      // ...
     },
     "totalStableDebt": {
       "block18952780": {
         "token_debt": 0,
         "usd_debt": 0
       },
-      // ...
     },
     "totalVariableDebt": {
       "block18952780": {
         "token_debt": 480399688.920932,
         "usd_debt": 480331828.3332265
       },
-      // ...
     },
     "variableBorrowIndex": {
       "block18952780": 1.0458616555650315,
-      // ...
     },
     "variableBorrowRate": {
       "block18952780": 0.06316570459257716,
-      // ...
     }
   }
   ```
