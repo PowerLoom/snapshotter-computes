@@ -50,7 +50,9 @@ class UniswapTradeEvents(BaseModel):
     Trades: Dict[str, float]
 
 
-class UniswapTradesSnapshot(SnapshotBase):
+class UniswapTradesSnapshot(BaseModel):
+    epoch: EpochBaseSnapshot
+    contract: str
     totalTrade: float  # in USD
     totalFee: float  # in USD
     token0TradeVolume: float  # in token native decimals supply
@@ -67,6 +69,7 @@ class UniswapTradesAggregateSnapshot(AggregateBase):
     token1TradeVolume: float = 0  # in token native decimals supply
     token0TradeVolumeUSD: float = 0
     token1TradeVolumeUSD: float = 0
+    complete: bool = True
 
 
 class UniswapTopTokenSnapshot(BaseModel):
@@ -82,6 +85,7 @@ class UniswapTopTokenSnapshot(BaseModel):
 
 class UniswapTopTokensSnapshot(AggregateBase):
     tokens: List[UniswapTopTokenSnapshot] = []
+    complete: bool = True
 
 
 class UniswapTopPair24hSnapshot(BaseModel):
@@ -94,6 +98,7 @@ class UniswapTopPair24hSnapshot(BaseModel):
 
 class UniswapTopPairs24hSnapshot(AggregateBase):
     pairs: List[UniswapTopPair24hSnapshot] = []
+    complete: bool = True
 
 
 class UniswapTopPair7dSnapshot(BaseModel):
@@ -105,6 +110,7 @@ class UniswapTopPair7dSnapshot(BaseModel):
 
 class UniswapTopPairs7dSnapshot(AggregateBase):
     pairs: List[UniswapTopPair7dSnapshot] = []
+    complete: bool = True
 
 
 class UniswapStatsSnapshot(AggregateBase):
@@ -114,3 +120,8 @@ class UniswapStatsSnapshot(AggregateBase):
     volumeChange24h: float = 0
     tvlChange24h: float = 0
     feeChange24h: float = 0
+    complete: bool = True
+
+
+class MonitoredPairsSnapshot(BaseModel):
+    pairs: List[str] = []

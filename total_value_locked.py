@@ -145,21 +145,7 @@ async def get_events(
         UNISWAP_EVENTS_ABI,
     )
     
-    rate_limit = rpc._nodes[0].get('rate_limit', [])
-    if len(rate_limit) == 3:
-        sem_limit = rate_limit[2].amount / (
-                settings.callback_worker_config.num_snapshot_workers +
-                settings.callback_worker_config.num_aggregation_workers +
-                settings.callback_worker_config.num_delegate_workers
-            )
-    else:
-        sem_limit = 2000 / (
-                settings.callback_worker_config.num_snapshot_workers +
-                settings.callback_worker_config.num_aggregation_workers +
-                settings.callback_worker_config.num_delegate_workers
-            )
-    
-    semaphore = asyncio.BoundedSemaphore(sem_limit)
+
     events = await rpc.get_events_logs(
         contract_address=pair_address,
         to_block=to_block,
@@ -167,7 +153,6 @@ async def get_events(
         topics=[event_sig],
         event_abi=event_abi,
         redis_conn=redis_con,
-        semaphore=semaphore,
         )
     
     return events

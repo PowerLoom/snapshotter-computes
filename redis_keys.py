@@ -61,3 +61,5 @@ uniswap_cached_tick_data_block_height = (
 uniswap_pair_cached_block_height_reserves = (
     "uniswap:pairContract:" + settings.namespace + ":{}:cachedBlockHeightReserves"
 )
+
+uniswap_v3_monitored_pairs = 'uniswap:monitoredPairs'

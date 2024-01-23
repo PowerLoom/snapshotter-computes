@@ -81,6 +81,11 @@ class ContractAddresses(BaseModel):
     )
 
 
+
+
 class Settings(BaseModel):
     uniswap_contract_abis: UniswapContractAbis
     contract_addresses: ContractAddresses
+    uniswap_v3_whitelist: List[str]
+    initial_pairs: List[str]
+    static_pairs: bool
