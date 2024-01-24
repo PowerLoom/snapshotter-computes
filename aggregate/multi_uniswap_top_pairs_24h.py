@@ -85,7 +85,7 @@ class AggregateTopPairsProcessor(GenericProcessorAggregate):
                 }
 
             if 'reserves' in snapshot_project_id:
-                max_epoch_block = snapshot.epoch.end
+                max_epoch_block = snapshot.chainHeightRange.end
                 pair_data[contract]['liquidity'] += snapshot.token0ReservesUSD[f'block{max_epoch_block}'] + \
                     snapshot.token1ReservesUSD[f'block{max_epoch_block}']
 

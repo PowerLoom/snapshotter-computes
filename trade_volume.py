@@ -1,3 +1,4 @@
+import asyncio
 import time
 
 from ipfs_client.main import AsyncIPFSClient
@@ -84,25 +85,36 @@ class TradeVolumeProcessor(GenericProcessor):
         monitored_pairs = await redis.smembers(uniswap_v3_monitored_pairs)
         if monitored_pairs:
             monitored_pairs = set([pair.decode() for pair in monitored_pairs])
+        
         snapshots = list()
 
         self._logger.debug(f'trade volume, computation init time {time.time()}')
 
+        snapshot_tasks = list()
         for data_source_contract_address in monitored_pairs:
-
-            snapshot = await self._compute_single(
-                data_source_contract_address=data_source_contract_address,
-                min_chain_height=min_chain_height,
-                max_chain_height=max_chain_height,
-                redis_conn=redis,
-                rpc_helper=rpc_helper,
+            snapshot_tasks.append(
+                self._compute_single(
+                    data_source_contract_address=data_source_contract_address,
+                    min_chain_height=min_chain_height,
+                    max_chain_height=max_chain_height,
+                    rpc_helper=rpc_helper,
+                    redis_conn=redis
+                ),
             )
-            if snapshot:
-                snapshots.append(
-                    (
-                        data_source_contract_address,
-                        snapshot,
-                    ),
-                )
+
+        snapshots_generated = await asyncio.gather(*snapshot_tasks, return_exceptions=True)
+
+        for data_source_contract_address, snapshot in zip(monitored_pairs, snapshots_generated):
+            if isinstance(snapshot, Exception):
+                self._logger.error(f'Error while computing trade volume snapshot: {snapshot}')
+                continue
+            snapshots.append(
+                (
+                    data_source_contract_address,
+                    snapshot,
+                ),
+            )
+
+        self._logger.debug(f'trade volume, computation end time {time.time()}')
 
         return snapshots
