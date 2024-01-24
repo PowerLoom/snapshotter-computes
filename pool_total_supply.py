@@ -46,6 +46,8 @@ class AssetTotalSupplyProcessor(GenericProcessorSnapshot):
         epoch_asset_snapshot_map_variable_borrow_rate = dict()
 
         epoch_asset_snapshot_map_last_update_timestamp = dict()
+        epoch_asset_snapshot_map_asset_details = dict()
+        epoch_asset_snapshot_map_available_liquidity = dict()
 
         max_block_timestamp = int(time.time())
 
@@ -90,6 +92,12 @@ class AssetTotalSupplyProcessor(GenericProcessorSnapshot):
             epoch_asset_snapshot_map_last_update_timestamp[
                 f'block{block_num}'
             ] = block_asset_supply_debt['last_update_timestamp']
+            epoch_asset_snapshot_map_asset_details[
+                f'block{block_num}'
+            ] = block_asset_supply_debt['asset_details_dict']
+            epoch_asset_snapshot_map_available_liquidity[
+                f'block{block_num}'
+            ] = block_asset_supply_debt['available_liquidity']
 
             if fetch_ts:
                 if not block_asset_supply_debt.get('timestamp', None):
@@ -119,7 +127,8 @@ class AssetTotalSupplyProcessor(GenericProcessorSnapshot):
                 'stableBorrowRate': epoch_asset_snapshot_map_stable_borrow_rate,
                 'variableBorrowIndex': epoch_asset_snapshot_map_variable_borrow_index,
                 'lastUpdateTimestamp': epoch_asset_snapshot_map_last_update_timestamp,
-
+                'assetDetails': epoch_asset_snapshot_map_asset_details,
+                'availableLiquidity': epoch_asset_snapshot_map_available_liquidity,
                 'chainHeightRange': EpochBaseSnapshot(
                     begin=min_chain_height, end=max_chain_height,
                 ),

@@ -1,8 +1,7 @@
-from typing import Dict
-from typing import List
-
 from pydantic import BaseModel
 from pydantic.dataclasses import dataclass
+
+from .message_models import AssetDetailsData
 
 
 class ReserveConfiguration(BaseModel):
@@ -10,7 +9,7 @@ class ReserveConfiguration(BaseModel):
 
 
 @dataclass
-class data_provider_reserve_data():
+class DataProviderReserveData():
     unbacked: int
     accruedToTreasuryScaled: int
     totalAToken: int
@@ -27,7 +26,7 @@ class data_provider_reserve_data():
 
 
 @dataclass
-class ui_data_provider_reserve_data():
+class UiDataProviderReserveData():
     liquidityIndex: int
     variableBorrowIndex: int
     liquidityRate: int
@@ -41,3 +40,4 @@ class ui_data_provider_reserve_data():
     totalScaledVariableDebt: int
     priceInMarketReferenceCurrency: int
     accruedToTreasury: int
+    assetDetails: AssetDetailsData

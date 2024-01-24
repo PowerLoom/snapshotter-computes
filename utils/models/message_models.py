@@ -26,6 +26,15 @@ class AaveDebtData(BaseModel):
     usd_debt: float
 
 
+class AssetDetailsData(BaseModel):
+    ltv: float
+    liqThreshold: float
+    liqBonus: float
+    resFactor: float
+    borrowCap: int
+    supplyCap: int
+
+
 class AavePoolTotalAssetSnapshot(SnapshotBase):
     totalAToken: Dict[
         str,
@@ -39,6 +48,8 @@ class AavePoolTotalAssetSnapshot(SnapshotBase):
     stableBorrowRate: Dict[str, int]
     variableBorrowIndex: Dict[str, int]
     lastUpdateTimestamp: Dict[str, int]
+    assetDetails: Dict[str, AssetDetailsData]
+    availableLiquidity: Dict[str, AaveSupplyData]
 
 
 class AaveTopSupplyData(BaseModel):

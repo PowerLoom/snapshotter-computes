@@ -8,7 +8,7 @@ from web3 import Web3
 
 from ..utils.constants import pool_data_provider_contract_obj
 from ..utils.core import get_asset_supply_and_debt
-from ..utils.models.data_models import data_provider_reserve_data
+from ..utils.models.data_models import DataProviderReserveData
 
 
 async def test_total_supply_and_debt_calc():
@@ -61,7 +61,7 @@ async def test_total_supply_and_debt_calc():
         params=[asset_address],
     )
 
-    chain_data = [data_provider_reserve_data(*data) for data in chain_data]
+    chain_data = [DataProviderReserveData(*data) for data in chain_data]
 
     for i, block_num in enumerate(range(from_block, to_block + 1)):
 

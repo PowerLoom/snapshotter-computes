@@ -27,7 +27,7 @@ from .constants import STABLE_BURN_MINT_EVENT_SIGS
 from .constants import ui_pool_data_provider_contract_obj
 from .constants import VARIABLE_BURN_MINT_EVENT_ABI
 from .constants import VARIABLE_BURN_MINT_EVENT_SIGS
-from .models.data_models import ui_data_provider_reserve_data
+from .models.data_models import UiDataProviderReserveData
 
 
 helper_logger = logger.bind(module='PowerLoom|Aave|Helpers')
@@ -401,6 +401,14 @@ async def get_bulk_asset_data(
                     'totalScaledVariableDebt': asset_data[27],
                     'priceInMarketReferenceCurrency': asset_data[28],
                     'accruedToTreasury': asset_data[39],
+                    'assetDetails': {
+                        'ltv': asset_data[4],
+                        'liqThreshold': asset_data[5],
+                        'liqBonus': asset_data[6],
+                        'resFactor': asset_data[7],
+                        'borrowCap': asset_data[46],
+                        'supplyCap': asset_data[47],
+                    },
                 }
 
                 all_assets_data_dict[asset][block_num] = data_dict

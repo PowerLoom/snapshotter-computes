@@ -12,6 +12,7 @@ from snapshotter.utils.snapshot_utils import (
 from web3 import Web3
 
 from ..redis_keys import aave_cached_block_height_asset_data
+from .constants import DETAILS_BASIS
 from .constants import HALF_RAY
 from .constants import ORACLE_DECIMALS
 from .constants import pool_data_provider_contract_obj
@@ -20,8 +21,8 @@ from .constants import SECONDS_IN_YEAR
 from .helpers import get_asset_metadata
 from .helpers import get_debt_burn_mint_events
 from .helpers import get_pool_data_events
-from .models.data_models import data_provider_reserve_data
-from .models.data_models import ui_data_provider_reserve_data
+from .models.data_models import DataProviderReserveData
+from .models.data_models import UiDataProviderReserveData
 from .pricing import get_asset_price_in_block_range
 
 core_logger = logger.bind(module='PowerLoom|AaveCore')
@@ -105,7 +106,7 @@ async def get_asset_supply_and_debt_bulk(
         current_block_details = block_details_dict.get(block_num, None)
         timestamp = current_block_details.get('timestamp')
         asset_data = data_dict.get(block_num, None)
-        asset_data = ui_data_provider_reserve_data(
+        asset_data = UiDataProviderReserveData(
             *asset_data.values(),
         )
 
@@ -134,16 +135,20 @@ async def get_asset_supply_and_debt_bulk(
 
         asset_usd_price = asset_data.priceInMarketReferenceCurrency * (10 ** -ORACLE_DECIMALS)
 
-        total_supply_usd = total_supply * asset_usd_price
-        total_variable_debt_usd = total_variable_debt * asset_usd_price
-        total_stable_debt_usd = total_stable_debt * asset_usd_price
+        total_supply_usd = (total_supply * asset_usd_price) / (10 ** int(asset_metadata['decimals']))
+        total_variable_debt_usd = (total_variable_debt * asset_usd_price) / (10 ** int(asset_metadata['decimals']))
+        total_stable_debt_usd = (total_stable_debt * asset_usd_price) / (10 ** int(asset_metadata['decimals']))
+        available_liquidity_usd = (asset_data.availableLiquidity * asset_usd_price) / \
+            (10 ** int(asset_metadata['decimals']))
 
-        total_supply_usd = total_supply_usd / (10 ** int(asset_metadata['decimals']))
-        total_variable_debt_usd = total_variable_debt_usd / (10 ** int(asset_metadata['decimals']))
-        total_stable_debt_usd = total_stable_debt_usd / (10 ** int(asset_metadata['decimals']))
+        asset_data.assetDetails.ltv = (asset_data.assetDetails.ltv / DETAILS_BASIS) * 100
+        asset_data.assetDetails.liqThreshold = (asset_data.assetDetails.liqThreshold / DETAILS_BASIS) * 100
+        asset_data.assetDetails.resFactor = (asset_data.assetDetails.resFactor / DETAILS_BASIS) * 100
+        asset_data.assetDetails.liqBonus = ((asset_data.assetDetails.liqBonus / DETAILS_BASIS) * 100) - 100
 
         asset_supply_debt_dict[block_num] = {
             'total_supply': {'token_supply': total_supply, 'usd_supply': total_supply_usd},
+            'available_liquidity': {'token_supply': asset_data.availableLiquidity, 'usd_supply': available_liquidity_usd},
             'total_stable_debt': {'token_debt': total_stable_debt, 'usd_debt': total_stable_debt_usd},
             'total_variable_debt': {'token_debt': total_variable_debt, 'usd_debt': total_variable_debt_usd},
             'liquidity_rate': asset_data.liquidityRate,
@@ -152,6 +157,7 @@ async def get_asset_supply_and_debt_bulk(
             'stable_borrow_rate': asset_data.stableBorrowRate,
             'variable_borrow_index': asset_data.variableBorrowIndex,
             'last_update_timestamp': asset_data.lastUpdateTimestamp,
+            'asset_details_dict': dict(asset_data.assetDetails),
             'timestamp': timestamp,
         }
 
@@ -253,7 +259,7 @@ async def get_asset_supply_and_debt(
             params=[asset_address],
         )
 
-        asset_data = [data_provider_reserve_data(*data) for data in asset_data]
+        asset_data = [DataProviderReserveData(*data) for data in asset_data]
 
     asset_supply_debt_dict = dict()
 
@@ -338,7 +344,7 @@ async def calculate_asset_event_data(
         for key, value in data_events.items()
     }
 
-    initial_data = data_provider_reserve_data(*initial_data[0])
+    initial_data = DataProviderReserveData(*initial_data[0])
 
     # Init supply variables for calc
     liquidity_rate = initial_data.liquidityRate
@@ -512,7 +518,7 @@ async def calculate_asset_event_data(
         ),
     )
 
-    return [data_provider_reserve_data(**data) for data in computed_supply_debt_list]
+    return [DataProviderReserveData(**data) for data in computed_supply_debt_list]
 
 
 def calculate_initial_scaled_supply(
