@@ -2,6 +2,7 @@ import asyncio
 
 from snapshotter.utils.models.message_models import PowerloomSnapshotProcessMessage
 from snapshotter.utils.redis.redis_conn import RedisPoolCache
+from snapshotter.utils.redis.redis_keys import source_chain_epoch_size_key
 from snapshotter.utils.rpc import RpcHelper
 
 from ..pool_total_supply import AssetTotalSupplyProcessor
@@ -14,7 +15,7 @@ async def test_total_supply_processor():
     from_block = 18780760
     to_block = from_block + 9
     snapshot_process_message = PowerloomSnapshotProcessMessage(
-        data_source='0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+        data_source='0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0',
         begin=from_block,
         end=to_block,
         epochId=1,
@@ -25,6 +26,12 @@ async def test_total_supply_processor():
     aioredis_pool = RedisPoolCache()
     await aioredis_pool.populate()
     redis_conn = aioredis_pool._aioredis_pool
+
+    # set key for get_block_details_in_block_range
+    await redis_conn.set(
+        source_chain_epoch_size_key(),
+        to_block - from_block,
+    )
 
     # simulate preloader call
     await get_bulk_asset_data(

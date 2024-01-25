@@ -408,6 +408,10 @@ async def get_bulk_asset_data(
                         'resFactor': asset_data[7],
                         'borrowCap': asset_data[46],
                         'supplyCap': asset_data[47],
+                        'eLtv': asset_data[48],
+                        'eliqThreshold': asset_data[49],
+                        'eliqBonus': asset_data[50],
+                        'optimalRate': asset_data[36],
                     },
                 }
 

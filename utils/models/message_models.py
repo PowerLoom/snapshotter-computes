@@ -33,6 +33,10 @@ class AssetDetailsData(BaseModel):
     resFactor: float
     borrowCap: int
     supplyCap: int
+    eLtv: float
+    eliqThreshold: float
+    eliqBonus: float
+    optimalRate: float
 
 
 class AavePoolTotalAssetSnapshot(SnapshotBase):

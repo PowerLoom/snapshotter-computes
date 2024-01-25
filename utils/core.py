@@ -141,10 +141,15 @@ async def get_asset_supply_and_debt_bulk(
         available_liquidity_usd = (asset_data.availableLiquidity * asset_usd_price) / \
             (10 ** int(asset_metadata['decimals']))
 
+        # Normalize detail rates
         asset_data.assetDetails.ltv = (asset_data.assetDetails.ltv / DETAILS_BASIS) * 100
         asset_data.assetDetails.liqThreshold = (asset_data.assetDetails.liqThreshold / DETAILS_BASIS) * 100
         asset_data.assetDetails.resFactor = (asset_data.assetDetails.resFactor / DETAILS_BASIS) * 100
         asset_data.assetDetails.liqBonus = ((asset_data.assetDetails.liqBonus / DETAILS_BASIS) * 100) - 100
+        asset_data.assetDetails.eLtv = (asset_data.assetDetails.eLtv / DETAILS_BASIS) * 100
+        asset_data.assetDetails.eliqThreshold = (asset_data.assetDetails.eliqThreshold / DETAILS_BASIS) * 100
+        asset_data.assetDetails.eliqBonus = ((asset_data.assetDetails.eliqBonus / DETAILS_BASIS) * 100) - 100
+        asset_data.assetDetails.optimalRate = round(asset_data.assetDetails.optimalRate / RAY, 2)
 
         asset_supply_debt_dict[block_num] = {
             'total_supply': {'token_supply': total_supply, 'usd_supply': total_supply_usd},
