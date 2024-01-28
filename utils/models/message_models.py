@@ -90,3 +90,12 @@ class AaveMarketStatsSnapshot(AggregateBase):
     availableChange24h: float
     borrowChange24h: float
     complete: bool = True
+
+
+class AaveAprAggregateSnapshot(AggregateBase):
+    avgLiquidityRate: float = 0
+    avgVariableRate: float = 0
+    avgStableRate: float = 0
+    avgUtilizationRate: float = 0
+    timestamp: int = 0
+    complete: bool = True
