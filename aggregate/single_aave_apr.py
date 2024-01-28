@@ -68,8 +68,6 @@ class AggreagateSingleAprProcessor(GenericProcessorAggregate):
 
         sample_size += 1
 
-        self._logger.debug(f'added to sample_size, sample_size is now: {sample_size}')
-
         return previous_aggregate_snapshot, sample_size
 
     def _remove_aggregate_snapshot(
@@ -111,8 +109,6 @@ class AggreagateSingleAprProcessor(GenericProcessorAggregate):
         previous_aggregate_snapshot.avgUtilizationRate /= sample_size - 1
 
         sample_size -= 1
-
-        self._logger.debug(f'removed from sample_size, sample_size is now: {sample_size}')
 
         return previous_aggregate_snapshot, sample_size
 
@@ -313,8 +309,8 @@ class AggreagateSingleAprProcessor(GenericProcessorAggregate):
 
             # get epoch relative location data
             source_chain_block_time = await get_source_chain_block_time(redis, protocol_state_contract, anchor_rpc_helper)
-            complete_snapshot_count = project_last_finalized_epoch - project_first_epoch + 1
-            expected_snapshot_count = int(21600 / (source_chain_epoch_size * source_chain_block_time)) + 1
+            complete_snapshot_count = project_last_finalized_epoch - tail_epoch_id
+            expected_snapshot_count = int(21600 / (source_chain_epoch_size * source_chain_block_time))
 
             # set sample size based on how many epochs have been processed
             if complete_snapshot_count >= expected_snapshot_count:
@@ -335,6 +331,7 @@ class AggreagateSingleAprProcessor(GenericProcessorAggregate):
                         aggregate_snapshot, snapshot, sample_size,
                     )
                     aggregate_snapshot.timestamp = snapshot.timestamp
+                    self._logger.debug(f'added 1 to sample_size: {sample_size}')
 
             # Remove from tail if needed
             tail_epochs_to_remove = []
@@ -356,6 +353,9 @@ class AggreagateSingleAprProcessor(GenericProcessorAggregate):
                         aggregate_snapshot, sample_size = self._remove_aggregate_snapshot(
                             aggregate_snapshot, snapshot, sample_size,
                         )
+                        self._logger.debug(f'removed 1 from sample_size: {sample_size}')
+
+            self._logger.debug(f'Final sample size for {project_id}: {sample_size}')
 
             if aggregate_complete_flag:
                 aggregate_snapshot.complete = True
