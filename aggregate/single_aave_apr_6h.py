@@ -309,19 +309,21 @@ class AggreagateSingleAprProcessor(GenericProcessorAggregate):
 
             # get epoch relative location data
             source_chain_block_time = await get_source_chain_block_time(redis, protocol_state_contract, anchor_rpc_helper)
-            complete_snapshot_count = project_last_finalized_epoch - tail_epoch_id + 1
-            expected_snapshot_count = int(21600 / (source_chain_epoch_size * source_chain_block_time))
+
+            last_finalized_tail, last_finalized_extrapolated_flag = await get_tail_epoch_id(
+                redis, protocol_state_contract, anchor_rpc_helper, project_last_finalized_epoch, 21600, project_id,
+            )
 
             # set sample size based on how many epochs have been processed
-            if complete_snapshot_count >= expected_snapshot_count:
-                # use full sample size
-                sample_size = expected_snapshot_count
-                self._logger.debug(f'using base sample_size {sample_size} for {msg_obj.projectId}')
+            if last_finalized_extrapolated_flag:
+                # use derived sample size
+                sample_size = project_last_finalized_epoch - last_finalized_tail + 1
+                self._logger.debug(f'using derived sample_size {sample_size} for {msg_obj.projectId}')
 
             else:
-                # use derived sample size
-                sample_size = complete_snapshot_count
-                self._logger.debug(f'using derived sample_size {sample_size} for {msg_obj.projectId}')
+                # use full sample size
+                sample_size = int(21600 / (source_chain_epoch_size * source_chain_block_time)) + 1
+                self._logger.debug(f'using base sample_size {sample_size} for {msg_obj.projectId}')
 
             # add new snapshots
             for snapshot_data in base_snapshots:
