@@ -309,7 +309,7 @@ class AggreagateSingleAprProcessor(GenericProcessorAggregate):
 
             # get epoch relative location data
             source_chain_block_time = await get_source_chain_block_time(redis, protocol_state_contract, anchor_rpc_helper)
-            complete_snapshot_count = project_last_finalized_epoch - tail_epoch_id
+            complete_snapshot_count = project_last_finalized_epoch - tail_epoch_id + 1
             expected_snapshot_count = int(21600 / (source_chain_epoch_size * source_chain_block_time))
 
             # set sample size based on how many epochs have been processed
