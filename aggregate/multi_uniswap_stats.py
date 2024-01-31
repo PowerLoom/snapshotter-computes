@@ -72,7 +72,7 @@ class AggregateStatsProcessor(GenericProcessorAggregate):
             snapshot = snapshot_mapping[snapshot_project_id]
 
             if 'reserves' in snapshot_project_id:
-                max_epoch_block = snapshot.epoch.end
+                max_epoch_block = snapshot.chainHeightRange.end
 
                 stats_data['tvl'] += snapshot.token0ReservesUSD[f'block{max_epoch_block}'] + \
                     snapshot.token1ReservesUSD[f'block{max_epoch_block}']

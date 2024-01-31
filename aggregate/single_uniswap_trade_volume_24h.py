@@ -1,5 +1,6 @@
 import asyncio
 import json
+import time
 from typing import List
 
 from ipfs_client.main import AsyncIPFSClient
@@ -249,16 +250,24 @@ class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
 
     ):
         snapshots = []
+        snapshot_tasks = []
         for submitted_snapshot, project_id in zip(msg_obj.snapshotsSubmitted, project_ids):
 
-            snapshot = await self._compute_single(
+            snapshot_tasks.append(self._compute_single(
                 submitted_snapshot, msg_obj.epochId, redis, rpc_helper, anchor_rpc_helper, ipfs_reader, protocol_state_contract, project_id,
+            ))
+        snapshots_generated = await asyncio.gather(*snapshot_tasks, return_exceptions=True)
+
+        for data_source_contract_address, snapshot in zip(project_ids, snapshots_generated):
+            if isinstance(snapshot, Exception):
+                self._logger.error(f'Error while computing trade volume snapshot: {snapshot}')
+                continue
+            snapshots.append(
+                (
+                    data_source_contract_address,
+                    snapshot,
+                ),
             )
-            if snapshot:
-                snapshots.append(
-                    (
-                        project_id,
-                        snapshot,
-                    ),
-                )
+            
+        self._logger.debug(f'trade volume aggregation, computation end time {time.time()}')
         return snapshots

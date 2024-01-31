@@ -17,7 +17,7 @@ from ..utils.models.message_models import UniswapTopTokensSnapshot
 from ..utils.models.message_models import UniswapTradesAggregateSnapshot
 
 
-class AggreagateTopTokensProcessor(GenericProcessorAggregate):
+class AggregateTopTokensProcessor(GenericProcessorAggregate):
 
     def __init__(self) -> None:
         self._logger = logger.bind(module='AggregateTopTokensProcessor')
@@ -104,7 +104,7 @@ class AggreagateTopTokensProcessor(GenericProcessorAggregate):
                 }
 
             if 'reserves' in snapshot_project_id:
-                max_epoch_block = snapshot.epoch.end
+                max_epoch_block = snapshot.chainHeightRange.end
 
                 token_data[token0['address']]['price'] = snapshot.token0Prices[f'block{max_epoch_block}']
                 token_data[token1['address']]['price'] = snapshot.token1Prices[f'block{max_epoch_block}']
