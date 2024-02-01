@@ -108,7 +108,7 @@ class AggregateTopTokensProcessor(GenericProcessorAggregate):
                 }
 
             if 'reserves' in snapshot_project_id:
-                max_epoch_block = snapshot.epoch.end
+                max_epoch_block = snapshot.end
 
                 token_data[token0['address']]['price'] = snapshot.token0Prices[f'block{max_epoch_block}']
                 token_data[token1['address']]['price'] = snapshot.token1Prices[f'block{max_epoch_block}']
