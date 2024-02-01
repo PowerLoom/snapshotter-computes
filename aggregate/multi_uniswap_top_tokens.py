@@ -1,3 +1,4 @@
+import asyncio
 from typing import List
 
 from ipfs_client.main import AsyncIPFSClient
@@ -17,7 +18,7 @@ from ..utils.models.message_models import UniswapTopTokensSnapshot
 from ..utils.models.message_models import UniswapTradesAggregateSnapshot
 
 
-class AggregateTopTokensProcessor(GenericProcessorAggregate):
+class AggreagateTopTokensProcessor(GenericProcessorAggregate):
 
     def __init__(self) -> None:
         self._logger = logger.bind(module='AggregateTopTokensProcessor')
@@ -49,7 +50,7 @@ class AggregateTopTokensProcessor(GenericProcessorAggregate):
             redis, [snapshot.snapshotCid for snapshot in submitted_snapshots], ipfs_reader,
             [snapshot.projectId for snapshot in submitted_snapshots],
         )
-
+        metadata_tasks = []
         complete_flags = []
         for msg, data in zip(submitted_snapshots, snapshot_data):
             if not data:
@@ -62,12 +63,15 @@ class AggregateTopTokensProcessor(GenericProcessorAggregate):
             snapshot_mapping[msg.projectId] = snapshot
 
             contract_address = msg.projectId.split(':')[-2]
-            pair_metadata = await get_pair_metadata(
+            metadata_tasks.append(get_pair_metadata(
                 contract_address,
                 redis_conn=redis,
                 rpc_helper=rpc_helper,
-            )
-
+            ))
+            
+        pair_metadata_list = await asyncio.gather(*metadata_tasks, return_exceptions=True)  
+        for msg, pair_metadata in zip(submitted_snapshots, pair_metadata_list):
+            
             projects_metadata[msg.projectId] = pair_metadata
 
         # iterate over all snapshots and generate token data
@@ -104,7 +108,7 @@ class AggregateTopTokensProcessor(GenericProcessorAggregate):
                 }
 
             if 'reserves' in snapshot_project_id:
-                max_epoch_block = snapshot.chainHeightRange.end
+                max_epoch_block = snapshot.epoch.end
 
                 token_data[token0['address']]['price'] = snapshot.token0Prices[f'block{max_epoch_block}']
                 token_data[token1['address']]['price'] = snapshot.token1Prices[f'block{max_epoch_block}']

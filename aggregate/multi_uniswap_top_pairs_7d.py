@@ -1,3 +1,4 @@
+import asyncio
 from typing import List
 
 from ipfs_client.main import AsyncIPFSClient
@@ -43,6 +44,7 @@ class AggregateTopPairsProcessor(GenericProcessorAggregate):
             ],
         )
 
+        pair_metadata_tasks = []
         complete_flags = []
         for msg, data in zip(msg_obj.messages[0].snapshotsSubmitted, snapshot_data):
             if not data:
@@ -53,13 +55,16 @@ class AggregateTopPairsProcessor(GenericProcessorAggregate):
 
             contract_address = msg.projectId.split(':')[-2]
             if contract_address not in all_pair_metadata:
-                pair_metadata = await get_pair_metadata(
+                pair_metadata_tasks.append(get_pair_metadata(
                     contract_address,
                     redis_conn=redis,
                     rpc_helper=rpc_helper,
-                )
+                ))
 
-                all_pair_metadata[contract_address] = pair_metadata
+        pair_metadata_data_list = await asyncio.gather(*pair_metadata_tasks)
+        for msg, pair_metadata in zip(msg_obj.messages[0].snapshotsSubmitted, pair_metadata_data_list):
+            contract_address = msg.projectId.split(':')[-2]
+            all_pair_metadata[contract_address] = pair_metadata
 
         # iterate over all snapshots and generate pair data
         pair_data = {}
@@ -92,5 +97,6 @@ class AggregateTopPairsProcessor(GenericProcessorAggregate):
 
         if not all(complete_flags):
             top_pairs_snapshot.complete = False
+            self._logger.debug(f'7d top pairs trade volume snapshot for project ID {project_id} is not complete')
 
         return [(project_id, top_pairs_snapshot)]
