@@ -18,7 +18,7 @@ from ..utils.models.message_models import UniswapTopTokensSnapshot
 from ..utils.models.message_models import UniswapTradesAggregateSnapshot
 
 
-class AggreagateTopTokensProcessor(GenericProcessorAggregate):
+class AggregateTopTokensProcessor(GenericProcessorAggregate):
 
     def __init__(self) -> None:
         self._logger = logger.bind(module='AggregateTopTokensProcessor')
