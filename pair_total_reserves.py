@@ -1,37 +1,33 @@
-import asyncio
 import time
+from typing import Dict
 from typing import Optional
 from typing import Union
 
 from redis import asyncio as aioredis
-from .redis_keys import uniswap_v3_monitored_pairs
-from snapshotter.utils.models.message_models import SnapshotProcessMessage
+
 from .utils.core import get_pair_reserves
 from .utils.models.message_models import UniswapPairTotalReservesSnapshot
-from snapshotter.utils.callback_helpers import GenericProcessor
-from snapshotter.utils.default_logger import logger
-from .utils.models.message_models import EpochBaseSnapshot
-from snapshotter.utils.rpc import RpcHelper
+from pooler.utils.callback_helpers import GenericProcessorSnapshot
+from pooler.utils.default_logger import logger
+from pooler.utils.models.message_models import EpochBaseSnapshot
+from pooler.utils.rpc import RpcHelper
 
-from ipfs_client.main import AsyncIPFSClient
-from ipfs_client.main import AsyncIPFSClientSingleton
 
-class PairTotalReservesProcessor(GenericProcessor):
+class PairTotalReservesProcessor(GenericProcessorSnapshot):
     transformation_lambdas = None
 
     def __init__(self) -> None:
         self.transformation_lambdas = []
         self._logger = logger.bind(module="PairTotalReservesProcessor")
 
-    async def _compute_single(
+    async def compute(
         self,
-        data_source_contract_address: str,
         min_chain_height: int,
         max_chain_height: int,
+        data_source_contract_address: str,
         redis_conn: aioredis.Redis,
         rpc_helper: RpcHelper,
-    ) -> UniswapPairTotalReservesSnapshot:
-
+    ) -> Optional[Dict[str, Union[int, float]]]:
         epoch_reserves_snapshot_map_token0 = dict()
         epoch_prices_snapshot_map_token0 = dict()
         epoch_prices_snapshot_map_token1 = dict()
@@ -39,13 +35,10 @@ class PairTotalReservesProcessor(GenericProcessor):
         epoch_usd_reserves_snapshot_map_token0 = dict()
         epoch_usd_reserves_snapshot_map_token1 = dict()
         max_block_timestamp = int(time.time())
-        self._logger.debug(
-            f"project {data_source_contract_address} computation init time {time.time()}")
-        
+
         self._logger.debug(
             f"pair reserves {data_source_contract_address} computation init time {time.time()}"
         )
-
         pair_reserve_total = await get_pair_reserves(
             pair_address=data_source_contract_address,
             from_block=min_chain_height,
@@ -118,50 +111,3 @@ class PairTotalReservesProcessor(GenericProcessor):
         )
 
         return pair_total_reserves_snapshot
-    async def compute(
-        self,
-        msg_obj: SnapshotProcessMessage,
-        redis: aioredis.Redis,
-        rpc_helper: RpcHelper,
-        anchor_rpc_helper: RpcHelper,
-        ipfs_reader: AsyncIPFSClient,
-        protocol_state_contract,
-    )-> list[UniswapPairTotalReservesSnapshot]:
-        min_chain_height = msg_obj.begin
-        max_chain_height = msg_obj.end
-
-        # get monitored pairs from redis
-        monitored_pairs = await redis.smembers(uniswap_v3_monitored_pairs)
-        if monitored_pairs:
-            monitored_pairs = set([pair.decode() for pair in monitored_pairs])
-        snapshots = list()
-        self._logger.debug(f'pair reserves computation init time {time.time()}')
-
-        snapshot_tasks = list()
-        for data_source_contract_address in monitored_pairs:
-            snapshot_tasks.append(
-                self._compute_single(
-                    data_source_contract_address=data_source_contract_address,
-                    min_chain_height=min_chain_height,
-                    max_chain_height=max_chain_height,
-                    rpc_helper=rpc_helper,
-                    redis_conn=redis,
-                ),
-            )
-
-        snapshots_generated = await asyncio.gather(*snapshot_tasks, return_exceptions=True)
-
-        for data_source_contract_address, snapshot in zip(monitored_pairs, snapshots_generated):
-            if isinstance(snapshot, Exception):
-                self._logger.error(f'Error while computing pair reserves snapshot: {snapshot}')
-                continue
-            snapshots.append(
-                (
-                    data_source_contract_address,
-                    snapshot,
-                ),
-            )
-
-        self._logger.debug(f'pair reserves, computation end time {time.time()}')
-
-        return snapshots

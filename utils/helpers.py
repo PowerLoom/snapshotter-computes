@@ -292,6 +292,7 @@ async def  get_token_eth_price_dict(
         return token_eth_price_dict
 
     # get token price function takes care of its own rate limit
+    # TODO repetitious refactor
     try: 
         # 1 token / x token
         # token_eth_quote = await rpc_helper.batch_eth_call_on_block_range(
