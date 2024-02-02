@@ -47,8 +47,11 @@ class AggreagateSingleAprProcessor(GenericProcessorAggregate):
             len(current_snapshot.stableBorrowRate.values())
         current_stable_avg /= RAY
 
-        current_util_avg = [data.optimalRate for data in current_snapshot.assetDetails.values()]
-        current_util_avg = sum(current_util_avg) / len(current_util_avg)
+        current_util_avg = sum(
+            current_snapshot.totalVariableDebt[key].token_debt /
+            current_snapshot.totalAToken[key].token_supply for key in current_snapshot.totalAToken.keys()
+        )
+        current_util_avg /= len(current_snapshot.totalAToken.keys())
 
         # increment rolling averages
         previous_aggregate_snapshot.avgLiquidityRate = sample_size * \
@@ -89,8 +92,11 @@ class AggreagateSingleAprProcessor(GenericProcessorAggregate):
             len(current_snapshot.stableBorrowRate.values())
         current_stable_avg /= RAY
 
-        current_util_avg = [data.optimalRate for data in current_snapshot.assetDetails.values()]
-        current_util_avg = sum(current_util_avg) / len(current_util_avg)
+        current_util_avg = sum(
+            current_snapshot.totalVariableDebt[key].token_debt /
+            current_snapshot.totalAToken[key].token_supply for key in current_snapshot.totalAToken.keys()
+        )
+        current_util_avg /= len(current_snapshot.totalAToken.keys())
 
         # decrement rolling averages
         previous_aggregate_snapshot.avgLiquidityRate = sample_size * \
