@@ -52,7 +52,6 @@ class UniswapTradeEvents(BaseModel):
 
 class UniswapTradesSnapshot(BaseModel):
     epoch: EpochBaseSnapshot
-    contract: str
     totalTrade: float  # in USD
     totalFee: float  # in USD
     token0TradeVolume: float  # in token native decimals supply
