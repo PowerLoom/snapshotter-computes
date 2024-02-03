@@ -63,11 +63,15 @@ class AggregateTopTokensProcessor(GenericProcessorAggregate):
             snapshot_mapping[msg.projectId] = snapshot
 
             contract_address = msg.projectId.split(':')[-2]
-            projects_metadata[contract_address]= await get_pair_metadata(
+            pair_metadata_tasks.append(get_pair_metadata(
                 pair_address=contract_address,
                 redis_conn=redis,
                 rpc_helper=rpc_helper,
-            )
+            ))
+        pair_metadata_list = await asyncio.gather(*pair_metadata_tasks) 
+        for msg, pair_metadata in zip(submitted_snapshots, pair_metadata_list):
+            contract_address = msg.projectId.split(':')[-2]
+            projects_metadata[contract_address] = pair_metadata
 
 
         # iterate over all snapshots and generate token data

@@ -32,7 +32,7 @@ class AggregateTopPairsProcessor(GenericProcessorAggregate):
 
     ):
         self._logger.info(f'Calculating 7d top pairs trade volume data for {msg_obj}')
-        project_id = 'aggregate_7d_top_pairs:uniswapv3'
+        project_id = project_ids[0]
         epoch_id = msg_obj.epochId
 
         snapshot_mapping = {}
@@ -43,7 +43,7 @@ class AggregateTopPairsProcessor(GenericProcessorAggregate):
                 msg.projectId for msg in msg_obj.messages[0].snapshotsSubmitted
             ],
         )
-        pair_metadata_tasks = {}
+        pair_metadata_tasks = []
         complete_flags = []
         for msg, data in zip(msg_obj.messages[0].snapshotsSubmitted, snapshot_data):
             if not data:
@@ -54,22 +54,21 @@ class AggregateTopPairsProcessor(GenericProcessorAggregate):
 
             contract_address = msg.projectId.split(':')[-2]
             if contract_address not in all_pair_metadata:
-                all_pair_metadata[contract_address] = await get_pair_metadata(
+                pair_metadata_tasks.append(get_pair_metadata(
                     pair_address=contract_address,
                     rpc_helper=rpc_helper,
                     redis_conn=redis,
-                )
-
-        
-
-
+                ))
+        pair_metadata_lists = await asyncio.gather(*pair_metadata_tasks)
+        for msg, pair_metadata in zip(msg_obj.messages[0].snapshotsSubmitted, pair_metadata_lists):
+            contract_address = msg.projectId.split(':')[-2]
+            all_pair_metadata[contract_address] = pair_metadata     
 
         # iterate over all snapshots and generate pair data
         pair_data = {}
         cids = snapshot_mapping.keys()
         self._logger.info(f'Calculating 7d top pairs trade volume data for {cids}')
-        values = snapshot_mapping.values()
-        self._logger.info(f'Calculating 7d top pairs trade volume data for {values}')
+
         for snapshot_project_id in snapshot_mapping.keys():
             snapshot = snapshot_mapping[snapshot_project_id]
             contract = snapshot_project_id.split(':')[-2]
