@@ -50,7 +50,7 @@ class AggregateTopTokensProcessor(GenericProcessorAggregate):
             redis, [snapshot.snapshotCid for snapshot in submitted_snapshots], ipfs_reader,
             [snapshot.projectId for snapshot in submitted_snapshots],
         )
-        metadata_tasks = []
+        pair_metadata_tasks = []
         complete_flags = []
         for msg, data in zip(submitted_snapshots, snapshot_data):
             if not data:
@@ -63,16 +63,19 @@ class AggregateTopTokensProcessor(GenericProcessorAggregate):
             snapshot_mapping[msg.projectId] = snapshot
 
             contract_address = msg.projectId.split(':')[-2]
-            metadata_tasks.append(get_pair_metadata(
+            pair_metadata_tasks.append(get_pair_metadata(
                 contract_address,
                 redis_conn=redis,
                 rpc_helper=rpc_helper,
             ))
-            
-        pair_metadata_list = await asyncio.gather(*metadata_tasks, return_exceptions=True)  
-        for msg, pair_metadata in zip(submitted_snapshots, pair_metadata_list):
-            
-            projects_metadata[msg.projectId] = pair_metadata
+
+        
+        pair_metadata_list = await asyncio.gather(*pair_metadata_tasks, return_exceptions=True)
+        pair_metadata_dict = dict(zip([pair['address'] for pair in pair_metadata_list], pair_metadata_list))
+        
+        for msg in submitted_snapshots:
+            contract_address = msg.projectId.split(':')[-2]
+            projects_metadata[msg.projectId] = pair_metadata_dict[contract_address]
 
         # iterate over all snapshots and generate token data
         token_data = {}
@@ -152,6 +155,8 @@ class AggregateTopTokensProcessor(GenericProcessorAggregate):
             tokens=top_tokens,
         )
         if not all(complete_flags):
+            self._logger.debug(f'Not all snapshots are complete for {project_id}')
+
             top_tokens_snapshot.complete = False
 
         return [(project_id, top_tokens_snapshot)]

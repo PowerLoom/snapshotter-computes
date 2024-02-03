@@ -43,11 +43,12 @@ class AggregateTopPairsProcessor(GenericProcessorAggregate):
         for msg in msg_obj.messages:
             for snapshot in msg.snapshotsSubmitted:
                 submitted_snapshots.append(snapshot)
+
         snapshot_data = await get_submission_data_bulk(
             redis, [snapshot.snapshotCid for snapshot in submitted_snapshots], ipfs_reader,
             [snapshot.projectId for snapshot in submitted_snapshots],
         )
-        metadata_tasks = []
+        pair_metadata_tasks = {}
         complete_flags = []
         for msg, data in zip(submitted_snapshots, snapshot_data):
             if not data:
@@ -61,18 +62,18 @@ class AggregateTopPairsProcessor(GenericProcessorAggregate):
 
             contract_address = msg.projectId.split(':')[-2]
             if contract_address not in all_pair_metadata:
-                metadata_tasks.append(get_pair_metadata(
-                    contract_address,
-                    redis_conn=redis,
+                pair_metadata_tasks[contract_address] = get_pair_metadata(
+                    contract_address=contract_address,
                     rpc_helper=rpc_helper,
-                ))
-        pair_metadata_list = await asyncio.gather(*metadata_tasks, return_exceptions=True)  
-        for msg, pair_metadata in zip(submitted_snapshots, pair_metadata_list):
-            
-            contract_address = msg.projectId.split(':')[-2]
+                    redis_conn=redis,
+                )
 
-            all_pair_metadata[contract_address] = pair_metadata
 
+        pair_metadata_list = await asyncio.gather(*pair_metadata_tasks.values())
+        
+        all_pair_metadata = {contract_address: pair_metadata for contract_address, pair_metadata \
+                              in zip(pair_metadata_tasks.keys(), pair_metadata_list)}
+        
         # iterate over all snapshots and generate pair data
         pair_data = {}
         for snapshot_project_id in snapshot_mapping.keys():
@@ -113,4 +114,3 @@ class AggregateTopPairsProcessor(GenericProcessorAggregate):
             top_pairs_snapshot.complete = False
 
         return [(project_id, top_pairs_snapshot)]
-    

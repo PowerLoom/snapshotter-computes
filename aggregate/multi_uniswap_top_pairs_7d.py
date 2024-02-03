@@ -43,8 +43,7 @@ class AggregateTopPairsProcessor(GenericProcessorAggregate):
                 msg.projectId for msg in msg_obj.messages[0].snapshotsSubmitted
             ],
         )
-
-        pair_metadata_tasks = []
+        pair_metadata_tasks = {}
         complete_flags = []
         for msg, data in zip(msg_obj.messages[0].snapshotsSubmitted, snapshot_data):
             if not data:
@@ -55,19 +54,24 @@ class AggregateTopPairsProcessor(GenericProcessorAggregate):
 
             contract_address = msg.projectId.split(':')[-2]
             if contract_address not in all_pair_metadata:
-                pair_metadata_tasks.append(get_pair_metadata(
-                    contract_address,
-                    redis_conn=redis,
+                pair_metadata_tasks[contract_address] = get_pair_metadata(
+                    contract_address=contract_address,
                     rpc_helper=rpc_helper,
-                ))
+                    redis_conn=redis,
+                )
 
-        pair_metadata_data_list = await asyncio.gather(*pair_metadata_tasks)
-        for msg, pair_metadata in zip(msg_obj.messages[0].snapshotsSubmitted, pair_metadata_data_list):
-            contract_address = msg.projectId.split(':')[-2]
-            all_pair_metadata[contract_address] = pair_metadata
+        pair_metadata_list = await asyncio.gather(*pair_metadata_tasks.values())
+        
+        all_pair_metadata = {contract_address: pair_metadata for contract_address, pair_metadata \
+                              in zip(pair_metadata_tasks.keys(), pair_metadata_list)}
+
 
         # iterate over all snapshots and generate pair data
         pair_data = {}
+        cids = snapshot_mapping.keys()
+        self._logger.info(f'Calculating 7d top pairs trade volume data for {cids}')
+        values = snapshot_mapping.values()
+        self._logger.info(f'Calculating 7d top pairs trade volume data for {values}')
         for snapshot_project_id in snapshot_mapping.keys():
             snapshot = snapshot_mapping[snapshot_project_id]
             contract = snapshot_project_id.split(':')[-2]
@@ -96,7 +100,7 @@ class AggregateTopPairsProcessor(GenericProcessorAggregate):
         )
 
         if not all(complete_flags):
+            self._logger.debug(f'Not all snapshots are complete for {project_id}')
             top_pairs_snapshot.complete = False
-            self._logger.debug(f'7d top pairs trade volume snapshot for project ID {project_id} is not complete')
 
         return [(project_id, top_pairs_snapshot)]
