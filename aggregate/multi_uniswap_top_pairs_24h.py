@@ -96,8 +96,10 @@ class AggregateTopPairsProcessor(GenericProcessorAggregate):
         top_pairs = []
         for pair in pair_data.values():
             top_pairs.append(UniswapTopPair24hSnapshot.parse_obj(pair))
-
-        top_pairs = sorted(top_pairs, key=lambda x: x.liquidity, reverse=True)
+        if 'reserves' in msg.projectId:
+            top_pairs = sorted(top_pairs, key=lambda x: x.liquidity, reverse=True)
+        else:
+            top_pairs = sorted(top_pairs, key=lambda x: x.volume24h, reverse=True)
 
         top_pairs_snapshot = UniswapTopPairs24hSnapshot(
             epochId=epoch_id,
