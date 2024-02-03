@@ -64,7 +64,7 @@ class AggregateTopTokensProcessor(GenericProcessorAggregate):
 
             contract_address = msg.projectId.split(':')[-2]
             projects_metadata[contract_address]= await get_pair_metadata(
-                contract_address,
+                pair_address=contract_address,
                 redis_conn=redis,
                 rpc_helper=rpc_helper,
             )
