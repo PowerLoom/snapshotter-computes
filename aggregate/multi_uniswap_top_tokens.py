@@ -74,7 +74,8 @@ class AggregateTopTokensProcessor(GenericProcessorAggregate):
         token_data = {}
         for snapshot_project_id in snapshot_mapping.keys():
             snapshot = snapshot_mapping[snapshot_project_id]
-            project_metadata = projects_metadata[snapshot_project_id]
+            contract_address = snapshot_project_id.split(':')[-2]
+            project_metadata = projects_metadata[contract_address]
 
             token0 = project_metadata['token0']
             token1 = project_metadata['token1']
