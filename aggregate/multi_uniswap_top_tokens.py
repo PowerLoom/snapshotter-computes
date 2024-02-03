@@ -141,11 +141,9 @@ class AggregateTopTokensProcessor(GenericProcessorAggregate):
         top_tokens = []
         for token in token_data.values():
             top_tokens.append(UniswapTopTokenSnapshot.parse_obj(token))
-        if 'reserves' in msg.projectId:
-            top_tokens = sorted(top_tokens, key=lambda x: x.liquidity, reverse=True)
-        elif 'volume' in msg.projectId:
-            top_tokens = sorted(top_tokens, key=lambda x: x.volume24h, reverse=True)
-            
+
+        top_tokens = sorted(top_tokens, key=lambda x: x.volume24h, reverse=True)
+
         top_tokens_snapshot = UniswapTopTokensSnapshot(
             epochId=epoch_id,
             tokens=top_tokens,
