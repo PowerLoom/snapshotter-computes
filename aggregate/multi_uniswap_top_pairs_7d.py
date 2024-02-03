@@ -54,16 +54,14 @@ class AggregateTopPairsProcessor(GenericProcessorAggregate):
 
             contract_address = msg.projectId.split(':')[-2]
             if contract_address not in all_pair_metadata:
-                pair_metadata_tasks[contract_address] = get_pair_metadata(
+                all_pair_metadata[contract_address] = await get_pair_metadata(
                     pair_address=contract_address,
                     rpc_helper=rpc_helper,
                     redis_conn=redis,
                 )
 
-        pair_metadata_list = await asyncio.gather(*pair_metadata_tasks.values())
         
-        all_pair_metadata = {contract_address: pair_metadata for contract_address, pair_metadata \
-                              in zip(pair_metadata_tasks.keys(), pair_metadata_list)}
+
 
 
         # iterate over all snapshots and generate pair data

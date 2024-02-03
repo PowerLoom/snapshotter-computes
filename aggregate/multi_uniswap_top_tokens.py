@@ -63,7 +63,7 @@ class AggregateTopTokensProcessor(GenericProcessorAggregate):
             snapshot_mapping[msg.projectId] = snapshot
 
             contract_address = msg.projectId.split(':')[-2]
-            project_metadata[contract_address]= await get_pair_metadata(
+            projects_metadata[contract_address]= await get_pair_metadata(
                 contract_address,
                 redis_conn=redis,
                 rpc_helper=rpc_helper,
