@@ -55,7 +55,7 @@ class AggregateTopPairsProcessor(GenericProcessorAggregate):
             contract_address = msg.projectId.split(':')[-2]
             if contract_address not in all_pair_metadata:
                 pair_metadata_tasks[contract_address] = get_pair_metadata(
-                    contract_address=contract_address,
+                    pair_address=contract_address,
                     rpc_helper=rpc_helper,
                     redis_conn=redis,
                 )
