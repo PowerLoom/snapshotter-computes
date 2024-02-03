@@ -35,7 +35,7 @@ class AggregateStatsProcessor(GenericProcessorAggregate):
         self._logger.info(f'Calculating unswap stats for {msg_obj}')
 
         epoch_id = msg_obj.epochId
-        project_id = project_ids[0]
+        project_id = 'aggregate_24h_stats:uniswapv3'
         snapshot_mapping = {}
 
         submitted_snapshots = []

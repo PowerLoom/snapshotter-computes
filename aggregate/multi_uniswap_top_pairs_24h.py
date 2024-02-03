@@ -35,7 +35,7 @@ class AggregateTopPairsProcessor(GenericProcessorAggregate):
         self._logger.info(f'Calculating 24h top pairs trade volume and reserves data for {msg_obj}')
 
         epoch_id = msg_obj.epochId
-        project_id = project_ids[0]
+        project_id = 'aggregate_24h_top_pairs:uniswapv3'
         snapshot_mapping = {}
         all_pair_metadata = {}
 
