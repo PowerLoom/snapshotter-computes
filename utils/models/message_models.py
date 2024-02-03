@@ -70,6 +70,7 @@ class UniswapTradesAggregateSnapshot(AggregateBase):
     token0TradeVolumeUSD: float = 0
     token1TradeVolumeUSD: float = 0
     complete: bool = True
+    contract: str
 
 
 class UniswapTopTokenSnapshot(BaseModel):
