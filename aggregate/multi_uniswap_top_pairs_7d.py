@@ -89,6 +89,7 @@ class AggregateTopPairsProcessor(GenericProcessorAggregate):
         for pair in pair_data.values():
             top_pairs.append(UniswapTopPair7dSnapshot.parse_obj(pair))
 
+        top_pairs = sorted(top_pairs, key=lambda x: x.address, reverse=True)
         top_pairs = sorted(top_pairs, key=lambda x: x.volume7d, reverse=True)
 
         top_pairs_snapshot = UniswapTopPairs7dSnapshot(
