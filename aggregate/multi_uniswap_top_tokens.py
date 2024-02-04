@@ -68,7 +68,7 @@ class AggregateTopTokensProcessor(GenericProcessorAggregate):
                 redis_conn=redis,
                 rpc_helper=rpc_helper,
             ))
-        pair_metadata_list = await asyncio.gather(*pair_metadata_tasks) 
+        pair_metadata_list = await asyncio.gather(*pair_metadata_tasks, return_exceptions=True) 
         for msg, pair_metadata in zip(submitted_snapshots, pair_metadata_list):
             contract_address = msg.projectId.split(':')[-2]
             projects_metadata[contract_address] = pair_metadata
