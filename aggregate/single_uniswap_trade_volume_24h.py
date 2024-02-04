@@ -106,7 +106,7 @@ class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
                 aggregate_snapshot = self._add_aggregate_snapshot(aggregate_snapshot, snapshot)
 
         await redis.delete(f'calculate_from_scratch:{project_id}')
-
+        self._logger.info(f'aggregate from scratch built: {aggregate_snapshot}')
         return aggregate_snapshot
 
     async def _compute_single(
