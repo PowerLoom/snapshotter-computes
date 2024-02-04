@@ -52,6 +52,7 @@ class UniswapTradeEvents(BaseModel):
 
 class UniswapTradesSnapshot(BaseModel):
     epoch: EpochBaseSnapshot
+    contract: str
     totalTrade: float  # in USD
     totalFee: float  # in USD
     token0TradeVolume: float  # in token native decimals supply
@@ -69,7 +70,6 @@ class UniswapTradesAggregateSnapshot(AggregateBase):
     token0TradeVolumeUSD: float = 0
     token1TradeVolumeUSD: float = 0
     complete: bool = True
-    contract: str
 
 
 class UniswapTopTokenSnapshot(BaseModel):
