@@ -80,6 +80,14 @@ class AggregateStatsProcessor(GenericProcessorAggregate):
             elif 'volume' in snapshot_project_id:
                 stats_data['volume24h'] += snapshot.totalTrade
                 stats_data['fee24h'] += snapshot.totalFee
+            stats_data = {
+                'volume24h': 0,
+                'tvl': 0,
+                'fee24h': 0,
+                'volumeChange24h': 0,
+                'tvlChange24h': 0,
+                'feeChange24h': 0,
+            }
 
         # source project tail epoch
         tail_epoch_id, extrapolated_flag = await get_tail_epoch_id(
