@@ -147,7 +147,7 @@ class AggregateTopTokensProcessor(GenericProcessorAggregate):
             top_tokens.append(UniswapTopTokenSnapshot.parse_obj(token))
 
 
-        top_tokens = sorted(top_tokens, key=lambda x: x.address, reverse=True)
+        top_tokens = sorted(top_tokens, key=lambda x: int(x.address, base=16), reverse=True)
         top_tokens = sorted(top_tokens, key=lambda x: x.volume24h, reverse=True)
 
         top_tokens_snapshot = UniswapTopTokensSnapshot(
