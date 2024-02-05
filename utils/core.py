@@ -196,8 +196,8 @@ async def get_pair_reserves(
             'token1': {'reserves': token1Amount, 'decimals': pair_per_token_metadata['token1']['decimals']},
             'token0USD': round(token0USD, 2),
             'token1USD': round(token1USD, 2),
-            'token0Price': token0Price,
-            'token1Price': token1Price,
+            'token0Price': round(token0Price, 2),
+            'token1Price': round(token1Price, 2),
             'timestamp': timestamp,
         }
 
@@ -356,12 +356,12 @@ def extract_trade_volume_log(
 
     return (
         trade_data(
-            totalTradesUSD=trade_volume_usd,
-            totalFeeUSD=trade_fee_usd,
+            totalTradesUSD=round(trade_volume_usd, 2),
+            totalFeeUSD=round(trade_fee_usd, 2),
             token0TradeVolume=token0_amount,
             token1TradeVolume=token1_amount,
-            token0TradeVolumeUSD=token0_amount_usd,
-            token1TradeVolumeUSD=token1_amount_usd,
+            token0TradeVolumeUSD=round(token0_amount_usd, 2),
+            token1TradeVolumeUSD=round(token1_amount_usd, 2),
         ),
         log,
     )
