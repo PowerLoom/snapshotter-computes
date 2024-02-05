@@ -257,9 +257,12 @@ async def get_tick_info(
         tickDataResponse, slot0Response = await asyncio.gather(
             rpc_helper.web3_call(tick_tasks, redis_conn, overrides=overrides, block=from_block),
             rpc_helper.web3_call(slot0_tasks, redis_conn, block=from_block,),
+            return_exceptions=True
             )
             
         for ticks in tickDataResponse:
+            if isinstance(ticks, Exception):
+                continue
             ticks_list.append(transform_tick_bytes_to_list(ticks))
 
         ticks_list = functools.reduce(lambda x, y: x + y, ticks_list)
