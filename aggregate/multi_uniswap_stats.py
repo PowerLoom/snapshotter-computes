@@ -103,9 +103,7 @@ class AggregateStatsProcessor(GenericProcessorAggregate):
 
                 stats_data['feeChange24h'] = (stats_data['fee24h'] - previous_stats_snapshot.fee24h) / \
                     previous_stats_snapshot.fee24h * 100
-                stats_data['volumeChange24h'] = round(stats_data['volumeChange24h'], 2)
-                stats_data['tvlChange24h'] = round(stats_data['tvlChange24h'], 2)
-                stats_data['feeChange24h'] = round(stats_data['feeChange24h'], 2)
+                
 
         stats_snapshot = UniswapStatsSnapshot(
             epochId=epoch_id,
