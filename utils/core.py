@@ -1,4 +1,5 @@
 import asyncio
+from decimal import Decimal
 import json
 from functools import reduce
 
@@ -171,9 +172,10 @@ async def get_pair_reserves(
             if event['event'] == 'Burn' 
             else acc + event['args']['amount1'], events_in_block, 0)
         
-        token0USD = token0Amount * token0_price_map.get(block_num, 0) * (10 ** -int(pair_per_token_metadata["token0"]["decimals"]))
-        token1USD = token1Amount * (token1_price_map.get(block_num, 0)) * (10 ** -int(pair_per_token_metadata["token1"]["decimals"]))
-        
+        token0USD = Decimal(token0Amount) * Decimal(token0_price_map.get(block_num, 0)) * (Decimal((10) ** Decimal(-int(pair_per_token_metadata["token0"]["decimals"]))))
+        token1USD = Decimal(token1Amount) * Decimal(token1_price_map.get(block_num, 0)) * (Decimal(10) ** Decimal(-int(pair_per_token_metadata["token1"]["decimals"])))
+        token0USD = int(token0USD)
+        token1USD = int(token1USD)
 
         token0Price = token0_price_map.get(block_num, 0)
         token1Price = token1_price_map.get(block_num, 0)
