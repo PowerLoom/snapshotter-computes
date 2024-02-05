@@ -119,8 +119,8 @@ class AggregateTopTokensProcessor(GenericProcessorAggregate):
 
             elif 'volume' in snapshot_project_id:
 
-                token_data[token0['address']]['volume24h'] += round(snapshot.token0TradeVolumeUSD)
-                token_data[token1['address']]['volume24h'] += round(snapshot.token1TradeVolumeUSD)
+                token_data[token0['address']]['volume24h'] += round(snapshot.token0TradeVolumeUSD, 2)
+                token_data[token1['address']]['volume24h'] += round(snapshot.token1TradeVolumeUSD, 2)
 
         tail_epoch_id, extrapolated_flag = await get_tail_epoch_id(
             redis, protocol_state_contract, anchor_rpc_helper, msg_obj.epochId, 86400, project_id,
