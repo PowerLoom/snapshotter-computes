@@ -107,12 +107,12 @@ class AggregateStatsProcessor(GenericProcessorAggregate):
 
         stats_snapshot = UniswapStatsSnapshot(
             epochId=epoch_id,
-            volume24h=stats_data['volume24h'],
-            tvl=stats_data['tvl'],
-            fee24h=stats_data['fee24h'],
-            volumeChange24h=stats_data['volumeChange24h'],
-            tvlChange24h=stats_data['tvlChange24h'],
-            feeChange24h=stats_data['feeChange24h'],
+            volume24h=round(stats_data['volume24h'], 2),
+            tvl=round(stats_data['tvl'], 2),
+            fee24h=round(stats_data['fee24h'], 2),
+            volumeChange24h=round(stats_data['volumeChange24h'], 2),
+            tvlChange24h=round(stats_data['tvlChange24h'], 2),
+            feeChange24h=round(stats_data['feeChange24h'], 2),
         )
 
         if not all(complete_flags):
