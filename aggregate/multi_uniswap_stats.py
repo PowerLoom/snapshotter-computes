@@ -74,20 +74,13 @@ class AggregateStatsProcessor(GenericProcessorAggregate):
             if 'reserves' in snapshot_project_id:
                 max_epoch_block = snapshot.chainHeightRange.end
 
-                stats_data['tvl'] += round(snapshot.token0ReservesUSD[f'block{max_epoch_block}'], 2) + \
-                    round(snapshot.token1ReservesUSD[f'block{max_epoch_block}'], 2)
+                stats_data['tvl'] += snapshot.token0ReservesUSD[f'block{max_epoch_block}'] + \
+                    snapshot.token1ReservesUSD[f'block{max_epoch_block}']
 
             elif 'volume' in snapshot_project_id:
-                stats_data['volume24h'] += round(snapshot.totalTrade, 2)
-                stats_data['fee24h'] += round(snapshot.totalFee, 2)
-            stats_data = {
-                'volume24h': 0,
-                'tvl': 0,
-                'fee24h': 0,
-                'volumeChange24h': 0,
-                'tvlChange24h': 0,
-                'feeChange24h': 0,
-            }
+                stats_data['volume24h'] += snapshot.totalTrade
+                stats_data['fee24h'] += snapshot.totalFee
+
 
         # source project tail epoch
         tail_epoch_id, extrapolated_flag = await get_tail_epoch_id(
