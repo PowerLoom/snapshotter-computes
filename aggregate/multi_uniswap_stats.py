@@ -103,6 +103,9 @@ class AggregateStatsProcessor(GenericProcessorAggregate):
 
                 stats_data['feeChange24h'] = (stats_data['fee24h'] - previous_stats_snapshot.fee24h) / \
                     previous_stats_snapshot.fee24h * 100
+                stats_data['volumeChange24h'] = round(stats_data['volumeChange24h'], 2)
+                stats_data['tvlChange24h'] = round(stats_data['tvlChange24h'], 2)
+                stats_data['feeChange24h'] = round(stats_data['feeChange24h'], 2)
 
         stats_snapshot = UniswapStatsSnapshot(
             epochId=epoch_id,
@@ -116,5 +119,5 @@ class AggregateStatsProcessor(GenericProcessorAggregate):
 
         if not all(complete_flags):
             stats_snapshot.complete = False
-
+        self._logger.debug(f'stats snapshot {stats_snapshot}')
         return [(project_id, stats_snapshot)]
