@@ -1,6 +1,5 @@
 import asyncio
 import json
-from decimal import Decimal
 
 from redis import asyncio as aioredis
 from snapshotter.utils.default_logger import logger
@@ -13,14 +12,15 @@ from web3 import Web3
 
 from ..redis_keys import aave_cached_block_height_asset_data
 from .constants import DETAILS_BASIS
-from .constants import HALF_RAY
 from .constants import ORACLE_DECIMALS
 from .constants import pool_data_provider_contract_obj
 from .constants import RAY
-from .constants import SECONDS_IN_YEAR
+from .helpers import calculate_compound_interest
+from .helpers import calculate_current_from_scaled
 from .helpers import get_asset_metadata
 from .helpers import get_debt_burn_mint_events
 from .helpers import get_pool_data_events
+from .helpers import rayMul
 from .models.data_models import AaveDebtData
 from .models.data_models import AaveSupplyData
 from .models.data_models import AssetTotalData
@@ -541,126 +541,3 @@ async def calculate_asset_event_data(
     )
 
     return [DataProviderReserveData(**data) for data in computed_supply_debt_list]
-
-
-def calculate_initial_scaled_supply(
-    supply: int,
-    current_timestamp: dict,
-    last_update: int,
-    liquidity_rate: int,
-    liquidity_index: int,
-) -> int:
-    interest = calculate_linear_interest(
-        last_update_timestamp=last_update,
-        current_timestamp=current_timestamp,
-        liquidity_rate=liquidity_rate,
-    )
-    normalized = calculate_normalized_value(
-        interest=interest,
-        index=liquidity_index,
-    )
-    return rayDiv(supply, normalized)
-
-
-def calculate_initial_scaled_variable(
-    variable_debt: int,
-    variable_rate: int,
-    variable_index: int,
-    current_timestamp: int,
-    last_update: int,
-) -> int:
-    variable_interest = calculate_compound_interest(
-        rate=variable_rate,
-        current_timestamp=current_timestamp,
-        last_update_timestamp=last_update,
-    )
-    normalized_variable_debt = calculate_normalized_value(
-        interest=variable_interest,
-        index=variable_index,
-    )
-    return rayDiv(variable_debt, normalized_variable_debt)
-
-
-def calculate_initial_scaled_stable(
-    stable_debt: int,
-    avg_stable_rate: int,
-    current_timestamp: int,
-    last_update: int,
-) -> int:
-    stable_interest = calculate_compound_interest(
-        rate=avg_stable_rate,
-        current_timestamp=current_timestamp,
-        last_update_timestamp=last_update,
-    )
-    return rayDiv(stable_debt, stable_interest)
-
-
-def calculate_scaled_from_current(current_value: int, interest: int, index: int) -> int:
-    normalized = calculate_normalized_value(
-        interest=interest,
-        index=index,
-    )
-    return rayDiv(current_value, normalized)
-
-
-def calculate_current_from_scaled(scaled_value: int, interest: int, index: int) -> int:
-    normalized = calculate_normalized_value(
-        interest=interest,
-        index=index,
-    )
-    return rayMul(scaled_value, normalized)
-
-
-def rayMul(a: int, b: int):
-    x = Decimal(a) * Decimal(b)
-    y = x + Decimal(HALF_RAY)
-    z = y / Decimal(RAY)
-    return int(z)
-
-
-def rayDiv(a: int, b: int):
-    x = Decimal(b) / 2
-    y = Decimal(a) * Decimal(RAY)
-    z = (x + y) / b
-    return int(z)
-
-
-def calculate_normalized_value(interest: int, index: int) -> int:
-    return rayMul(interest, index)
-
-# https://github.com/aave/aave-v3-core/blob/master/contracts/protocol/libraries/math/MathUtils.sol
-
-
-def calculate_linear_interest(
-    last_update_timestamp: int,
-    current_timestamp: int,
-    liquidity_rate: int,
-):
-    result = Decimal(liquidity_rate) * Decimal(current_timestamp - last_update_timestamp)
-    result = result / SECONDS_IN_YEAR
-
-    return Decimal(RAY) + result
-
-# https://github.com/aave/aave-v3-core/blob/master/contracts/protocol/libraries/math/MathUtils.sol line 50
-
-
-def calculate_compound_interest(rate: int, current_timestamp: int, last_update_timestamp: int) -> Decimal:
-    exp = current_timestamp - last_update_timestamp
-    base = Decimal(rate) / Decimal(SECONDS_IN_YEAR)
-
-    if exp == 0:
-        return int(RAY)
-
-    expMinusOne = exp - 1
-    expMinusTwo = max(0, exp - 2)
-
-    basePowerTwo = rayMul(base, base)
-    basePowerThree = rayMul(basePowerTwo, base)
-
-    firstTerm = exp * base
-    secondTerm = Decimal(exp * expMinusOne * basePowerTwo) / Decimal(2)
-    thirdTerm = Decimal(exp * expMinusOne * expMinusTwo * basePowerThree) / Decimal(6)
-
-    interest = Decimal(RAY) + firstTerm + secondTerm + thirdTerm
-
-    return interest
