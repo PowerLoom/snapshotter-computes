@@ -97,7 +97,7 @@ async def get_pair_reserves(
             debug_log=False,
 
         ),
-        raise_exception=True,
+        return_exceptions=True,
     )
     
     for token_price in token0_price_map:
