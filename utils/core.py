@@ -100,11 +100,12 @@ async def get_pair_reserves(
         return_exceptions=True,
     )
     
-    if isinstance(token0_price_map, Exception):
-        raise(token0_price_map)
-    
-    if isinstance(token1_price_map, Exception):
-            raise(token1_price_map)    
+    for token_price in token0_price_map:
+        if isinstance(token0_price_map[token_price], Exception):
+            raise(token0_price_map[token_price])
+    for token_price in token1_price_map:
+        if isinstance(token1_price_map[token_price], Exception):
+            raise(token1_price_map[token_price])    
         
     core_logger.debug(
         f'Total reserves fetched token prices for: {pair_address}',
@@ -436,10 +437,7 @@ async def get_pair_trade_volume(
         return_exceptions=True,
     )
 
-    if isinstance(token0_price_map, Exception): 
-        raise(token0_price_map)
-    if isinstance(token1_price_map, Exception):
-        raise(token1_price_map)
+    
     
 
     # fetch logs for swap, mint & burn

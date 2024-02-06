@@ -260,13 +260,13 @@ async def get_tick_info(
             return_exceptions=True
             )
             
-        
-        if isinstance(tickDataResponse, Exception):
-            raise(Exception(tickDataResponse))
-           
+        for ticks in tickDataResponse:
+            if isinstance(ticks, Exception):
+                raise(Exception(ticks))
+            ticks_list.append(transform_tick_bytes_to_list(ticks))
 
         ticks_list = functools.reduce(lambda x, y: x + y, ticks_list)
-        if isinstance(slot0Response, Exception):
+        if isinstance(slot0Response[0], Exception):
             raise(Exception(slot0Response))
         slot0 = slot0Response[0]
         
