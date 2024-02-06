@@ -100,12 +100,11 @@ async def get_pair_reserves(
         return_exceptions=True,
     )
     
-    for token_price in token0_price_map:
-        if isinstance(token0_price_map[token_price], Exception):
-            raise(token0_price_map[token_price])
-    for token_price in token1_price_map:
-        if isinstance(token1_price_map[token_price], Exception):
-            raise(token1_price_map[token_price])    
+    if isinstance(token0_price_map, Exception):
+        raise(token0_price_map)
+    
+    if isinstance(token1_price_map, Exception):
+            raise(token1_price_map)    
         
     core_logger.debug(
         f'Total reserves fetched token prices for: {pair_address}',
@@ -414,6 +413,9 @@ async def get_pair_trade_volume(
         redis_conn=redis_conn,
         rpc_helper=rpc_helper,
     )
+
+    
+
     token0_price_map, token1_price_map = await asyncio.gather(
         get_token_price_in_block_range(
             token_metadata=pair_per_token_metadata['token0'],
@@ -431,7 +433,14 @@ async def get_pair_trade_volume(
             rpc_helper=rpc_helper,
             debug_log=False,
         ),
+        return_exceptions=True,
     )
+
+    if isinstance(token0_price_map, Exception): 
+        raise(token0_price_map)
+    if isinstance(token1_price_map, Exception):
+        raise(token1_price_map)
+    
 
     # fetch logs for swap, mint & burn
     event_sig, event_abi = get_event_sig_and_abi(
