@@ -59,7 +59,13 @@ class AggregateTopPairsProcessor(GenericProcessorAggregate):
                     rpc_helper=rpc_helper,
                     redis_conn=redis,
                 ))
-        pair_metadata_lists = await asyncio.gather(*pair_metadata_tasks)
+        pair_metadata_lists = await asyncio.gather(*pair_metadata_tasks, return_exceptions=True)
+        
+        for pair_metadata in pair_metadata_lists:
+            if isinstance(pair_metadata, Exception):
+                self._logger.error(f'Error while fetching pair metadata: {pair_metadata}')
+                raise(pair_metadata)
+
         for msg, pair_metadata in zip(msg_obj.messages[0].snapshotsSubmitted, pair_metadata_lists):
             contract_address = msg.projectId.split(':')[-2]
             all_pair_metadata[contract_address] = pair_metadata     

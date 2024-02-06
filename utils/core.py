@@ -73,6 +73,7 @@ async def get_pair_reserves(
         rpc_helper=rpc_helper,
     )
 
+
     core_logger.debug(
         ('total pair reserves fetched block details for epoch for:' f' {pair_address}'),
     )
@@ -96,8 +97,16 @@ async def get_pair_reserves(
             debug_log=False,
 
         ),
+        raise_exception=True,
     )
     
+    for token_price in token0_price_map:
+        if isinstance(token0_price_map[token_price], Exception):
+            raise(token0_price_map[token_price])
+    for token_price in token1_price_map:
+        if isinstance(token1_price_map[token_price], Exception):
+            raise(token1_price_map[token_price])    
+        
     core_logger.debug(
         f'Total reserves fetched token prices for: {pair_address}',
     )
