@@ -1,11 +1,9 @@
 from pydantic import BaseModel
 from pydantic.dataclasses import dataclass
 
+from .message_models import AaveDebtData
+from .message_models import AaveSupplyData
 from .message_models import AssetDetailsData
-
-
-class ReserveConfiguration(BaseModel):
-    data: int
 
 
 @dataclass
@@ -41,3 +39,18 @@ class UiDataProviderReserveData():
     priceInMarketReferenceCurrency: int
     accruedToTreasury: int
     assetDetails: AssetDetailsData
+
+
+class AssetTotalData(BaseModel):
+    totalSupply: AaveSupplyData
+    availableLiquidity: AaveSupplyData
+    totalStableDebt: AaveDebtData
+    totalVariableDebt: AaveDebtData
+    liquidityRate: int
+    liquidityIndex: int
+    variableBorrowRate: int
+    stableBorrowRate: int
+    variableBorrowIndex: int
+    lastUpdateTimestamp: int
+    assetDetails: AssetDetailsData
+    timestamp: int = None

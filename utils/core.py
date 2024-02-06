@@ -21,6 +21,9 @@ from .constants import SECONDS_IN_YEAR
 from .helpers import get_asset_metadata
 from .helpers import get_debt_burn_mint_events
 from .helpers import get_pool_data_events
+from .models.data_models import AaveDebtData
+from .models.data_models import AaveSupplyData
+from .models.data_models import AssetTotalData
 from .models.data_models import DataProviderReserveData
 from .models.data_models import UiDataProviderReserveData
 from .pricing import get_asset_price_in_block_range
@@ -151,20 +154,34 @@ async def get_asset_supply_and_debt_bulk(
         asset_data.assetDetails.eliqBonus = ((asset_data.assetDetails.eliqBonus / DETAILS_BASIS) * 100) - 100
         asset_data.assetDetails.optimalRate = round(asset_data.assetDetails.optimalRate / RAY, 2)
 
-        asset_supply_debt_dict[block_num] = {
-            'total_supply': {'token_supply': total_supply, 'usd_supply': total_supply_usd},
-            'available_liquidity': {'token_supply': asset_data.availableLiquidity, 'usd_supply': available_liquidity_usd},
-            'total_stable_debt': {'token_debt': total_stable_debt, 'usd_debt': total_stable_debt_usd},
-            'total_variable_debt': {'token_debt': total_variable_debt, 'usd_debt': total_variable_debt_usd},
-            'liquidity_rate': asset_data.liquidityRate,
-            'liquidity_index': asset_data.liquidityIndex,
-            'variable_borrow_rate': asset_data.variableBorrowRate,
-            'stable_borrow_rate': asset_data.stableBorrowRate,
-            'variable_borrow_index': asset_data.variableBorrowIndex,
-            'last_update_timestamp': asset_data.lastUpdateTimestamp,
-            'asset_details_dict': dict(asset_data.assetDetails),
-            'timestamp': timestamp,
-        }
+        total_asset_data = AssetTotalData(
+            totalSupply=AaveSupplyData(
+                token_supply=total_supply,
+                usd_supply=total_supply_usd,
+            ),
+            availableLiquidity=AaveSupplyData(
+                token_supply=asset_data.availableLiquidity,
+                usd_supply=available_liquidity_usd,
+            ),
+            totalStableDebt=AaveDebtData(
+                token_debt=total_stable_debt,
+                usd_debt=total_stable_debt_usd,
+            ),
+            totalVariableDebt=AaveDebtData(
+                token_debt=total_variable_debt,
+                usd_debt=total_variable_debt_usd,
+            ),
+            liquidityRate=asset_data.liquidityRate,
+            liquidityIndex=asset_data.liquidityIndex,
+            variableBorrowRate=asset_data.variableBorrowRate,
+            stableBorrowRate=asset_data.stableBorrowRate,
+            variableBorrowIndex=asset_data.variableBorrowIndex,
+            lastUpdateTimestamp=asset_data.lastUpdateTimestamp,
+            assetDetails=asset_data.assetDetails,
+            timestamp=timestamp,
+        )
+
+        asset_supply_debt_dict[block_num] = total_asset_data
 
     core_logger.debug(
         (

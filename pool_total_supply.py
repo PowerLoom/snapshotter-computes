@@ -10,6 +10,7 @@ from snapshotter.utils.models.message_models import PowerloomSnapshotProcessMess
 from snapshotter.utils.rpc import RpcHelper
 
 from .utils.core import get_asset_supply_and_debt_bulk
+from .utils.models.data_models import AssetTotalData
 from .utils.models.message_models import AavePoolTotalAssetSnapshot
 from .utils.models.message_models import EpochBaseSnapshot
 
@@ -52,7 +53,7 @@ class AssetTotalSupplyProcessor(GenericProcessorSnapshot):
         max_block_timestamp = int(time.time())
 
         self._logger.debug(f'asset supply {data_source_contract_address} computation init time {time.time()}')
-        asset_supply_debt_total = await get_asset_supply_and_debt_bulk(
+        asset_supply_debt_total: Dict[str, AssetTotalData] = await get_asset_supply_and_debt_bulk(
             asset_address=data_source_contract_address,
             from_block=min_chain_height,
             to_block=max_chain_height,
@@ -67,40 +68,40 @@ class AssetTotalSupplyProcessor(GenericProcessorSnapshot):
 
             epoch_asset_snapshot_map_total_supply[
                 f'block{block_num}'
-            ] = block_asset_supply_debt['total_supply']
+            ] = block_asset_supply_debt.totalSupply
             epoch_asset_snapshot_map_liquidity_rate[
                 f'block{block_num}'
-            ] = block_asset_supply_debt['liquidity_rate']
+            ] = block_asset_supply_debt.liquidityRate
             epoch_asset_snapshot_map_liquidity_index[
                 f'block{block_num}'
-            ] = block_asset_supply_debt['liquidity_index']
+            ] = block_asset_supply_debt.liquidityIndex
             epoch_asset_snapshot_map_total_stable_debt[
                 f'block{block_num}'
-            ] = block_asset_supply_debt['total_stable_debt']
+            ] = block_asset_supply_debt.totalStableDebt
             epoch_asset_snapshot_map_total_variable_debt[
                 f'block{block_num}'
-            ] = block_asset_supply_debt['total_variable_debt']
+            ] = block_asset_supply_debt.totalVariableDebt
             epoch_asset_snapshot_map_variable_borrow_rate[
                 f'block{block_num}'
-            ] = block_asset_supply_debt['variable_borrow_rate']
+            ] = block_asset_supply_debt.variableBorrowRate
             epoch_asset_snapshot_map_stable_borrow_rate[
                 f'block{block_num}'
-            ] = block_asset_supply_debt['stable_borrow_rate']
+            ] = block_asset_supply_debt.stableBorrowRate
             epoch_asset_snapshot_map_variable_borrow_index[
                 f'block{block_num}'
-            ] = block_asset_supply_debt['variable_borrow_index']
+            ] = block_asset_supply_debt.variableBorrowIndex
             epoch_asset_snapshot_map_last_update_timestamp[
                 f'block{block_num}'
-            ] = block_asset_supply_debt['last_update_timestamp']
+            ] = block_asset_supply_debt.lastUpdateTimestamp
             epoch_asset_snapshot_map_asset_details[
                 f'block{block_num}'
-            ] = block_asset_supply_debt['asset_details_dict']
+            ] = block_asset_supply_debt.assetDetails
             epoch_asset_snapshot_map_available_liquidity[
                 f'block{block_num}'
-            ] = block_asset_supply_debt['available_liquidity']
+            ] = block_asset_supply_debt.availableLiquidity
 
             if fetch_ts:
-                if not block_asset_supply_debt.get('timestamp', None):
+                if not block_asset_supply_debt.timestamp:
                     self._logger.error(
                         (
                             'Could not fetch timestamp against max block'
@@ -113,9 +114,7 @@ class AssetTotalSupplyProcessor(GenericProcessorSnapshot):
                         max_chain_height,
                     )
                 else:
-                    max_block_timestamp = block_asset_supply_debt.get(
-                        'timestamp',
-                    )
+                    max_block_timestamp = block_asset_supply_debt.timestamp
         asset_total_snapshot = AavePoolTotalAssetSnapshot(
             **{
                 'totalAToken': epoch_asset_snapshot_map_total_supply,
