@@ -4,6 +4,11 @@ from typing import List
 from pydantic import BaseModel
 from snapshotter.utils.models.message_models import AggregateBase
 
+from .data_models import AaveDebtData
+from .data_models import AaveSupplyData
+from .data_models import AssetDetailsData
+from .data_models import volumeData
+
 
 class EpochBaseSnapshot(BaseModel):
     begin: int
@@ -14,29 +19,6 @@ class SnapshotBase(BaseModel):
     contract: str
     chainHeightRange: EpochBaseSnapshot
     timestamp: int
-
-
-class AaveSupplyData(BaseModel):
-    token_supply: int
-    usd_supply: float
-
-
-class AaveDebtData(BaseModel):
-    token_debt: int
-    usd_debt: float
-
-
-class AssetDetailsData(BaseModel):
-    ltv: float
-    liqThreshold: float
-    liqBonus: float
-    resFactor: float
-    borrowCap: int
-    supplyCap: int
-    eLtv: float
-    eliqThreshold: float
-    eliqBonus: float
-    optimalRate: float
 
 
 class AavePoolTotalAssetSnapshot(SnapshotBase):
@@ -101,14 +83,16 @@ class AaveAprAggregateSnapshot(AggregateBase):
     complete: bool = True
 
 
-class volumeData(BaseModel):
-    totalUSD: float
-    totalToken: int
-
-
 class AaveSupplyVolumeSnapshot(SnapshotBase):
     borrow: volumeData
     repay: volumeData
     supply: volumeData
     withdraw: volumeData
     events: List[Dict]
+
+
+class AaveVolumeAggregateSnapshot(AggregateBase):
+    totalBorrow: volumeData
+    totalRepay: volumeData
+    totalSupply: volumeData
+    totalWithdraw: volumeData

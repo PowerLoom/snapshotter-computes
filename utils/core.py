@@ -20,10 +20,10 @@ from .helpers import rayMul
 from .models.data_models import AaveDebtData
 from .models.data_models import AaveSupplyData
 from .models.data_models import AssetTotalData
-from .models.data_models import epoch_event_volume_data
-from .models.data_models import event_volume_data
+from .models.data_models import epochEventVolumeData
+from .models.data_models import eventVolumeData
 from .models.data_models import UiDataProviderReserveData
-from .models.data_models import volume_data
+from .models.data_models import volumeData
 from .pricing import get_asset_price_in_block_range
 
 core_logger = logger.bind(module='PowerLoom|AaveCore')
@@ -279,31 +279,31 @@ async def get_asset_trade_volume(
     }
 
     # init data models with empty/0 values
-    epoch_results = epoch_event_volume_data(
-        borrow=event_volume_data(
+    epoch_results = epochEventVolumeData(
+        borrow=eventVolumeData(
             logs=[],
-            totals=volume_data(
+            totals=volumeData(
                 totalUSD=float(),
                 totalToken=int(),
             ),
         ),
-        repay=event_volume_data(
+        repay=eventVolumeData(
             logs=[],
-            totals=volume_data(
+            totals=volumeData(
                 totalUSD=float(),
                 totalToken=int(),
             ),
         ),
-        supply=event_volume_data(
+        supply=eventVolumeData(
             logs=[],
-            totals=volume_data(
+            totals=volumeData(
                 totalUSD=float(),
                 totalToken=int(),
             ),
         ),
-        withdraw=event_volume_data(
+        withdraw=eventVolumeData(
             logs=[],
-            totals=volume_data(
+            totals=volumeData(
                 totalUSD=float(),
                 totalToken=int(),
             ),
@@ -316,7 +316,7 @@ async def get_asset_trade_volume(
 
         for event in asset_supply_events.get(block_num, None):
             amount = event['args']['amount']
-            volume = volume_data(
+            volume = volumeData(
                 totalToken=amount,
                 totalUSD=amount * asset_usd_price,
             )

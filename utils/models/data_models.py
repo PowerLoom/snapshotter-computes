@@ -4,10 +4,6 @@ from typing import List
 from pydantic import BaseModel
 from pydantic.dataclasses import dataclass
 
-from .message_models import AaveDebtData
-from .message_models import AaveSupplyData
-from .message_models import AssetDetailsData
-
 
 @dataclass
 class DataProviderReserveData():
@@ -24,6 +20,19 @@ class DataProviderReserveData():
     variableBorrowIndex: int
     lastUpdateTimestamp: int
     timestamp: int = None
+
+
+class AssetDetailsData(BaseModel):
+    ltv: float
+    liqThreshold: float
+    liqBonus: float
+    resFactor: float
+    borrowCap: int
+    supplyCap: int
+    eLtv: float
+    eliqThreshold: float
+    eliqBonus: float
+    optimalRate: float
 
 
 @dataclass
@@ -44,6 +53,16 @@ class UiDataProviderReserveData():
     assetDetails: AssetDetailsData
 
 
+class AaveSupplyData(BaseModel):
+    token_supply: int
+    usd_supply: float
+
+
+class AaveDebtData(BaseModel):
+    token_debt: int
+    usd_debt: float
+
+
 class AssetTotalData(BaseModel):
     totalSupply: AaveSupplyData
     availableLiquidity: AaveSupplyData
@@ -59,33 +78,33 @@ class AssetTotalData(BaseModel):
     timestamp: int = None
 
 
-class volume_data(BaseModel):
+class volumeData(BaseModel):
     totalUSD: float
     totalToken: int
 
-    def __add__(self, other: 'volume_data') -> 'volume_data':
+    def __add__(self, other: 'volumeData') -> 'volumeData':
         self.totalUSD += other.totalUSD
         self.totalToken += other.totalToken
         return self
 
-    def __sub__(self, other: 'volume_data') -> 'volume_data':
+    def __sub__(self, other: 'volumeData') -> 'volumeData':
         self.totalUSD -= other.totalUSD
         self.totalToken -= other.totalToken
         return self
 
-    def __abs__(self) -> 'volume_data':
+    def __abs__(self) -> 'volumeData':
         self.totalUSD = abs(self.totalUSD)
         self.totalToken = abs(self.totalToken)
         return self
 
 
-class event_volume_data(BaseModel):
+class eventVolumeData(BaseModel):
     logs: List[Dict]
-    totals: volume_data
+    totals: volumeData
 
 
-class epoch_event_volume_data(BaseModel):
-    borrow: event_volume_data
-    repay: event_volume_data
-    supply: event_volume_data
-    withdraw: event_volume_data
+class epochEventVolumeData(BaseModel):
+    borrow: eventVolumeData
+    repay: eventVolumeData
+    supply: eventVolumeData
+    withdraw: eventVolumeData
