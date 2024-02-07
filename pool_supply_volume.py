@@ -50,12 +50,7 @@ class AssetSupplyVolumeProcessor(GenericProcessorSnapshot):
             max_block_timestamp = result['timestamp']
 
         result.pop('timestamp', None)
-
-        events = []
-        for key in result.keys():
-            if result[key]['logs']:
-                for log in result[key]['logs']:
-                    events.append(log)
+        events = [log for key in result.keys() for log in result[key]['logs']]
 
         supply_volume_snapshot = AaveSupplyVolumeSnapshot(
             contract=asset_address,

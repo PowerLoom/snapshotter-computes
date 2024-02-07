@@ -15,7 +15,7 @@ from .constants import RAY
 from .helpers import calculate_compound_interest
 from .helpers import calculate_current_from_scaled
 from .helpers import get_asset_metadata
-from .helpers import get_pool_data_events
+from .helpers import get_pool_supply_events
 from .helpers import rayMul
 from .models.data_models import AaveDebtData
 from .models.data_models import AaveSupplyData
@@ -254,7 +254,7 @@ async def get_asset_trade_volume(
     if data_dict:
         block_usd_prices = {
             key: data['priceInMarketReferenceCurrency'] * (10 ** -ORACLE_DECIMALS)
-            for key, data in data_dict.values()
+            for key, data in data_dict.items()
         }
     else:
         block_usd_prices = await get_asset_price_in_block_range(
@@ -265,7 +265,7 @@ async def get_asset_trade_volume(
             rpc_helper,
         )
 
-    supply_events = await get_pool_data_events(
+    supply_events = await get_pool_supply_events(
         rpc_helper=rpc_helper,
         from_block=from_block,
         to_block=to_block,
@@ -338,4 +338,12 @@ async def get_asset_trade_volume(
     max_block_details = block_details_dict.get(to_block, {})
     max_block_timestamp = max_block_details.get('timestamp', None)
     epoch_volume_logs.update({'timestamp': max_block_timestamp})
+
+    core_logger.debug(
+        (
+            'Calculated asset supply and debt volume for epoch-range:'
+            f' {from_block} - {to_block} | asset_contract: {asset_address}'
+        ),
+    )
+
     return epoch_volume_logs

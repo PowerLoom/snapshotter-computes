@@ -134,7 +134,7 @@ async def get_asset_metadata(
         raise err
 
 
-async def get_pool_data_events(
+async def get_pool_supply_events(
     rpc_helper: RpcHelper,
     from_block: int,
     to_block: int,
