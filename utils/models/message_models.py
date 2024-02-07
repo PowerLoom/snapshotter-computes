@@ -92,7 +92,8 @@ class AaveSupplyVolumeSnapshot(SnapshotBase):
 
 
 class AaveVolumeAggregateSnapshot(AggregateBase):
-    totalBorrow: volumeData
-    totalRepay: volumeData
-    totalSupply: volumeData
-    totalWithdraw: volumeData
+    totalBorrow: volumeData = volumeData()
+    totalRepay: volumeData = volumeData()
+    totalSupply: volumeData = volumeData()
+    totalWithdraw: volumeData = volumeData()
+    complete: bool = True

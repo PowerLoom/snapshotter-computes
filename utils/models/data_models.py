@@ -79,8 +79,8 @@ class AssetTotalData(BaseModel):
 
 
 class volumeData(BaseModel):
-    totalUSD: float
-    totalToken: int
+    totalUSD: float = 0.0
+    totalToken: int = 0
 
     def __add__(self, other: 'volumeData') -> 'volumeData':
         self.totalUSD += other.totalUSD
