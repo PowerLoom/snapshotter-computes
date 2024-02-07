@@ -1,9 +1,7 @@
-import asyncio
 import json
 
 from redis import asyncio as aioredis
 from snapshotter.utils.default_logger import logger
-from snapshotter.utils.rpc import get_contract_abi_dict
 from snapshotter.utils.rpc import RpcHelper
 from snapshotter.utils.snapshot_utils import (
     get_block_details_in_block_range,
@@ -13,18 +11,15 @@ from web3 import Web3
 from ..redis_keys import aave_cached_block_height_asset_data
 from .constants import DETAILS_BASIS
 from .constants import ORACLE_DECIMALS
-from .constants import pool_data_provider_contract_obj
 from .constants import RAY
 from .helpers import calculate_compound_interest
 from .helpers import calculate_current_from_scaled
 from .helpers import get_asset_metadata
-from .helpers import get_debt_burn_mint_events
 from .helpers import get_pool_data_events
 from .helpers import rayMul
 from .models.data_models import AaveDebtData
 from .models.data_models import AaveSupplyData
 from .models.data_models import AssetTotalData
-from .models.data_models import DataProviderReserveData
 from .models.data_models import epoch_event_volume_data
 from .models.data_models import event_volume_data
 from .models.data_models import UiDataProviderReserveData
