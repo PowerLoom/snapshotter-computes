@@ -99,3 +99,16 @@ class AaveAprAggregateSnapshot(AggregateBase):
     avgUtilizationRate: float = 0
     timestamp: int = 0
     complete: bool = True
+
+
+class volumeData(BaseModel):
+    totalUSD: float
+    totalToken: int
+
+
+class AaveSupplyVolumeSnapshot(SnapshotBase):
+    borrow: volumeData
+    repay: volumeData
+    supply: volumeData
+    withdraw: volumeData
+    events: List[Dict]

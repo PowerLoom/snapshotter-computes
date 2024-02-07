@@ -25,7 +25,10 @@ from .models.data_models import AaveDebtData
 from .models.data_models import AaveSupplyData
 from .models.data_models import AssetTotalData
 from .models.data_models import DataProviderReserveData
+from .models.data_models import epoch_event_volume_data
+from .models.data_models import event_volume_data
 from .models.data_models import UiDataProviderReserveData
+from .models.data_models import volume_data
 from .pricing import get_asset_price_in_block_range
 
 core_logger = logger.bind(module='PowerLoom|AaveCore')
@@ -191,3 +194,153 @@ async def get_asset_supply_and_debt_bulk(
     )
 
     return asset_supply_debt_dict
+
+
+async def get_asset_trade_volume(
+    asset_address,
+    from_block,
+    to_block,
+    redis_conn: aioredis.Redis,
+    rpc_helper: RpcHelper,
+    fetch_timestamp=True,
+):
+    asset_address = Web3.toChecksumAddress(
+        asset_address,
+    )
+    block_details_dict = dict()
+
+    if fetch_timestamp:
+        try:
+            block_details_dict = await get_block_details_in_block_range(
+                from_block=from_block,
+                to_block=to_block,
+                redis_conn=redis_conn,
+                rpc_helper=rpc_helper,
+            )
+        except Exception as err:
+            core_logger.opt(exception=True).error(
+                (
+                    'Error attempting to get block details of to_block {}:'
+                    ' {}, retrying again'
+                ),
+                to_block,
+                err,
+            )
+            raise err
+
+    asset_metadata = await get_asset_metadata(
+        asset_address=asset_address,
+        redis_conn=redis_conn,
+        rpc_helper=rpc_helper,
+    )
+
+    data_dict = {}
+    # get cached asset data from redis
+    cached_data_dict = await redis_conn.zrangebyscore(
+        name=aave_cached_block_height_asset_data.format(
+            asset_address,
+        ),
+        min=int(from_block),
+        max=int(to_block),
+    )
+
+    if cached_data_dict and len(cached_data_dict) == to_block - (from_block - 1):
+        data_dict = {
+            json.loads(
+                data.decode(
+                    'utf-8',
+                ),
+            )['blockHeight']: json.loads(
+                data.decode('utf-8'),
+            )['data']
+            for data in cached_data_dict
+        }
+
+    if data_dict:
+        block_usd_prices = {
+            key: data['priceInMarketReferenceCurrency'] * (10 ** -ORACLE_DECIMALS)
+            for key, data in data_dict.values()
+        }
+    else:
+        block_usd_prices = await get_asset_price_in_block_range(
+            asset_metadata,
+            from_block,
+            to_block,
+            redis_conn,
+            rpc_helper,
+        )
+
+    supply_events = await get_pool_data_events(
+        rpc_helper=rpc_helper,
+        from_block=from_block,
+        to_block=to_block,
+        redis_conn=redis_conn,
+    )
+
+    # TODO: Filter events by address in get_pool_data_events?
+    asset_supply_events = {
+        key: filter(lambda x: x['args']['reserve'] == asset_address, value)
+        for key, value in supply_events.items()
+    }
+
+    # init data models with empty/0 values
+    epoch_results = epoch_event_volume_data(
+        borrow=event_volume_data(
+            logs=[],
+            totals=volume_data(
+                totalUSD=float(),
+                totalToken=int(),
+            ),
+        ),
+        repay=event_volume_data(
+            logs=[],
+            totals=volume_data(
+                totalUSD=float(),
+                totalToken=int(),
+            ),
+        ),
+        supply=event_volume_data(
+            logs=[],
+            totals=volume_data(
+                totalUSD=float(),
+                totalToken=int(),
+            ),
+        ),
+        withdraw=event_volume_data(
+            logs=[],
+            totals=volume_data(
+                totalUSD=float(),
+                totalToken=int(),
+            ),
+        ),
+    )
+
+    for block_num in range(from_block, to_block + 1):
+        asset_usd_price = block_usd_prices.get(block_num, 0)
+        asset_usd_price = asset_usd_price / (10 ** int(asset_metadata['decimals']))
+
+        for event in asset_supply_events.get(block_num, None):
+            amount = event['args']['amount']
+            volume = volume_data(
+                totalToken=amount,
+                totalUSD=amount * asset_usd_price,
+            )
+
+            if event['event'] == 'Borrow':
+                epoch_results.borrow.logs.append(event)
+                epoch_results.borrow.totals += volume
+            elif event['event'] == 'Repay':
+                epoch_results.repay.logs.append(event)
+                epoch_results.repay.totals += volume
+            elif event['event'] == 'Supply':
+                epoch_results.supply.logs.append(event)
+                epoch_results.supply.totals += volume
+            elif event['event'] == 'Withdraw':
+                epoch_results.withdraw.logs.append(event)
+                epoch_results.withdraw.totals += volume
+
+    epoch_volume_logs = epoch_results.dict()
+    max_block_details = block_details_dict.get(to_block, {})
+    max_block_timestamp = max_block_details.get('timestamp', None)
+    epoch_volume_logs.update({'timestamp': max_block_timestamp})
+    return epoch_volume_logs

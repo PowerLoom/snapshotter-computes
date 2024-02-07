@@ -151,13 +151,8 @@ async def get_pool_data_events(
 
         if cached_event_dict:
             event_dict = {
-                json.loads(
-                    event.decode(
-                        'utf-8',
-                    ),
-                )['blockHeight']: json.loads(
-                    event.decode('utf-8'),
-                )['events']
+                json.loads(event.decode('utf-8'))['blockHeight']:
+                [event for event in json.loads(event.decode('utf-8'))['events']]
                 for event in cached_event_dict
             }
 
@@ -181,7 +176,8 @@ async def get_pool_data_events(
             event_dict = {}
 
             for block_num in range(from_block, to_block + 1):
-                event_dict[block_num] = list(filter(lambda x: x['blockNumber'] == block_num, events))
+                block_events = filter(lambda x: x['blockNumber'] == block_num, events)
+                event_dict[block_num] = [dict(event) for event in block_events]
 
             if len(event_dict) > 0:
 

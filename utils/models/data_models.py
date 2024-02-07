@@ -1,3 +1,6 @@
+from typing import Dict
+from typing import List
+
 from pydantic import BaseModel
 from pydantic.dataclasses import dataclass
 
@@ -54,3 +57,35 @@ class AssetTotalData(BaseModel):
     lastUpdateTimestamp: int
     assetDetails: AssetDetailsData
     timestamp: int = None
+
+
+class volume_data(BaseModel):
+    totalUSD: float
+    totalToken: int
+
+    def __add__(self, other: 'volume_data') -> 'volume_data':
+        self.totalUSD += other.totalUSD
+        self.totalToken += other.totalToken
+        return self
+
+    def __sub__(self, other: 'volume_data') -> 'volume_data':
+        self.totalUSD -= other.totalUSD
+        self.totalToken -= other.totalToken
+        return self
+
+    def __abs__(self) -> 'volume_data':
+        self.totalUSD = abs(self.totalUSD)
+        self.totalToken = abs(self.totalToken)
+        return self
+
+
+class event_volume_data(BaseModel):
+    logs: List[Dict]
+    totals: volume_data
+
+
+class epoch_event_volume_data(BaseModel):
+    borrow: event_volume_data
+    repay: event_volume_data
+    supply: event_volume_data
+    withdraw: event_volume_data

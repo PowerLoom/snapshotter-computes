@@ -100,15 +100,13 @@ dummy_variable_debt_contract_obj = current_node['web3_client'].eth.contract(
 AAVE_EVENT_SIGS = {
     'Withdraw': 'Withdraw(address,address,address,uint256)',
     'Supply': 'Supply(address,address,address,uint256,uint16)',
-    'LiquidationCall': 'LiquidationCall(address,address,address,uint256,uint256,address,bool)',
-    'ReserveDataUpdated': 'ReserveDataUpdated(address,uint256,uint256,uint256,uint256,uint256)',
+    'Repay': 'Repay(address,address,address,uint256,bool)',
     'Borrow': 'Borrow(address,address,address,uint256,uint8,uint256,uint16)',
 }
 AAVE_EVENTS_ABI = {
     'Withdraw': pool_contract_obj.events.Withdraw._get_event_abi(),
     'Supply': pool_contract_obj.events.Supply._get_event_abi(),
-    'LiquidationCall': pool_contract_obj.events.LiquidationCall._get_event_abi(),
-    'ReserveDataUpdated': pool_contract_obj.events.ReserveDataUpdated._get_event_abi(),
+    'Repay': pool_contract_obj.events.Repay._get_event_abi(),
     'Borrow': pool_contract_obj.events.Borrow._get_event_abi(),
 }
 AAVE_CORE_EVENTS = ('Withdraw', 'Supply', 'Borrow', 'Repay')
