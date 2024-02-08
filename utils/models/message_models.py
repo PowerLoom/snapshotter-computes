@@ -97,3 +97,22 @@ class AaveVolumeAggregateSnapshot(AggregateBase):
     totalSupply: volumeData = volumeData()
     totalWithdraw: volumeData = volumeData()
     complete: bool = True
+
+
+class AaveTopAssetVolumeSnapshot(BaseModel):
+    name: str
+    symbol: str
+    address: str
+    totalBorrow: volumeData
+    totalRepay: volumeData
+    totalSupply: volumeData
+    totalWithdraw: volumeData
+    borrowChange24h: float
+    repayChange24h: float
+    supplyChange24h: float
+    withdrawChange24h: float
+
+
+class AaveTopAssetsVolumeSnapshot(AggregateBase):
+    assets: List[AaveTopAssetVolumeSnapshot] = []
+    complete: bool = True
