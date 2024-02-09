@@ -117,5 +117,4 @@ class AggregateStatsProcessor(GenericProcessorAggregate):
 
         if not all(complete_flags):
             stats_snapshot.complete = False
-        self._logger.debug(f'stats snapshot {stats_snapshot}')
         return [(project_id, stats_snapshot)]

@@ -71,8 +71,8 @@ class AggregateTopPairsProcessor(GenericProcessorAggregate):
         for msg, pair_metadata in zip(submitted_snapshots, pair_metadata_list):
             if isinstance(pair_metadata, Exception):
                 self._logger.error(f'Error while fetching pair metadata: {pair_metadata}')
-                raise(pair_metadata)
-            
+                continue
+
             contract_address = msg.projectId.split(':')[-2]
             all_pair_metadata[contract_address] = pair_metadata
         # iterate over all snapshots and generate pair data
