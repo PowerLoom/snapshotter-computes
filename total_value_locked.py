@@ -262,7 +262,7 @@ async def get_tick_info(
             
         for ticks in tickDataResponse:
             if isinstance(ticks, Exception):
-                raise(Exception(ticks))
+                raise(Exception(f'failed to get ticks {pair_address}'))
             ticks_list.append(transform_tick_bytes_to_list(ticks))
 
         ticks_list = functools.reduce(lambda x, y: x + y, ticks_list)
