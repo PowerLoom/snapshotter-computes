@@ -70,7 +70,6 @@ async def get_asset_supply_and_debt_bulk(
 
     else:
         block_details_dict = dict()
-        asset_data = list()
 
     core_logger.debug(
         (
@@ -100,6 +99,8 @@ async def get_asset_supply_and_debt_bulk(
             )['data']
             for data in cached_data_dict
         }
+
+    # TODO: add fallback if cached data does not exist
 
     asset_supply_debt_dict = dict()
 
