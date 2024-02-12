@@ -353,7 +353,7 @@ async def get_bulk_asset_data(
             abi=ui_pool_data_provider_contract_obj.abi,
         )
 
-        asset_prices_bulk = await rpc_helper.batch_eth_call_on_block_range_hex_data(
+        asset_data_bulk = await rpc_helper.batch_eth_call_on_block_range_hex_data(
             abi_dict=abi_dict,
             contract_address=worker_settings.contract_addresses.ui_pool_data_provider,
             from_block=from_block,
@@ -379,7 +379,7 @@ async def get_bulk_asset_data(
 
         for i, block_num in enumerate(range(from_block, to_block + 1)):
             decoded_assets_data = abi.decode(
-                (type_str, output_type[1]), asset_prices_bulk[i],
+                (type_str, output_type[1]), asset_data_bulk[i],
             )
 
             for asset_data in decoded_assets_data[0]:
@@ -414,7 +414,18 @@ async def get_bulk_asset_data(
                     },
                 }
 
-                all_assets_data_dict[asset][block_num] = data_dict
+                if all_assets_data_dict.get(asset, False):
+                    all_assets_data_dict[asset][block_num] = data_dict
+                else:
+                    # asset was not in known asset list, new asset was added while snapshotting
+                    all_assets_data_dict[asset] = dict()
+                    all_assets_data_dict[asset][block_num] = data_dict
+                    asset_list.append(asset)
+
+                    # update cache with new address
+                    await redis_conn.lpush(
+                        aave_pool_asset_list_data, *asset_list,
+                    )
 
         # cache each price dict for later retrieval by snapshotter
         for address, data_dict in all_assets_data_dict.items():

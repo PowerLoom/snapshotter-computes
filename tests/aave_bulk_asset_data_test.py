@@ -71,10 +71,10 @@ async def test_total_supply_and_debt_calc():
 
         # Only debt is computed manually for the bulk version
         target_variable_debt = chain_data[i].totalVariableDebt
-        computed_variable_debt = asset_supply_debt_total[block_num]['total_variable_debt']['token_debt']
+        computed_variable_debt = asset_supply_debt_total[block_num].totalVariableDebt.token_debt
 
         target_stable_debt = chain_data[i].totalStableDebt
-        computed_stable_debt = asset_supply_debt_total[block_num]['total_stable_debt']['token_debt']
+        computed_stable_debt = asset_supply_debt_total[block_num].totalStableDebt.token_debt
 
         # # may be +/- 1 due to rounding
         assert abs(target_variable_debt - computed_variable_debt) <= 2, 'Variable debt results do not match chain data'
