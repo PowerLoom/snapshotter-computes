@@ -59,11 +59,6 @@ async def get_asset_metadata(
             asset_name = asset_data_cache[b'asset_name'].decode(
                 'utf-8',
             )
-            reserve_address_dict = json.loads(
-                asset_data_cache[b'reserve_addresses'].decode(
-                    'utf-8',
-                ),
-            )
 
         else:
 
@@ -80,30 +75,20 @@ async def get_asset_metadata(
                 asset_name = get_maker_pair_data('name')
                 asset_symbol = get_maker_pair_data('symbol')
                 tasks.append(asset_contract_obj.functions.decimals())
-                tasks.append(pool_data_provider_contract_obj.functions.getReserveTokensAddresses(asset_address))
 
                 [
                     asset_decimals,
-                    reserve_addresses,
                 ] = await rpc_helper.web3_call(tasks, redis_conn=redis_conn)
 
             else:
                 tasks.append(asset_contract_obj.functions.decimals())
                 tasks.append(asset_contract_obj.functions.symbol())
                 tasks.append(asset_contract_obj.functions.name())
-                tasks.append(pool_data_provider_contract_obj.functions.getReserveTokensAddresses(asset_address))
                 [
                     asset_decimals,
                     asset_symbol,
                     asset_name,
-                    reserve_addresses,
                 ] = await rpc_helper.web3_call(tasks, redis_conn=redis_conn)
-
-            reserve_address_dict = {
-                'a_token': reserve_addresses[0],
-                'stable_debt_token': reserve_addresses[1],
-                'variable_debt_token': reserve_addresses[2],
-            }
 
             await redis_conn.hset(
                 name=aave_asset_contract_data.format(asset_address),
@@ -111,7 +96,6 @@ async def get_asset_metadata(
                     'asset_decimals': asset_decimals,
                     'asset_symbol': asset_symbol,
                     'asset_name': asset_name,
-                    'reserve_addresses': json.dumps(reserve_address_dict),
                 },
             )
 
@@ -120,7 +104,6 @@ async def get_asset_metadata(
             'decimals': asset_decimals,
             'symbol': asset_symbol,
             'name': asset_name,
-            'reserve_addresses': reserve_address_dict,
         }
 
     except Exception as err:
