@@ -99,7 +99,7 @@ class AggreagateTopVolumeProcessor(GenericProcessorAggregate):
 
             if previous_top_assets_snapshot_data:
                 previous_top_assets_snapshot = AaveTopAssetsVolumeSnapshot.parse_obj(previous_top_assets_snapshot_data)
-                for asset in previous_top_assets_snapshot.tokens:
+                for asset in previous_top_assets_snapshot.assets:
                     if asset.address in volume_data:
                         borrow_before_24h = asset.totalBorrow.totalUSD
                         repay_before_24h = asset.totalRepay.totalUSD
