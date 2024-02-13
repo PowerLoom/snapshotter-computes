@@ -6,7 +6,9 @@ from snapshotter.utils.rpc import get_contract_abi_dict
 from snapshotter.utils.rpc import get_event_sig_and_abi
 from snapshotter.utils.rpc import RpcHelper
 from web3 import Web3
-
+from snapshotter.utils.snapshot_utils import (
+    get_block_details_in_block_range,
+)
 from .constants import pair_contract_abi
 from .constants import UNISWAP_EVENTS_ABI
 from .constants import UNISWAP_TRADE_EVENT_SIGS
@@ -31,6 +33,26 @@ async def get_pair_reserves(
         f'Starting pair total reserves query for: {pair_address}',
     )
     pair_address = Web3.to_checksum_address(pair_address)
+
+
+    try:
+        block_details_dict = await get_block_details_in_block_range(
+            from_block,
+            to_block,
+            rpc_helper=rpc_helper,
+        )
+    except Exception as err:
+        core_logger.opt(exception=True).error(
+            (
+                'Error attempting to get block details of block-range'
+                ' {}-{}: {}, retrying again'
+            ),
+            from_block,
+            to_block,
+            err,
+        )
+        raise err
+
 
     pair_per_token_metadata = await get_pair_metadata(
         pair_address=pair_address,
@@ -99,9 +121,27 @@ async def get_pair_reserves(
         token0USD = token0Amount * token0_price_map.get(block_num, 0)
         token1USD = token1Amount * token1_price_map.get(block_num, 0)
 
+        current_block_details = block_details_dict.get(block_num, None)
+        timestamp = (
+            current_block_details.get(
+                'timestamp',
+                None,
+            )
+            if current_block_details
+            else None
+        )
+
         token0Price = token0_price_map.get(block_num, 0)
         token1Price = token1_price_map.get(block_num, 0)
-
+        current_block_details = block_details_dict.get(block_num, None)
+        timestamp = (
+            current_block_details.get(
+                'timestamp',
+                None,
+            )
+            if current_block_details
+            else None
+        )
         pair_reserves_arr[block_num] = {
             'token0': token0Amount,
             'token1': token1Amount,
@@ -109,6 +149,7 @@ async def get_pair_reserves(
             'token1USD': token1USD,
             'token0Price': token0Price,
             'token1Price': token1Price,
+            'timestamp': timestamp,
         }
 
         block_count += 1
@@ -266,6 +307,26 @@ async def get_pair_trade_volume(
         pair_address=data_source_contract_address,
         rpc_helper=rpc_helper,
     )
+
+    try:
+        block_details_dict = await get_block_details_in_block_range(
+            min_chain_height,
+            max_chain_height,
+            rpc_helper=rpc_helper,
+        )
+    except Exception as err:
+        core_logger.opt(exception=True).error(
+            (
+            'Error attempting to get block details of block-range'
+            ' {}-{}: {}, retrying again'
+        ),
+        min_chain_height,
+        max_chain_height,
+        err,
+    )
+        raise err
+    
+
     token0_price_map, token1_price_map = await asyncio.gather(
         get_token_price_in_block_range(
             token_metadata=pair_per_token_metadata['token0'],

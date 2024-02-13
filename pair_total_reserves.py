@@ -31,6 +31,7 @@ class PairTotalReservesProcessor(GenericProcessor):
         epoch_reserves_snapshot_map_token1 = dict()
         epoch_usd_reserves_snapshot_map_token0 = dict()
         epoch_usd_reserves_snapshot_map_token1 = dict()
+        max_block_timestamp = int(time.time())
 
         pair_reserve_total = await get_pair_reserves(
             pair_address=data_source_contract_address,
