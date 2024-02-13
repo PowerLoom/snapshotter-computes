@@ -71,7 +71,7 @@ class TradeVolumeProcessor(GenericProcessor):
         snapshotter_hash = hash(int(settings.instance_id.lower(), 16))
         current_day = msg_obj.day
 
-        return (current_epoch + snapshotter_hash + current_day) % len(monitored_pairs)
+        return (current_epoch + snapshotter_hash + settings.slot_id + current_day) % len(monitored_pairs)
 
     async def compute(
         self,
