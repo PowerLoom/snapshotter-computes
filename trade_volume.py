@@ -51,9 +51,12 @@ class TradeVolumeProcessor(GenericProcessor):
             'token1TradeVolumeUSD'
         ]
 
+        max_block_timestamp = result.get('timestamp')
+        result.pop('timestamp', None)
         trade_volume_snapshot = UniswapTradesSnapshot(
             contract=data_source_contract_address,
-            epoch=EpochBaseSnapshot(begin=min_chain_height, end=max_chain_height),
+            chainHeightRange=EpochBaseSnapshot(begin=min_chain_height, end=max_chain_height),
+            timestamp=max_block_timestamp,
             totalTrade=float(f'{total_trades_in_usd: .6f}'),
             totalFee=float(f'{total_fee_in_usd: .6f}'),
             token0TradeVolume=float(f'{total_token0_vol: .6f}'),

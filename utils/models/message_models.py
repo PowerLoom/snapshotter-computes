@@ -10,9 +10,13 @@ class EpochBaseSnapshot(BaseModel):
     end: int
 
 
-class UniswapPairTotalReservesSnapshot(BaseModel):
-    epoch: EpochBaseSnapshot
+class SnapshotBase(BaseModel):
     contract: str
+    chainHeightRange: EpochBaseSnapshot
+    timestamp: int
+
+
+class UniswapPairTotalReservesSnapshot(SnapshotBase):
     token0Reserves: Dict[
         str,
         float,

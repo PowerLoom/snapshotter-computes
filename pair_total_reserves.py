@@ -63,6 +63,24 @@ class PairTotalReservesProcessor(GenericProcessor):
                 f'block{block_num}'
             ] = block_pair_total_reserves['token1Price']
 
+            
+            if not block_pair_total_reserves.get('timestamp', None):
+                self._logger.error(
+                    (
+                        'Could not fetch timestamp against max block'
+                        ' height in epoch {} - {}to calculate pair'
+                        ' reserves for contract {}. Using current time'
+                        ' stamp for snapshot construction'
+                    ),
+                    data_source_contract_address,
+                    min_chain_height,
+                    max_chain_height,
+                )
+            else:
+                max_block_timestamp = block_pair_total_reserves.get(
+                    'timestamp',
+                )
+
         pair_total_reserves_snapshot = UniswapPairTotalReservesSnapshot(
             **{
                 'token0Reserves': epoch_reserves_snapshot_map_token0,
@@ -71,9 +89,10 @@ class PairTotalReservesProcessor(GenericProcessor):
                 'token1ReservesUSD': epoch_usd_reserves_snapshot_map_token1,
                 'token0Prices': epoch_prices_snapshot_map_token0,
                 'token1Prices': epoch_prices_snapshot_map_token1,
-                'epoch': EpochBaseSnapshot(
+                'chainHeightRange': EpochBaseSnapshot(
                     begin=min_chain_height, end=max_chain_height,
                 ),
+                'timestamp': max_block_timestamp,
                 'contract': data_source_contract_address,
             },
         )
