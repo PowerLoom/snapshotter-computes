@@ -169,6 +169,7 @@ def extract_trade_volume_log(
     pair_per_token_metadata,
     token0_price_map,
     token1_price_map,
+    block_details_dict
 ):
     token0_amount = 0
     token1_amount = 0
@@ -233,6 +234,8 @@ def extract_trade_volume_log(
     log = json.loads(Web3.to_json(log))
     log['token0_amount'] = token0_amount
     log['token1_amount'] = token1_amount
+    log['timestamp'] = block_details_dict.get('timestamp', '')
+
     # pop unused log props
     log.pop('blockHash', None)
     log.pop('transactionIndex', None)
@@ -307,6 +310,7 @@ async def get_pair_trade_volume(
         pair_address=data_source_contract_address,
         rpc_helper=rpc_helper,
     )
+    block_details_dict = dict()
 
     try:
         block_details_dict = await get_block_details_in_block_range(
@@ -438,6 +442,7 @@ async def get_pair_trade_volume(
                 pair_per_token_metadata=pair_per_token_metadata,
                 token0_price_map=token0_price_map,
                 token1_price_map=token1_price_map,
+                block_details_dict=block_details_dict
             )
 
             if log.event == 'Swap':
@@ -457,5 +462,9 @@ async def get_pair_trade_volume(
 
         # At the end of txHash logs we must normalize trade values, so it don't affect result of other txHash logs
         epoch_results.Trades += abs(tx_hash_trades)
+    max_block_details = block_details_dict.get(max_chain_height, {})
+    max_block_timestamp = max_block_details.get('timestamp', None)
+
     epoch_trade_logs = epoch_results.dict()
+    epoch_trade_logs.update({'timestamp': max_block_timestamp})
     return epoch_trade_logs

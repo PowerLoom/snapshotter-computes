@@ -43,9 +43,7 @@ class UniswapTradeEvents(BaseModel):
     Trades: Dict[str, float]
 
 
-class UniswapTradesSnapshot(BaseModel):
-    epoch: EpochBaseSnapshot
-    contract: str
+class UniswapTradesSnapshot(SnapshotBase):
     totalTrade: float  # in USD
     totalFee: float  # in USD
     token0TradeVolume: float  # in token native decimals supply
