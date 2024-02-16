@@ -28,12 +28,12 @@ async def get_pair_reserves(
     from_block,
     to_block,
     rpc_helper: RpcHelper,
+    eth_price_dict: dict,
 ):
     core_logger.debug(
         f'Starting pair total reserves query for: {pair_address}',
     )
     pair_address = Web3.to_checksum_address(pair_address)
-
 
     try:
         block_details_dict = await get_block_details_in_block_range(
@@ -53,7 +53,6 @@ async def get_pair_reserves(
         )
         raise err
 
-
     pair_per_token_metadata = await get_pair_metadata(
         pair_address=pair_address,
         rpc_helper=rpc_helper,
@@ -72,6 +71,7 @@ async def get_pair_reserves(
             from_block=from_block,
             to_block=to_block,
             rpc_helper=rpc_helper,
+            eth_price_dict=eth_price_dict,
             debug_log=False,
         ),
         get_token_price_in_block_range(
@@ -79,6 +79,7 @@ async def get_pair_reserves(
             from_block=from_block,
             to_block=to_block,
             rpc_helper=rpc_helper,
+            eth_price_dict=eth_price_dict,
             debug_log=False,
         ),
     )
@@ -300,6 +301,7 @@ async def get_pair_trade_volume(
     min_chain_height,
     max_chain_height,
     rpc_helper: RpcHelper,
+    eth_price_dict: dict,
 ):
 
     data_source_contract_address = Web3.to_checksum_address(
@@ -337,6 +339,7 @@ async def get_pair_trade_volume(
             from_block=min_chain_height,
             to_block=max_chain_height,
             rpc_helper=rpc_helper,
+            eth_price_dict=eth_price_dict,
             debug_log=False,
         ),
         get_token_price_in_block_range(
@@ -344,6 +347,7 @@ async def get_pair_trade_volume(
             from_block=min_chain_height,
             to_block=max_chain_height,
             rpc_helper=rpc_helper,
+            eth_price_dict=eth_price_dict,
             debug_log=False,
         ),
     )

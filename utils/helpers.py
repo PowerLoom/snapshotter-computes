@@ -51,6 +51,8 @@ async def get_pair_metadata(
     """
     try:
         pair_address = Web3.to_checksum_address(pair_address)
+        if pair_address in worker_settings.metadata_cache:
+            return worker_settings.metadata_cache[pair_address]
 
         pair_contract_obj = current_node['web3_client'].eth.contract(
             address=Web3.to_checksum_address(pair_address),

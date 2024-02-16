@@ -1,7 +1,6 @@
 from snapshotter.utils.default_logger import logger
 from snapshotter.utils.rpc import get_contract_abi_dict
 from snapshotter.utils.rpc import RpcHelper
-from snapshotter.utils.snapshot_utils import get_eth_price_usd
 from web3 import Web3
 
 from ..settings.config import settings as worker_settings
@@ -164,6 +163,7 @@ async def get_token_price_in_block_range(
     from_block,
     to_block,
     rpc_helper: RpcHelper,
+    eth_price_dict: dict,
     debug_log=True,
 ):
     """
@@ -175,9 +175,7 @@ async def get_token_price_in_block_range(
         # check if cahce exist for given epoch
 
         if token_address == Web3.to_checksum_address(worker_settings.contract_addresses.WETH):
-            token_price_dict = await get_eth_price_usd(
-                from_block=from_block, to_block=to_block, rpc_helper=rpc_helper,
-            )
+            token_price_dict = eth_price_dict
         else:
             token_eth_price_dict = dict()
 
@@ -234,10 +232,7 @@ async def get_token_price_in_block_range(
                     break
 
             if len(token_eth_price_dict) > 0:
-                eth_usd_price_dict = await get_eth_price_usd(
-                    from_block=from_block, to_block=to_block,
-                    rpc_helper=rpc_helper,
-                )
+                eth_usd_price_dict = eth_price_dict
                 for block_num in range(from_block, to_block + 1):
                     token_price_dict[block_num] = token_eth_price_dict.get(
                         block_num, 0,
