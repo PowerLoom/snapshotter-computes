@@ -24,6 +24,7 @@ class PairTotalReservesProcessor(GenericProcessor):
         min_chain_height: int,
         max_chain_height: int,
         rpc_helper: RpcHelper,
+        eth_price_dict: dict,
     ):
         epoch_reserves_snapshot_map_token0 = dict()
         epoch_prices_snapshot_map_token0 = dict()
@@ -38,6 +39,7 @@ class PairTotalReservesProcessor(GenericProcessor):
             from_block=min_chain_height,
             to_block=max_chain_height,
             rpc_helper=rpc_helper,
+            eth_price_dict=eth_price_dict,
         )
 
         for block_num in range(min_chain_height, max_chain_height + 1):
@@ -113,6 +115,7 @@ class PairTotalReservesProcessor(GenericProcessor):
         anchor_rpc_helper: RpcHelper,
         ipfs_reader: AsyncIPFSClient,
         protocol_state_contract,
+        eth_price_dict: dict,
     ):
 
         min_chain_height = msg_obj.begin
@@ -129,6 +132,7 @@ class PairTotalReservesProcessor(GenericProcessor):
             min_chain_height=min_chain_height,
             max_chain_height=max_chain_height,
             rpc_helper=rpc_helper,
+            eth_price_dict=eth_price_dict,
         )
 
         self._logger.debug(f'pair reserves, computation end time {time.time()}')
