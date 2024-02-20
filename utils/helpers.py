@@ -1,6 +1,7 @@
 import asyncio
 import json
 from decimal import Decimal
+from decimal import localcontext
 
 from eth_abi import abi
 from redis import asyncio as aioredis
@@ -23,7 +24,6 @@ from .constants import current_node
 from .constants import erc20_abi
 from .constants import HALF_RAY
 from .constants import pool_contract_obj
-from .constants import pool_data_provider_contract_obj
 from .constants import RAY
 from .constants import SECONDS_IN_YEAR
 from .constants import STABLE_BURN_MINT_EVENT_ABI
@@ -393,6 +393,14 @@ async def get_bulk_asset_data(
                         'eLtv': asset_data[48],
                         'eliqThreshold': asset_data[49],
                         'eliqBonus': asset_data[50],
+                    },
+                    'rateDetails': {
+                        'varRateSlope1': asset_data[30],
+                        'varRateSlope2': asset_data[31],
+                        'stableRateSlope1': asset_data[32],
+                        'stableRateSlope2': asset_data[33],
+                        'baseStableRate': asset_data[34],
+                        'baseVarRate': asset_data[35],
                         'optimalRate': asset_data[36],
                     },
                 }
@@ -566,3 +574,9 @@ def calculate_compound_interest(rate: int, current_timestamp: int, last_update_t
     interest = Decimal(RAY) + firstTerm + secondTerm + thirdTerm
 
     return interest
+
+def convert_from_ray(value: int):
+    with localcontext() as ctx:
+        ctx.prec = 16
+        conv = Decimal(value) / Decimal(RAY)
+        return float(conv)

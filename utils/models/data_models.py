@@ -32,8 +32,16 @@ class AssetDetailsData(BaseModel):
     eLtv: float
     eliqThreshold: float
     eliqBonus: float
-    optimalRate: float
 
+class RateDetailsData(BaseModel):
+    varRateSlope1: float
+    varRateSlope2: float
+    stableRateSlope1: float
+    stableRateSlope2: float
+    baseStableRate: float
+    baseVarRate: float
+    optimalRate: float
+    utilRate: float = 0
 
 @dataclass
 class UiDataProviderReserveData():
@@ -51,6 +59,7 @@ class UiDataProviderReserveData():
     priceInMarketReferenceCurrency: int
     accruedToTreasury: int
     assetDetails: AssetDetailsData
+    rateDetails: RateDetailsData
 
 
 class AaveSupplyData(BaseModel):
@@ -75,6 +84,7 @@ class AssetTotalData(BaseModel):
     variableBorrowIndex: int
     lastUpdateTimestamp: int
     assetDetails: AssetDetailsData
+    rateDetails: RateDetailsData
     timestamp: int = None
 
 

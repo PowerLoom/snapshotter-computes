@@ -7,6 +7,7 @@ from snapshotter.utils.models.message_models import AggregateBase
 from .data_models import AaveDebtData
 from .data_models import AaveSupplyData
 from .data_models import AssetDetailsData
+from .data_models import RateDetailsData
 from .data_models import volumeData
 
 
@@ -35,6 +36,7 @@ class AavePoolTotalAssetSnapshot(SnapshotBase):
     variableBorrowIndex: Dict[str, int]
     lastUpdateTimestamp: Dict[str, int]
     assetDetails: Dict[str, AssetDetailsData]
+    rateDetails: Dict[str, RateDetailsData]
     availableLiquidity: Dict[str, AaveSupplyData]
 
 

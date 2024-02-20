@@ -11,9 +11,9 @@ from web3 import Web3
 from ..redis_keys import aave_cached_block_height_asset_data
 from .constants import DETAILS_BASIS
 from .constants import ORACLE_DECIMALS
-from .constants import RAY
 from .helpers import calculate_compound_interest
 from .helpers import calculate_current_from_scaled
+from .helpers import convert_from_ray
 from .helpers import get_asset_metadata
 from .helpers import get_pool_supply_events
 from .helpers import rayMul
@@ -143,7 +143,7 @@ async def get_asset_supply_and_debt_bulk(
         available_liquidity_usd = (asset_data.availableLiquidity * asset_usd_price) / \
             (10 ** int(asset_metadata['decimals']))
 
-        # Normalize detail rates
+        # Normalize asset detail rates
         asset_data.assetDetails.ltv = (asset_data.assetDetails.ltv / DETAILS_BASIS) * 100
         asset_data.assetDetails.liqThreshold = (asset_data.assetDetails.liqThreshold / DETAILS_BASIS) * 100
         asset_data.assetDetails.resFactor = (asset_data.assetDetails.resFactor / DETAILS_BASIS) * 100
@@ -151,7 +151,16 @@ async def get_asset_supply_and_debt_bulk(
         asset_data.assetDetails.eLtv = (asset_data.assetDetails.eLtv / DETAILS_BASIS) * 100
         asset_data.assetDetails.eliqThreshold = (asset_data.assetDetails.eliqThreshold / DETAILS_BASIS) * 100
         asset_data.assetDetails.eliqBonus = ((asset_data.assetDetails.eliqBonus / DETAILS_BASIS) * 100) - 100
-        asset_data.assetDetails.optimalRate = round(asset_data.assetDetails.optimalRate / RAY, 2)
+
+        # Normalize rate detail rates
+        asset_data.rateDetails.utilRate = total_variable_debt / total_supply
+        asset_data.rateDetails.varRateSlope1 = convert_from_ray(asset_data.rateDetails.varRateSlope1)
+        asset_data.rateDetails.varRateSlope2 = convert_from_ray(asset_data.rateDetails.varRateSlope2)
+        asset_data.rateDetails.baseVarRate = convert_from_ray(asset_data.rateDetails.baseVarRate)
+        asset_data.rateDetails.stableRateSlope1 = convert_from_ray(asset_data.rateDetails.stableRateSlope1)
+        asset_data.rateDetails.stableRateSlope2 = convert_from_ray(asset_data.rateDetails.stableRateSlope2)
+        asset_data.rateDetails.baseStableRate = convert_from_ray(asset_data.rateDetails.baseStableRate)
+        asset_data.rateDetails.optimalRate = convert_from_ray(asset_data.rateDetails.optimalRate)
 
         total_asset_data = AssetTotalData(
             totalSupply=AaveSupplyData(
@@ -177,6 +186,7 @@ async def get_asset_supply_and_debt_bulk(
             variableBorrowIndex=asset_data.variableBorrowIndex,
             lastUpdateTimestamp=asset_data.lastUpdateTimestamp,
             assetDetails=asset_data.assetDetails,
+            rateDetails=asset_data.rateDetails,
             timestamp=timestamp,
         )
 

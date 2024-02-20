@@ -90,10 +90,8 @@ class AggreagateSingleAprProcessor(GenericProcessorAggregate):
         current_stable_avg /= RAY
 
         current_util_avg = sum(
-            current_snapshot.totalVariableDebt[key].token_debt /
-            current_snapshot.totalAToken[key].token_supply for key in current_snapshot.totalAToken.keys()
-        )
-        current_util_avg /= len(current_snapshot.totalAToken.keys())
+            [details.utilRate for details in current_snapshot.rateDetails.values()],
+        ) / len(current_snapshot.rateDetails.values())
 
         # increment rolling averages
         previous_aggregate_snapshot.avgLiquidityRate = sample_size * \
@@ -160,10 +158,8 @@ class AggreagateSingleAprProcessor(GenericProcessorAggregate):
         current_stable_avg /= RAY
 
         current_util_avg = sum(
-            current_snapshot.totalVariableDebt[key].token_debt /
-            current_snapshot.totalAToken[key].token_supply for key in current_snapshot.totalAToken.keys()
-        )
-        current_util_avg /= len(current_snapshot.totalAToken.keys())
+            [details.utilRate for details in current_snapshot.rateDetails.values()],
+        ) / len(current_snapshot.rateDetails.values())
 
         # decrement rolling averages
         previous_aggregate_snapshot.avgLiquidityRate = sample_size * \
@@ -444,7 +440,7 @@ class AggreagateSingleAprProcessor(GenericProcessorAggregate):
 
                 previous_snapshot = None
                 previous_epoch_data = await get_project_epoch_snapshot(
-                    redis, protocol_state_contract, anchor_rpc_helper, ipfs_reader, 
+                    redis, protocol_state_contract, anchor_rpc_helper, ipfs_reader,
                     tail_epochs_to_remove[0] - 1, msg_obj.projectId,
                 )
                 if previous_epoch_data:
