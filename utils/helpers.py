@@ -314,21 +314,23 @@ async def get_bulk_asset_data(
     try:
 
         # check if asset list cache exist
-        asset_list_data_cache = await redis_conn.lrange(
-            aave_pool_asset_list_data, 0, -1,
+        asset_list_data_cache = await redis_conn.smembers(
+            aave_pool_asset_list_data,
         )
 
         if asset_list_data_cache:
-            asset_list = [asset.decode('utf-8') for asset in reversed(asset_list_data_cache)]
+            print('got cache')
+            asset_set = {Web3.toChecksumAddress(asset.decode('utf-8')) for asset in asset_list_data_cache}
         else:
             [asset_list] = await rpc_helper.web3_call(
                 tasks=[pool_contract_obj.functions.getReservesList()],
                 redis_conn=redis_conn,
             )
 
-            await redis_conn.lpush(
+            await redis_conn.sadd(
                 aave_pool_asset_list_data, *asset_list,
             )
+            asset_set = set(asset_list)
 
         param = Web3.toChecksumAddress(worker_settings.contract_addresses.pool_address_provider)
         function = ui_pool_data_provider_contract_obj.functions.getReservesData(param)
@@ -360,7 +362,7 @@ async def get_bulk_asset_data(
 
         type_str = output_type[0]+'[]'
 
-        all_assets_data_dict = {Web3.toChecksumAddress(asset): {} for asset in asset_list}
+        all_assets_data_dict = {asset: {} for asset in asset_set}
 
         for i, block_num in enumerate(range(from_block, to_block + 1)):
             decoded_assets_data = abi.decode(
@@ -415,18 +417,16 @@ async def get_bulk_asset_data(
                     'rate_details': rate_details,
                 }
 
-                if all_assets_data_dict.get(asset, False):
+                # Account for new assets being added after the initial asset list is retrieved
+                if asset in asset_set:
                     all_assets_data_dict[asset][block_num] = data_dict
                 else:
-                    # asset was not in known asset list, new asset was added while snapshotting
-                    all_assets_data_dict[asset] = dict()
-                    all_assets_data_dict[asset][block_num] = data_dict
-                    asset_list.append(asset)
-
-                    # update cache with new address
-                    await redis_conn.lpush(
-                        aave_pool_asset_list_data, *asset_list,
+                    await redis_conn.sadd(
+                        aave_pool_asset_list_data, asset,
                     )
+                    asset_set.add(asset)
+                    all_assets_data_dict[asset] = {}
+                    all_assets_data_dict[asset][block_num] = data_dict
 
         # cache each data dict for later retrieval by snapshotter
         for address, data_dict in all_assets_data_dict.items():
