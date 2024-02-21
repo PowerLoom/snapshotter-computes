@@ -14,6 +14,8 @@ from web3 import Web3
 
 from ..redis_keys import aave_asset_contract_data
 from ..redis_keys import aave_cached_block_height_asset_data
+from ..redis_keys import aave_cached_block_height_asset_details
+from ..redis_keys import aave_cached_block_height_asset_rate_details
 from ..redis_keys import aave_cached_block_height_burn_mint_data
 from ..redis_keys import aave_cached_block_height_core_event_data
 from ..redis_keys import aave_pool_asset_list_data
@@ -365,44 +367,52 @@ async def get_bulk_asset_data(
                 (type_str, output_type[1]), asset_data_bulk[i],
             )
 
-            for asset_data in decoded_assets_data[0]:
+            for data in decoded_assets_data[0]:
 
-                asset = Web3.toChecksumAddress(asset_data[0])
+                asset = Web3.toChecksumAddress(data[0])
+
+                asset_data = {
+                    'liquidityIndex': data[13],
+                    'variableBorrowIndex': data[14],
+                    'liquidityRate': data[15],
+                    'variableBorrowRate': data[16],
+                    'stableBorrowRate': data[17],
+                    'lastUpdateTimestamp': data[18],
+                    'availableLiquidity': data[23],
+                    'totalPrincipalStableDebt': data[24],
+                    'averageStableRate': data[25],
+                    'stableDebtLastUpdateTimestamp': data[26],
+                    'totalScaledVariableDebt': data[27],
+                    'priceInMarketReferenceCurrency': data[28],
+                    'accruedToTreasury': data[39],
+                }
+
+                asset_details = {
+                    'ltv': data[4],
+                    'liqThreshold': data[5],
+                    'liqBonus': data[6],
+                    'resFactor': data[7],
+                    'borrowCap': data[46],
+                    'supplyCap': data[47],
+                    'eLtv': data[48],
+                    'eliqThreshold': data[49],
+                    'eliqBonus': data[50],
+                }
+
+                rate_details = {
+                    'varRateSlope1': data[30],
+                    'varRateSlope2': data[31],
+                    'stableRateSlope1': data[32],
+                    'stableRateSlope2': data[33],
+                    'baseStableRate': data[34],
+                    'baseVarRate': data[35],
+                    'optimalRate': data[36],
+                }
 
                 data_dict = {
-                    'liquidityIndex': asset_data[13],
-                    'variableBorrowIndex': asset_data[14],
-                    'liquidityRate': asset_data[15],
-                    'variableBorrowRate': asset_data[16],
-                    'stableBorrowRate': asset_data[17],
-                    'lastUpdateTimestamp': asset_data[18],
-                    'availableLiquidity': asset_data[23],
-                    'totalPrincipalStableDebt': asset_data[24],
-                    'averageStableRate': asset_data[25],
-                    'stableDebtLastUpdateTimestamp': asset_data[26],
-                    'totalScaledVariableDebt': asset_data[27],
-                    'priceInMarketReferenceCurrency': asset_data[28],
-                    'accruedToTreasury': asset_data[39],
-                    'assetDetails': {
-                        'ltv': asset_data[4],
-                        'liqThreshold': asset_data[5],
-                        'liqBonus': asset_data[6],
-                        'resFactor': asset_data[7],
-                        'borrowCap': asset_data[46],
-                        'supplyCap': asset_data[47],
-                        'eLtv': asset_data[48],
-                        'eliqThreshold': asset_data[49],
-                        'eliqBonus': asset_data[50],
-                    },
-                    'rateDetails': {
-                        'varRateSlope1': asset_data[30],
-                        'varRateSlope2': asset_data[31],
-                        'stableRateSlope1': asset_data[32],
-                        'stableRateSlope2': asset_data[33],
-                        'baseStableRate': asset_data[34],
-                        'baseVarRate': asset_data[35],
-                        'optimalRate': asset_data[36],
-                    },
+                    'asset_data': asset_data,
+                    'asset_details': asset_details,
+                    'rate_details': rate_details,
                 }
 
                 if all_assets_data_dict.get(asset, False):
@@ -418,27 +428,72 @@ async def get_bulk_asset_data(
                         aave_pool_asset_list_data, *asset_list,
                     )
 
-        # cache each price dict for later retrieval by snapshotter
+        # cache each data dict for later retrieval by snapshotter
         for address, data_dict in all_assets_data_dict.items():
-            # cache price at height
+            # cache data at height
             if len(data_dict) > 0:
-                redis_cache_mapping = {
-                    json.dumps({'blockHeight': height, 'data': data}): int(
+                redis_data_cache_mapping = {
+                    json.dumps({'blockHeight': height, 'data': data['asset_data']}): int(
                         height,
                     )
                     for height, data in data_dict.items()
                 }
 
+                redis_details_cache_mapping = {
+                    json.dumps({'blockHeight': height, 'data': data['asset_details']}): int(
+                        height,
+                    )
+                    for height, data in data_dict.items()
+                }
+
+                redis_rate_cache_mapping = {
+                    json.dumps({'blockHeight': height, 'data': data['rate_details']}): int(
+                        height,
+                    )
+                    for height, data in data_dict.items()
+                }
+
+                asset_address = Web3.to_checksum_address(address)
+
                 await asyncio.gather(
                     redis_conn.zadd(
                         name=aave_cached_block_height_asset_data.format(
-                            Web3.to_checksum_address(address),
+                            asset_address,
                         ),
-                        mapping=redis_cache_mapping,
+                        mapping=redis_data_cache_mapping,
                     ),
+                    redis_conn.zadd(
+                        name=aave_cached_block_height_asset_details.format(
+                            asset_address,
+                        ),
+                        mapping=redis_details_cache_mapping,
+                    ),
+                    redis_conn.zadd(
+                        name=aave_cached_block_height_asset_rate_details.format(
+                            asset_address,
+                        ),
+                        mapping=redis_rate_cache_mapping,
+                    ),
+                )
+
+                await asyncio.gather(
                     redis_conn.zremrangebyscore(
                         name=aave_cached_block_height_asset_data.format(
-                            Web3.to_checksum_address(address),
+                            asset_address,
+                        ),
+                        min=0,
+                        max=from_block - source_chain_epoch_size * 3,
+                    ),
+                    redis_conn.zremrangebyscore(
+                        name=aave_cached_block_height_asset_details.format(
+                            asset_address,
+                        ),
+                        min=0,
+                        max=from_block - source_chain_epoch_size * 3,
+                    ),
+                    redis_conn.zremrangebyscore(
+                        name=aave_cached_block_height_asset_rate_details.format(
+                            asset_address,
                         ),
                         min=0,
                         max=from_block - source_chain_epoch_size * 3,

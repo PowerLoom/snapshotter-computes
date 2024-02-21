@@ -1,3 +1,4 @@
+import asyncio
 import json
 
 from redis import asyncio as aioredis
@@ -9,6 +10,8 @@ from snapshotter.utils.snapshot_utils import (
 from web3 import Web3
 
 from ..redis_keys import aave_cached_block_height_asset_data
+from ..redis_keys import aave_cached_block_height_asset_details
+from ..redis_keys import aave_cached_block_height_asset_rate_details
 from .constants import DETAILS_BASIS
 from .constants import ORACLE_DECIMALS
 from .helpers import calculate_compound_interest
@@ -19,9 +22,11 @@ from .helpers import get_pool_supply_events
 from .helpers import rayMul
 from .models.data_models import AaveDebtData
 from .models.data_models import AaveSupplyData
+from .models.data_models import AssetDetailsData
 from .models.data_models import AssetTotalData
 from .models.data_models import epochEventVolumeData
 from .models.data_models import eventVolumeData
+from .models.data_models import RateDetailsData
 from .models.data_models import UiDataProviderReserveData
 from .models.data_models import volumeData
 from .pricing import get_asset_price_in_block_range
@@ -78,18 +83,41 @@ async def get_asset_supply_and_debt_bulk(
         ),
     )
 
-    data_dict = {}
+    asset_data_dict = {}
+    asset_details_dict = {}
+    asset_rates_dict = {}
+
     # get cached asset data from redis
-    cached_data_dict = await redis_conn.zrangebyscore(
-        name=aave_cached_block_height_asset_data.format(
-            asset_address,
+    [
+    cached_asset_data_dict,
+    cached_asset_details_dict,
+    cached_asset_rates_dict,
+    ] = await asyncio.gather(
+        redis_conn.zrangebyscore(
+            name=aave_cached_block_height_asset_data.format(
+                asset_address,
+            ),
+            min=int(from_block),
+            max=int(to_block),
         ),
-        min=int(from_block),
-        max=int(to_block),
+        redis_conn.zrangebyscore(
+            name=aave_cached_block_height_asset_details.format(
+                asset_address,
+            ),
+            min=int(from_block),
+            max=int(to_block),
+        ),
+        redis_conn.zrangebyscore(
+            name=aave_cached_block_height_asset_rate_details.format(
+                asset_address,
+            ),
+            min=int(from_block),
+            max=int(to_block),
+        ),
     )
 
-    if cached_data_dict and len(cached_data_dict) == to_block - (from_block - 1):
-        data_dict = {
+    if cached_asset_data_dict and len(cached_asset_data_dict) == to_block - (from_block - 1):
+        asset_data_dict = {
             json.loads(
                 data.decode(
                     'utf-8',
@@ -97,7 +125,29 @@ async def get_asset_supply_and_debt_bulk(
             )['blockHeight']: json.loads(
                 data.decode('utf-8'),
             )['data']
-            for data in cached_data_dict
+            for data in cached_asset_data_dict
+        }
+
+        asset_details_dict = {
+            json.loads(
+                data.decode(
+                    'utf-8',
+                ),
+            )['blockHeight']: json.loads(
+                data.decode('utf-8'),
+            )['data']
+            for data in cached_asset_details_dict
+        }
+
+        asset_rates_dict = {
+            json.loads(
+                data.decode(
+                    'utf-8',
+                ),
+            )['blockHeight']: json.loads(
+                data.decode('utf-8'),
+            )['data']
+            for data in cached_asset_rates_dict
         }
 
     # TODO: add fallback if cached data does not exist
@@ -107,10 +157,14 @@ async def get_asset_supply_and_debt_bulk(
     for block_num in range(from_block, to_block + 1):
         current_block_details = block_details_dict.get(block_num, None)
         timestamp = current_block_details.get('timestamp')
-        asset_data = data_dict.get(block_num, None)
-        asset_data = UiDataProviderReserveData(
-            *asset_data.values(),
-        )
+
+        asset_data = asset_data_dict.get(block_num, None)
+        asset_details = asset_details_dict.get(block_num, None)
+        asset_rate_details = asset_rates_dict.get(block_num, None)
+
+        asset_data = UiDataProviderReserveData.parse_obj(asset_data)
+        asset_details = AssetDetailsData.parse_obj(asset_details)
+        asset_rate_details = RateDetailsData.parse_obj(asset_rate_details)
 
         variable_interest = calculate_compound_interest(
             rate=asset_data.variableBorrowRate,
@@ -144,23 +198,23 @@ async def get_asset_supply_and_debt_bulk(
             (10 ** int(asset_metadata['decimals']))
 
         # Normalize asset detail rates
-        asset_data.assetDetails.ltv = (asset_data.assetDetails.ltv / DETAILS_BASIS) * 100
-        asset_data.assetDetails.liqThreshold = (asset_data.assetDetails.liqThreshold / DETAILS_BASIS) * 100
-        asset_data.assetDetails.resFactor = (asset_data.assetDetails.resFactor / DETAILS_BASIS) * 100
-        asset_data.assetDetails.liqBonus = ((asset_data.assetDetails.liqBonus / DETAILS_BASIS) * 100) - 100
-        asset_data.assetDetails.eLtv = (asset_data.assetDetails.eLtv / DETAILS_BASIS) * 100
-        asset_data.assetDetails.eliqThreshold = (asset_data.assetDetails.eliqThreshold / DETAILS_BASIS) * 100
-        asset_data.assetDetails.eliqBonus = ((asset_data.assetDetails.eliqBonus / DETAILS_BASIS) * 100) - 100
+        asset_details.ltv = (asset_details.ltv / DETAILS_BASIS) * 100
+        asset_details.liqThreshold = (asset_details.liqThreshold / DETAILS_BASIS) * 100
+        asset_details.resFactor = (asset_details.resFactor / DETAILS_BASIS) * 100
+        asset_details.liqBonus = ((asset_details.liqBonus / DETAILS_BASIS) * 100) - 100
+        asset_details.eLtv = (asset_details.eLtv / DETAILS_BASIS) * 100
+        asset_details.eliqThreshold = (asset_details.eliqThreshold / DETAILS_BASIS) * 100
+        asset_details.eliqBonus = ((asset_details.eliqBonus / DETAILS_BASIS) * 100) - 100
 
         # Normalize rate detail rates
-        asset_data.rateDetails.utilRate = total_variable_debt / total_supply
-        asset_data.rateDetails.varRateSlope1 = convert_from_ray(asset_data.rateDetails.varRateSlope1)
-        asset_data.rateDetails.varRateSlope2 = convert_from_ray(asset_data.rateDetails.varRateSlope2)
-        asset_data.rateDetails.baseVarRate = convert_from_ray(asset_data.rateDetails.baseVarRate)
-        asset_data.rateDetails.stableRateSlope1 = convert_from_ray(asset_data.rateDetails.stableRateSlope1)
-        asset_data.rateDetails.stableRateSlope2 = convert_from_ray(asset_data.rateDetails.stableRateSlope2)
-        asset_data.rateDetails.baseStableRate = convert_from_ray(asset_data.rateDetails.baseStableRate)
-        asset_data.rateDetails.optimalRate = convert_from_ray(asset_data.rateDetails.optimalRate)
+        asset_rate_details.utilRate = total_variable_debt / total_supply
+        asset_rate_details.varRateSlope1 = convert_from_ray(asset_rate_details.varRateSlope1)
+        asset_rate_details.varRateSlope2 = convert_from_ray(asset_rate_details.varRateSlope2)
+        asset_rate_details.baseVarRate = convert_from_ray(asset_rate_details.baseVarRate)
+        asset_rate_details.stableRateSlope1 = convert_from_ray(asset_rate_details.stableRateSlope1)
+        asset_rate_details.stableRateSlope2 = convert_from_ray(asset_rate_details.stableRateSlope2)
+        asset_rate_details.baseStableRate = convert_from_ray(asset_rate_details.baseStableRate)
+        asset_rate_details.optimalRate = convert_from_ray(asset_rate_details.optimalRate)
 
         total_asset_data = AssetTotalData(
             totalSupply=AaveSupplyData(
@@ -185,8 +239,8 @@ async def get_asset_supply_and_debt_bulk(
             stableBorrowRate=asset_data.stableBorrowRate,
             variableBorrowIndex=asset_data.variableBorrowIndex,
             lastUpdateTimestamp=asset_data.lastUpdateTimestamp,
-            assetDetails=asset_data.assetDetails,
-            rateDetails=asset_data.rateDetails,
+            assetDetails=asset_details,
+            rateDetails=asset_rate_details,
             timestamp=timestamp,
         )
 
