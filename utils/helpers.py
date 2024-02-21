@@ -319,7 +319,6 @@ async def get_bulk_asset_data(
         )
 
         if asset_list_data_cache:
-            print('got cache')
             asset_set = {Web3.toChecksumAddress(asset.decode('utf-8')) for asset in asset_list_data_cache}
         else:
             [asset_list] = await rpc_helper.web3_call(
