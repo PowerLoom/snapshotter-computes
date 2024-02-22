@@ -4,7 +4,6 @@ import json
 from ipfs_client.main import AsyncIPFSClient
 from redis import asyncio as aioredis
 from snapshotter.utils.callback_helpers import GenericProcessorAggregate
-from snapshotter.utils.data_utils import get_project_epoch_snapshot
 from snapshotter.utils.data_utils import get_project_epoch_snapshot_bulk
 from snapshotter.utils.data_utils import get_project_first_epoch
 from snapshotter.utils.data_utils import get_source_chain_block_time
@@ -18,7 +17,6 @@ from snapshotter.utils.redis.redis_keys import submitted_base_snapshots_key
 from snapshotter.utils.rpc import RpcHelper
 
 from ..utils.constants import RAY
-from ..utils.constants import SECONDS_IN_YEAR
 from ..utils.models.message_models import AaveAprAggregateSnapshot
 from ..utils.models.message_models import AavePoolTotalAssetSnapshot
 
@@ -30,60 +28,20 @@ class AggreagateSingleAprProcessor(GenericProcessorAggregate):
         self.transformation_lambdas = []
         self._logger = logger.bind(module='AggregateSingleAprProcessor')
 
-    # https://github.com/aave/aave-js/blob/master/src/helpers/pool-math.ts#L171
-    # Used in the Aave-Api V2 here: https://github.com/aave/aave-api/blob/master/src/services/RatesHistory.ts#L91
-    def _calculate_average_rate(
-        self,
-        index0: int,
-        index1: int,
-        timestamp0: int,
-        timestamp1: int,
-    ):
-        average_rate = index1 / index0
-        average_rate -= 1
-        average_rate /= (timestamp1 - timestamp0)
-        average_rate *= SECONDS_IN_YEAR
-        return average_rate
-
     def _add_aggregate_snapshot(
         self,
         previous_aggregate_snapshot: AaveAprAggregateSnapshot,
         current_snapshot: AavePoolTotalAssetSnapshot,
-        previous_snapshot: AavePoolTotalAssetSnapshot,
         sample_size,
-        epoch_time,
     ):
 
-        # Use previous snapshot data if available, accounts for inter-epoch index changes
-        if previous_snapshot:
-            start_key = 'block' + str(previous_snapshot.chainHeightRange.end)
-            start_liq_index = previous_snapshot.liquidityIndex[start_key]
-            start_var_index = previous_snapshot.variableBorrowIndex[start_key]
-            start_timestamp = previous_snapshot.timestamp
-        else:
-            start_key = 'block' + str(current_snapshot.chainHeightRange.begin)
-            start_liq_index = current_snapshot.liquidityIndex[start_key]
-            start_var_index = current_snapshot.variableBorrowIndex[start_key]
-            start_timestamp = current_snapshot.timestamp - epoch_time
-
-        end_key = 'block' + str(current_snapshot.chainHeightRange.end)
-        end_liq_index = current_snapshot.liquidityIndex[end_key]
-        end_var_index = current_snapshot.variableBorrowIndex[end_key]
-
         # build averages and normalize values
-        current_liq_avg = self._calculate_average_rate(
-            start_liq_index,
-            end_liq_index,
-            start_timestamp,
-            current_snapshot.timestamp,
-        )
+        current_liq_avg = sum(current_snapshot.liquidityRate.values()) / len(current_snapshot.liquidityRate.values())
+        current_liq_avg /= RAY
 
-        current_variable_avg = self._calculate_average_rate(
-            start_var_index,
-            end_var_index,
-            start_timestamp,
-            current_snapshot.timestamp,
-        )
+        current_variable_avg = sum(current_snapshot.variableBorrowRate.values()) / \
+            len(current_snapshot.variableBorrowRate.values())
+        current_variable_avg /= RAY
 
         current_stable_avg = sum(current_snapshot.stableBorrowRate.values()) / \
             len(current_snapshot.stableBorrowRate.values())
@@ -117,41 +75,16 @@ class AggreagateSingleAprProcessor(GenericProcessorAggregate):
         self,
         previous_aggregate_snapshot: AaveAprAggregateSnapshot,
         current_snapshot: AavePoolTotalAssetSnapshot,
-        previous_snapshot: AavePoolTotalAssetSnapshot,
         sample_size,
-        epoch_time,
     ):
 
-        # Use previous snapshot data if available, accounts for inter-epoch index changes
-        if previous_snapshot:
-            start_key = 'block' + str(previous_snapshot.chainHeightRange.end)
-            start_liq_index = previous_snapshot.liquidityIndex[start_key]
-            start_var_index = previous_snapshot.variableBorrowIndex[start_key]
-            start_timestamp = previous_snapshot.timestamp
-        else:
-            start_key = 'block' + str(current_snapshot.chainHeightRange.begin)
-            start_liq_index = current_snapshot.liquidityIndex[start_key]
-            start_var_index = current_snapshot.variableBorrowIndex[start_key]
-            start_timestamp = current_snapshot.timestamp - epoch_time
-
-        end_key = 'block' + str(current_snapshot.chainHeightRange.end)
-        end_liq_index = current_snapshot.liquidityIndex[end_key]
-        end_var_index = current_snapshot.variableBorrowIndex[end_key]
-
         # build averages and normalize values
-        current_liq_avg = self._calculate_average_rate(
-            start_liq_index,
-            end_liq_index,
-            start_timestamp,
-            current_snapshot.timestamp,
-        )
+        current_liq_avg = sum(current_snapshot.liquidityRate.values()) / len(current_snapshot.liquidityRate.values())
+        current_liq_avg /= RAY
 
-        current_variable_avg = self._calculate_average_rate(
-            start_var_index,
-            end_var_index,
-            start_timestamp,
-            current_snapshot.timestamp,
-        )
+        current_variable_avg = sum(current_snapshot.variableBorrowRate.values()) / \
+            len(current_snapshot.variableBorrowRate.values())
+        current_variable_avg /= RAY
 
         current_stable_avg = sum(current_snapshot.stableBorrowRate.values()) / \
             len(current_snapshot.stableBorrowRate.values())
@@ -219,35 +152,22 @@ class AggreagateSingleAprProcessor(GenericProcessorAggregate):
 
         aggregate_snapshot = AaveAprAggregateSnapshot.parse_obj({'epochId': msg_obj.epochId})
 
-        source_chain_epoch_size = await get_source_chain_epoch_size(redis, protocol_state_contract, anchor_rpc_helper)
-        source_chain_block_time = await get_source_chain_block_time(redis, protocol_state_contract, anchor_rpc_helper)
-        epoch_time = source_chain_block_time * source_chain_epoch_size
-
         sample_size = 0
-        previous_snapshot = None
         if extrapolated_flag:
             aggregate_snapshot.complete = False
-        else:
-            # redis_conn: aioredis.Redis, state_contract_obj, rpc_helper, ipfs_reader, epoch_id, project_id,
-            tail_epoch_data = await get_project_epoch_snapshot(
-                redis, protocol_state_contract, anchor_rpc_helper, ipfs_reader, tail_epoch_id - 1, msg_obj.projectId,
-            )
-            if tail_epoch_data:
-                previous_snapshot = AavePoolTotalAssetSnapshot.parse_obj(tail_epoch_data)
 
         for snapshot_data in snapshots_data:
             if snapshot_data:
                 snapshot = AavePoolTotalAssetSnapshot.parse_obj(snapshot_data)
                 aggregate_snapshot, sample_size = self._add_aggregate_snapshot(
-                    aggregate_snapshot, snapshot, previous_snapshot, sample_size, epoch_time,
+                    aggregate_snapshot, snapshot, sample_size,
                 )
-                previous_snapshot = snapshot
                 aggregate_snapshot.timestamp = snapshot.timestamp
 
         if current_epoch_underlying_data:
             current_snapshot = AavePoolTotalAssetSnapshot.parse_obj(current_epoch_underlying_data)
             aggregate_snapshot, sample_size = self._add_aggregate_snapshot(
-                aggregate_snapshot, current_snapshot, previous_snapshot, sample_size, epoch_time,
+                aggregate_snapshot, current_snapshot, sample_size,
             )
             aggregate_snapshot.timestamp = current_snapshot.timestamp
 
@@ -406,21 +326,13 @@ class AggreagateSingleAprProcessor(GenericProcessorAggregate):
                 sample_size = int(21600 / epoch_time) + 1
                 self._logger.debug(f'using base sample_size {sample_size} for {msg_obj.projectId}')
 
-            previous_snapshot = None
-            previous_epoch_data = await get_project_epoch_snapshot(
-                redis, protocol_state_contract, anchor_rpc_helper, ipfs_reader, msg_obj.epochId - 1, msg_obj.projectId,
-            )
-            if previous_epoch_data:
-                previous_snapshot = AavePoolTotalAssetSnapshot.parse_obj(previous_epoch_data)
-
             # add new snapshots
             for snapshot_data in base_snapshots:
                 if snapshot_data:
                     snapshot = AavePoolTotalAssetSnapshot.parse_obj(snapshot_data)
                     aggregate_snapshot, sample_size = self._add_aggregate_snapshot(
-                        aggregate_snapshot, snapshot, previous_snapshot, sample_size, epoch_time,
+                        aggregate_snapshot, snapshot, sample_size,
                     )
-                    previous_snapshot = snapshot
                     aggregate_snapshot.timestamp = snapshot.timestamp
                     self._logger.debug(f'added 1 to sample_size: {sample_size}')
 
@@ -438,21 +350,12 @@ class AggreagateSingleAprProcessor(GenericProcessorAggregate):
                     tail_epochs_to_remove[0], tail_epochs_to_remove[-1], msg_obj.projectId,
                 )
 
-                previous_snapshot = None
-                previous_epoch_data = await get_project_epoch_snapshot(
-                    redis, protocol_state_contract, anchor_rpc_helper, ipfs_reader,
-                    tail_epochs_to_remove[0] - 1, msg_obj.projectId,
-                )
-                if previous_epoch_data:
-                    previous_snapshot = AavePoolTotalAssetSnapshot.parse_obj(previous_epoch_data)
-
                 for snapshot_data in tail_epoch_snapshots:
                     if snapshot_data:
                         snapshot = AavePoolTotalAssetSnapshot.parse_obj(snapshot_data)
                         aggregate_snapshot, sample_size = self._remove_aggregate_snapshot(
-                            aggregate_snapshot, snapshot, previous_snapshot, sample_size, epoch_time,
+                            aggregate_snapshot, snapshot, sample_size,
                         )
-                        previous_snapshot = snapshot
                         self._logger.debug(f'removed 1 from sample_size: {sample_size}')
 
             self._logger.debug(f'Final sample size for {project_id}: {sample_size}')
