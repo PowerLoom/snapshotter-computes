@@ -35,6 +35,7 @@ class AggregateSupplyVolumeProcessor(GenericProcessorAggregate):
         previous_aggregate_snapshot.totalRepay += current_snapshot.repay
         previous_aggregate_snapshot.totalSupply += current_snapshot.supply
         previous_aggregate_snapshot.totalWithdraw += current_snapshot.withdraw
+        previous_aggregate_snapshot.totalLiquidatedCollateral += current_snapshot.liquidation
 
         return previous_aggregate_snapshot
 
@@ -48,6 +49,7 @@ class AggregateSupplyVolumeProcessor(GenericProcessorAggregate):
         previous_aggregate_snapshot.totalRepay += current_snapshot.repay
         previous_aggregate_snapshot.totalSupply += current_snapshot.supply
         previous_aggregate_snapshot.totalWithdraw += current_snapshot.withdraw
+        previous_aggregate_snapshot.totalLiquidatedCollateral -= current_snapshot.liquidation
 
         return previous_aggregate_snapshot
 

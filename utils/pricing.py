@@ -9,7 +9,8 @@ from snapshotter.utils.rpc import RpcHelper
 from web3 import Web3
 
 from ..redis_keys import aave_cached_block_height_asset_price
-from ..redis_keys import aave_pool_asset_list_data
+from ..redis_keys import aave_cached_block_height_assets_prices
+from ..redis_keys import aave_pool_asset_set_data
 from ..settings.config import settings as worker_settings
 from .constants import aave_oracle_abi
 from .constants import pool_contract_obj
@@ -116,27 +117,50 @@ async def get_all_asset_prices(
     debug_log=True,
 ):
     try:
-        # check if asset list cache exist
-        asset_list_data_cache = await redis_conn.lrange(
-            aave_pool_asset_list_data, 0, -1,
+
+        cached_price_dict = await redis_conn.zrangebyscore(
+            name=aave_cached_block_height_assets_prices,
+            min=int(from_block),
+            max=int(to_block),
+        )
+
+        if cached_price_dict and len(cached_price_dict) == to_block - (from_block - 1):
+            all_assets_price_dict = {
+                json.loads(
+                    data.decode(
+                        'utf-8',
+                    ),
+                )['blockHeight']: json.loads(
+                    data.decode('utf-8'),
+                )['data']
+                for data in cached_price_dict
+            }
+
+            return all_assets_price_dict
+
+        # check if asset set cache exist
+        asset_list_data_cache = await redis_conn.smembers(
+            aave_pool_asset_set_data,
         )
 
         if asset_list_data_cache:
-            asset_list = [asset.decode('utf-8') for asset in reversed(asset_list_data_cache)]
+            asset_list = [asset.decode('utf-8') for asset in asset_list_data_cache]
         else:
+            # get list of all assets from Pool contract
             [asset_list] = await rpc_helper.web3_call(
                 tasks=[pool_contract_obj.functions.getReservesList()],
                 redis_conn=redis_conn,
             )
 
-            await redis_conn.lpush(
-                aave_pool_asset_list_data, *asset_list,
+            await redis_conn.sadd(
+                aave_pool_asset_set_data, *asset_list,
             )
 
         abi_dict = get_contract_abi_dict(
             abi=aave_oracle_abi,
         )
 
+        # get all asset prices in the block range from the Aave Oracle contract
         asset_prices_bulk = await rpc_helper.batch_eth_call_on_block_range(
             abi_dict=abi_dict,
             contract_address=worker_settings.contract_addresses.aave_oracle,
@@ -152,43 +176,37 @@ async def get_all_asset_prices(
                 f'Retrieved bulk prices for aave assets: {asset_prices_bulk}',
             )
 
-        all_assets_price_dict = {asset: {} for asset in asset_list}
+        all_assets_price_dict = {block_num: {} for block_num in range(from_block, to_block + 1)}
 
+        # match each asset to its price for each block
         for i, block_num in enumerate(range(from_block, to_block + 1)):
             matches = zip(asset_list, asset_prices_bulk[i][0])
 
             for match in matches:
                 # all asset prices are returned with 8 decimal format
-                all_assets_price_dict[match[0]][block_num] = match[1] * (10 ** -8)
+                all_assets_price_dict[block_num][match[0]] = match[1]
 
-        # cache each price dict for later retrieval by snapshotter
-        for address, price_dict in all_assets_price_dict.items():
-            # cache price at height
-            if len(price_dict) > 0:
-                redis_cache_mapping = {
-                    json.dumps({'blockHeight': height, 'price': price}): int(
-                        height,
-                    )
-                    for height, price in price_dict.items()
-                }
+        source_chain_epoch_size = await redis_conn.get(source_chain_epoch_size_key())
+        source_chain_epoch_size = int(source_chain_epoch_size)
 
-                source_chain_epoch_size = int(await redis_conn.get(source_chain_epoch_size_key()))
+        redis_data_cache_mapping = {
+            json.dumps({'blockHeight': height, 'data': asset_prices}): int(
+                height,
+            )
+            for height, asset_prices in all_assets_price_dict.items() if len(asset_prices) > 0
+        }
 
-                await gather(
-                    redis_conn.zadd(
-                        name=aave_cached_block_height_asset_price.format(
-                            Web3.to_checksum_address(address),
-                        ),
-                        mapping=redis_cache_mapping,
-                    ),
-                    redis_conn.zremrangebyscore(
-                        name=aave_cached_block_height_asset_price.format(
-                            Web3.to_checksum_address(address),
-                        ),
-                        min=0,
-                        max=from_block - source_chain_epoch_size * 3,
-                    ),
-                )
+        await gather(
+            redis_conn.zadd(
+                name=aave_cached_block_height_assets_prices,
+                mapping=redis_data_cache_mapping,
+            ),
+            redis_conn.zremrangebyscore(
+                name=aave_cached_block_height_assets_prices,
+                min=0,
+                max=from_block - source_chain_epoch_size * 3,
+            ),
+        )
 
         return all_assets_price_dict
 

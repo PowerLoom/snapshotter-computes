@@ -102,12 +102,14 @@ AAVE_EVENT_SIGS = {
     'Supply': 'Supply(address,address,address,uint256,uint16)',
     'Repay': 'Repay(address,address,address,uint256,bool)',
     'Borrow': 'Borrow(address,address,address,uint256,uint8,uint256,uint16)',
+    'LiquidationCall': 'LiquidationCall(address,address,address,uint256,uint256,address,bool)',
 }
 AAVE_EVENTS_ABI = {
     'Withdraw': pool_contract_obj.events.Withdraw._get_event_abi(),
     'Supply': pool_contract_obj.events.Supply._get_event_abi(),
     'Repay': pool_contract_obj.events.Repay._get_event_abi(),
     'Borrow': pool_contract_obj.events.Borrow._get_event_abi(),
+    'LiquidationCall': pool_contract_obj.events.LiquidationCall._get_event_abi(),
 }
 AAVE_CORE_EVENTS = ('Withdraw', 'Supply', 'Borrow', 'Repay')
 

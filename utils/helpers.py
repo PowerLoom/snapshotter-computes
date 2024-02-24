@@ -16,9 +16,10 @@ from ..redis_keys import aave_asset_contract_data
 from ..redis_keys import aave_cached_block_height_asset_data
 from ..redis_keys import aave_cached_block_height_asset_details
 from ..redis_keys import aave_cached_block_height_asset_rate_details
+from ..redis_keys import aave_cached_block_height_assets_prices
 from ..redis_keys import aave_cached_block_height_burn_mint_data
 from ..redis_keys import aave_cached_block_height_core_event_data
-from ..redis_keys import aave_pool_asset_list_data
+from ..redis_keys import aave_pool_asset_set_data
 from ..settings.config import settings as worker_settings
 from .constants import AAVE_EVENT_SIGS
 from .constants import AAVE_EVENTS_ABI
@@ -313,13 +314,13 @@ async def get_bulk_asset_data(
 ):
     try:
 
-        # check if asset list cache exist
-        asset_list_data_cache = await redis_conn.smembers(
-            aave_pool_asset_list_data,
+        # check if asset set cache exist
+        asset_list_set_cache = await redis_conn.smembers(
+            aave_pool_asset_set_data,
         )
 
-        if asset_list_data_cache:
-            asset_set = {Web3.toChecksumAddress(asset.decode('utf-8')) for asset in asset_list_data_cache}
+        if asset_list_set_cache:
+            asset_set = {Web3.toChecksumAddress(asset.decode('utf-8')) for asset in asset_list_set_cache}
         else:
             [asset_list] = await rpc_helper.web3_call(
                 tasks=[pool_contract_obj.functions.getReservesList()],
@@ -327,13 +328,27 @@ async def get_bulk_asset_data(
             )
 
             await redis_conn.sadd(
-                aave_pool_asset_list_data, *asset_list,
+                aave_pool_asset_set_data, *asset_list,
             )
             asset_set = set(asset_list)
 
+        source_chain_epoch_size = int(await redis_conn.get(source_chain_epoch_size_key()))
+
         param = Web3.toChecksumAddress(worker_settings.contract_addresses.pool_address_provider)
         function = ui_pool_data_provider_contract_obj.functions.getReservesData(param)
-        source_chain_epoch_size = int(await redis_conn.get(source_chain_epoch_size_key()))
+
+        # generate types for abi decoding
+        output_type = [
+            str(
+                tuple(
+                    component['type']
+                    for component in output['components']
+                ),
+            ).replace(' ', '').replace("'", '')
+            for output in function.abi['outputs']
+        ]
+
+        type_string = output_type[0]+'[]'
 
         abi_dict = get_contract_abi_dict(
             abi=ui_pool_data_provider_contract_obj.abi,
@@ -349,23 +364,12 @@ async def get_bulk_asset_data(
             redis_conn=redis_conn,
         )
 
-        output_type = [
-            str(
-                tuple(
-                    component['type']
-                    for component in output['components']
-                ),
-            ).replace(' ', '').replace("'", '')
-            for output in function.abi['outputs']
-        ]
-
-        type_str = output_type[0]+'[]'
-
         all_assets_data_dict = {asset: {} for asset in asset_set}
+        all_assets_price_dict = {block_num: {} for block_num in range(from_block, to_block + 1)}
 
         for i, block_num in enumerate(range(from_block, to_block + 1)):
             decoded_assets_data = abi.decode(
-                (type_str, output_type[1]), asset_data_bulk[i],
+                (type_string, output_type[1]), asset_data_bulk[i],
             )
 
             for data in decoded_assets_data[0]:
@@ -419,13 +423,15 @@ async def get_bulk_asset_data(
                 # Account for new assets being added after the initial asset list is retrieved
                 if asset in asset_set:
                     all_assets_data_dict[asset][block_num] = data_dict
+                    all_assets_price_dict[block_num][asset] = asset_data['priceInMarketReferenceCurrency']
                 else:
                     await redis_conn.sadd(
-                        aave_pool_asset_list_data, asset,
+                        aave_pool_asset_set_data, asset,
                     )
                     asset_set.add(asset)
                     all_assets_data_dict[asset] = {}
                     all_assets_data_dict[asset][block_num] = data_dict
+                    all_assets_price_dict[block_num][asset] = asset_data['priceInMarketReferenceCurrency']
 
         # cache each data dict for later retrieval by snapshotter
         for address, data_dict in all_assets_data_dict.items():
@@ -498,6 +504,26 @@ async def get_bulk_asset_data(
                         max=from_block - source_chain_epoch_size * 3,
                     ),
                 )
+
+        # cache asset prices by block number
+        redis_data_cache_mapping = {
+            json.dumps({'blockHeight': height, 'data': asset_prices}): int(
+                height,
+            )
+            for height, asset_prices in all_assets_price_dict.items() if len(asset_prices) > 0
+        }
+
+        await asyncio.gather(
+            redis_conn.zadd(
+                name=aave_cached_block_height_assets_prices,
+                mapping=redis_data_cache_mapping,
+            ),
+            redis_conn.zremrangebyscore(
+                name=aave_cached_block_height_assets_prices,
+                min=0,
+                max=from_block - source_chain_epoch_size * 3,
+            ),
+        )
 
         return all_assets_data_dict
 

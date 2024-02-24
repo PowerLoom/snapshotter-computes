@@ -60,7 +60,9 @@ class AssetSupplyVolumeProcessor(GenericProcessorSnapshot):
             repay=result['repay']['totals'],
             supply=result['supply']['totals'],
             withdraw=result['withdraw']['totals'],
+            liquidation=result['liquidation']['totalLiquidatedCollateral'],
             events=events,
+            liquidationList=result['liquidation']['liquidations'],
         )
 
         return supply_volume_snapshot

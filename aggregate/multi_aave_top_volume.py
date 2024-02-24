@@ -82,10 +82,12 @@ class AggreagateTopVolumeProcessor(GenericProcessorAggregate):
                 'totalRepay': snapshot.totalRepay,
                 'totalSupply': snapshot.totalSupply,
                 'totalWithdraw': snapshot.totalWithdraw,
+                'totalLiquidatedCollateral': snapshot.totalLiquidatedCollateral,
                 'borrowChange24h': 0,
                 'repayChange24h': 0,
                 'supplyChange24h': 0,
                 'withdrawChange24h': 0,
+                'liquidationChange24h': 0,
             }
 
         tail_epoch_id, extrapolated_flag = await get_tail_epoch_id(
@@ -105,6 +107,7 @@ class AggreagateTopVolumeProcessor(GenericProcessorAggregate):
                         repay_before_24h = asset.totalRepay.totalUSD
                         supply_before_24h = asset.totalSupply.totalUSD
                         withdraw_before_24h = asset.totalWithdraw.totalUSD
+                        liquidation_before_24h = asset.totalLiquidatedCollateral.usd_supply
 
                         if borrow_before_24h > 0:
                             volume_data[asset.address]['borrowChange24h'] = (
@@ -122,6 +125,11 @@ class AggreagateTopVolumeProcessor(GenericProcessorAggregate):
                             volume_data[asset.address]['withdrawChange24h'] = (
                                 volume_data[asset.address]['totalWithdraw'].totalUSD - withdraw_before_24h
                             ) / withdraw_before_24h * 100
+                        if liquidation_before_24h > 0:
+                            volume_data[asset.address]['liquidationChange24h'] = (
+                                volume_data[asset.address]['totalLiquidatedCollateral'].usd_supply -
+                                liquidation_before_24h
+                            ) / liquidation_before_24h * 100
 
         top_assets_volume = []
         for asset in volume_data.values():

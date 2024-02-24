@@ -12,6 +12,8 @@ from web3 import Web3
 from ..redis_keys import aave_cached_block_height_asset_data
 from ..redis_keys import aave_cached_block_height_asset_details
 from ..redis_keys import aave_cached_block_height_asset_rate_details
+from ..redis_keys import aave_cached_block_height_assets_prices
+from .constants import AAVE_CORE_EVENTS
 from .constants import DETAILS_BASIS
 from .constants import ORACLE_DECIMALS
 from .helpers import calculate_compound_interest
@@ -25,11 +27,13 @@ from .models.data_models import AaveSupplyData
 from .models.data_models import AssetDetailsData
 from .models.data_models import AssetTotalData
 from .models.data_models import epochEventVolumeData
+from .models.data_models import eventLiquidationData
 from .models.data_models import eventVolumeData
+from .models.data_models import liquidationData
 from .models.data_models import RateDetailsData
 from .models.data_models import UiDataProviderReserveData
 from .models.data_models import volumeData
-from .pricing import get_asset_price_in_block_range
+from .pricing import get_all_asset_prices
 
 core_logger = logger.bind(module='PowerLoom|AaveCore')
 
@@ -89,9 +93,9 @@ async def get_asset_supply_and_debt_bulk(
 
     # get cached asset data from redis
     [
-    cached_asset_data_dict,
-    cached_asset_details_dict,
-    cached_asset_rates_dict,
+        cached_asset_data_dict,
+        cached_asset_details_dict,
+        cached_asset_rates_dict,
     ] = await asyncio.gather(
         redis_conn.zrangebyscore(
             name=aave_cached_block_height_asset_data.format(
@@ -294,41 +298,12 @@ async def get_asset_trade_volume(
         rpc_helper=rpc_helper,
     )
 
-    data_dict = {}
-    # get cached asset data from redis
-    cached_data_dict = await redis_conn.zrangebyscore(
-        name=aave_cached_block_height_asset_data.format(
-            asset_address,
-        ),
-        min=int(from_block),
-        max=int(to_block),
+    price_dict = await get_all_asset_prices(
+        from_block,
+        to_block,
+        redis_conn,
+        rpc_helper,
     )
-
-    if cached_data_dict and len(cached_data_dict) == to_block - (from_block - 1):
-        data_dict = {
-            json.loads(
-                data.decode(
-                    'utf-8',
-                ),
-            )['blockHeight']: json.loads(
-                data.decode('utf-8'),
-            )['data']
-            for data in cached_data_dict
-        }
-
-    if data_dict:
-        block_usd_prices = {
-            key: data['priceInMarketReferenceCurrency'] * (10 ** -ORACLE_DECIMALS)
-            for key, data in data_dict.items()
-        }
-    else:
-        block_usd_prices = await get_asset_price_in_block_range(
-            asset_metadata,
-            from_block,
-            to_block,
-            redis_conn,
-            rpc_helper,
-        )
 
     supply_events = await get_pool_supply_events(
         rpc_helper=rpc_helper,
@@ -339,7 +314,12 @@ async def get_asset_trade_volume(
 
     # TODO: Filter events by address in get_pool_data_events?
     asset_supply_events = {
-        key: filter(lambda x: x['args']['reserve'] == asset_address, value)
+        key: filter(
+            lambda x:
+            x['args'].get('reserve', '') == asset_address or
+            x['args'].get('collateralAsset', '') == asset_address,
+            value,
+        )
         for key, value in supply_events.items()
     }
 
@@ -373,31 +353,76 @@ async def get_asset_trade_volume(
                 totalToken=int(),
             ),
         ),
+        liquidation=eventLiquidationData(
+            logs=[],
+            totalLiquidatedCollateral=AaveSupplyData(
+                token_supply=int(),
+                usd_supply=float(),
+            ),
+            liquidations=[],
+        ),
     )
 
     for block_num in range(from_block, to_block + 1):
-        asset_usd_price = block_usd_prices.get(block_num, 0)
-        asset_usd_price = asset_usd_price / (10 ** int(asset_metadata['decimals']))
+        block_all_asset_prices = price_dict.get(block_num, None)
+        asset_usd_price = block_all_asset_prices.get(asset_address, 0)
+        asset_usd_price = asset_usd_price * (10 ** -ORACLE_DECIMALS) / (10 ** int(asset_metadata['decimals']))
 
         for event in asset_supply_events.get(block_num, None):
-            amount = event['args']['amount']
-            volume = volumeData(
-                totalToken=amount,
-                totalUSD=amount * asset_usd_price,
-            )
+            if event['event'] in AAVE_CORE_EVENTS:
+                amount = event['args']['amount']
+                volume = volumeData(
+                    totalToken=amount,
+                    totalUSD=amount * asset_usd_price,
+                )
 
-            if event['event'] == 'Borrow':
-                epoch_results.borrow.logs.append(event)
-                epoch_results.borrow.totals += volume
-            elif event['event'] == 'Repay':
-                epoch_results.repay.logs.append(event)
-                epoch_results.repay.totals += volume
-            elif event['event'] == 'Supply':
-                epoch_results.supply.logs.append(event)
-                epoch_results.supply.totals += volume
-            elif event['event'] == 'Withdraw':
-                epoch_results.withdraw.logs.append(event)
-                epoch_results.withdraw.totals += volume
+                if event['event'] == 'Borrow':
+                    epoch_results.borrow.logs.append(event)
+                    epoch_results.borrow.totals += volume
+                elif event['event'] == 'Repay':
+                    epoch_results.repay.logs.append(event)
+                    epoch_results.repay.totals += volume
+                elif event['event'] == 'Supply':
+                    epoch_results.supply.logs.append(event)
+                    epoch_results.supply.totals += volume
+                elif event['event'] == 'Withdraw':
+                    epoch_results.withdraw.logs.append(event)
+                    epoch_results.withdraw.totals += volume
+
+            # event is a LiquidationCall
+            else:
+                liquidated_collateral = event['args']['liquidatedCollateralAmount']
+                debt_to_cover = event['args']['debtToCover']
+                debt_asset = event['args']['debtAsset']
+                debt_usd_price = block_all_asset_prices.get(Web3.to_checksum_address(debt_asset), 0)
+
+                debt_asset_metadata = await get_asset_metadata(
+                    asset_address=debt_asset,
+                    redis_conn=redis_conn,
+                    rpc_helper=rpc_helper,
+                )
+
+                debt_usd_price = debt_usd_price * (10 ** -ORACLE_DECIMALS) / \
+                    (10 ** int(debt_asset_metadata['decimals']))
+
+                liq_data = liquidationData(
+                    collateralAsset=asset_address,
+                    debtAsset=debt_asset,
+                    debtToCover=AaveDebtData(
+                        token_debt=debt_to_cover,
+                        usd_debt=debt_to_cover * debt_usd_price,
+                    ),
+                    liquidatedCollateral=AaveSupplyData(
+                        token_supply=liquidated_collateral,
+                        usd_supply=liquidated_collateral * asset_usd_price,
+                    ),
+                    blockNumber=block_num,
+                )
+
+                epoch_results.liquidation.logs.append(event)
+                epoch_results.liquidation.liquidations.append(liq_data)
+                epoch_results.liquidation.totalLiquidatedCollateral.token_supply += liquidated_collateral
+                epoch_results.liquidation.totalLiquidatedCollateral.usd_supply += liquidated_collateral * asset_usd_price
 
     epoch_volume_logs = epoch_results.dict()
     max_block_details = block_details_dict.get(to_block, {})

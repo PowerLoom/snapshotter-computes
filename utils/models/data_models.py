@@ -62,13 +62,23 @@ class UiDataProviderReserveData(BaseModel):
 
 
 class AaveSupplyData(BaseModel):
-    token_supply: int
-    usd_supply: float
+    token_supply: int = 0
+    usd_supply: float = 0
+
+    def __add__(self, other: 'volumeData') -> 'volumeData':
+        self.token_supply += other.token_supply
+        self.usd_supply += other.usd_supply
+        return self
+
+    def __sub__(self, other: 'volumeData') -> 'volumeData':
+        self.token_supply -= other.token_supply
+        self.usd_supply -= other.usd_supply
+        return self
 
 
 class AaveDebtData(BaseModel):
-    token_debt: int
-    usd_debt: float
+    token_debt: int = 0
+    usd_debt: float = 0
 
 
 class AssetTotalData(BaseModel):
@@ -112,8 +122,23 @@ class eventVolumeData(BaseModel):
     totals: volumeData
 
 
+class liquidationData(BaseModel):
+    collateralAsset: str
+    debtAsset: str
+    debtToCover: AaveDebtData
+    liquidatedCollateral: AaveSupplyData
+    blockNumber: int
+
+
+class eventLiquidationData(BaseModel):
+    logs: List[Dict]
+    totalLiquidatedCollateral: AaveSupplyData
+    liquidations: List[liquidationData]
+
+
 class epochEventVolumeData(BaseModel):
     borrow: eventVolumeData
     repay: eventVolumeData
     supply: eventVolumeData
     withdraw: eventVolumeData
+    liquidation: eventLiquidationData

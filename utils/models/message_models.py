@@ -7,6 +7,7 @@ from snapshotter.utils.models.message_models import AggregateBase
 from .data_models import AaveDebtData
 from .data_models import AaveSupplyData
 from .data_models import AssetDetailsData
+from .data_models import liquidationData
 from .data_models import RateDetailsData
 from .data_models import volumeData
 
@@ -90,7 +91,9 @@ class AaveSupplyVolumeSnapshot(SnapshotBase):
     repay: volumeData
     supply: volumeData
     withdraw: volumeData
+    liquidation: AaveSupplyData
     events: List[Dict]
+    liquidationList: List[liquidationData]
 
 
 class AaveVolumeAggregateSnapshot(AggregateBase):
@@ -98,6 +101,7 @@ class AaveVolumeAggregateSnapshot(AggregateBase):
     totalRepay: volumeData = volumeData()
     totalSupply: volumeData = volumeData()
     totalWithdraw: volumeData = volumeData()
+    totalLiquidatedCollateral: AaveSupplyData = AaveSupplyData()
     complete: bool = True
 
 
@@ -109,10 +113,12 @@ class AaveTopAssetVolumeSnapshot(BaseModel):
     totalRepay: volumeData
     totalSupply: volumeData
     totalWithdraw: volumeData
+    totalLiquidatedCollateral: AaveSupplyData
     borrowChange24h: float
     repayChange24h: float
     supplyChange24h: float
     withdrawChange24h: float
+    liquidationChange24h: float
 
 
 class AaveTopAssetsVolumeSnapshot(AggregateBase):
