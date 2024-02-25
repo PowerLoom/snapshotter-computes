@@ -63,8 +63,6 @@ class WalletTrackerProcessor(GenericProcessorSnapshot):
                             wallet_address=wallet_address,
                             transactionHash=tx['transactionHash'],
                             contract_address=tx['to'],
-                            timestamp_test=tx['timestamp'],
-                            gasUsed_test=tx['gasUsed'],
                         ),
                     ),
                 )

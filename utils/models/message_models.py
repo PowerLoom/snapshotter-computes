@@ -21,8 +21,6 @@ class WalletTrackerSnapShot(BaseModel):
     wallet_address: str
     contract_address: str
     transactionHash: str
-    timestamp: str
-    gasUsed: str
 
 class BlockDetails(BaseModel):
     difficulty: str
