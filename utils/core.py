@@ -12,7 +12,6 @@ from web3 import Web3
 from ..redis_keys import aave_cached_block_height_asset_data
 from ..redis_keys import aave_cached_block_height_asset_details
 from ..redis_keys import aave_cached_block_height_asset_rate_details
-from ..redis_keys import aave_cached_block_height_assets_prices
 from .constants import AAVE_CORE_EVENTS
 from .constants import DETAILS_BASIS
 from .constants import ORACLE_DECIMALS
@@ -355,9 +354,9 @@ async def get_asset_trade_volume(
         ),
         liquidation=eventLiquidationData(
             logs=[],
-            totalLiquidatedCollateral=AaveSupplyData(
-                token_supply=int(),
-                usd_supply=float(),
+            totalLiquidatedCollateral=volumeData(
+                totalUSD=float(),
+                totalToken=int(),
             ),
             liquidations=[],
         ),
@@ -408,21 +407,21 @@ async def get_asset_trade_volume(
                 liq_data = liquidationData(
                     collateralAsset=asset_address,
                     debtAsset=debt_asset,
-                    debtToCover=AaveDebtData(
-                        token_debt=debt_to_cover,
-                        usd_debt=debt_to_cover * debt_usd_price,
+                    debtToCover=volumeData(
+                        totalToken=debt_to_cover,
+                        totalUSD=debt_to_cover * debt_usd_price,
                     ),
-                    liquidatedCollateral=AaveSupplyData(
-                        token_supply=liquidated_collateral,
-                        usd_supply=liquidated_collateral * asset_usd_price,
+                    liquidatedCollateral=volumeData(
+                        totalToken=liquidated_collateral,
+                        totalUSD=liquidated_collateral * asset_usd_price,
                     ),
                     blockNumber=block_num,
                 )
 
                 epoch_results.liquidation.logs.append(event)
                 epoch_results.liquidation.liquidations.append(liq_data)
-                epoch_results.liquidation.totalLiquidatedCollateral.token_supply += liquidated_collateral
-                epoch_results.liquidation.totalLiquidatedCollateral.usd_supply += liquidated_collateral * asset_usd_price
+                epoch_results.liquidation.totalLiquidatedCollateral.totalToken += liquidated_collateral
+                epoch_results.liquidation.totalLiquidatedCollateral.totalUSD += liquidated_collateral * asset_usd_price
 
     epoch_volume_logs = epoch_results.dict()
     max_block_details = block_details_dict.get(to_block, {})

@@ -91,7 +91,7 @@ class AaveSupplyVolumeSnapshot(SnapshotBase):
     repay: volumeData
     supply: volumeData
     withdraw: volumeData
-    liquidation: AaveSupplyData
+    liquidation: volumeData
     events: List[Dict]
     liquidationList: List[liquidationData]
 
@@ -101,7 +101,7 @@ class AaveVolumeAggregateSnapshot(AggregateBase):
     totalRepay: volumeData = volumeData()
     totalSupply: volumeData = volumeData()
     totalWithdraw: volumeData = volumeData()
-    totalLiquidatedCollateral: AaveSupplyData = AaveSupplyData()
+    totalLiquidatedCollateral: volumeData = volumeData()
     complete: bool = True
 
 
@@ -113,7 +113,7 @@ class AaveTopAssetVolumeSnapshot(BaseModel):
     totalRepay: volumeData
     totalSupply: volumeData
     totalWithdraw: volumeData
-    totalLiquidatedCollateral: AaveSupplyData
+    totalLiquidatedCollateral: volumeData
     borrowChange24h: float
     repayChange24h: float
     supplyChange24h: float

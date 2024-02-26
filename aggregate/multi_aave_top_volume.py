@@ -107,7 +107,7 @@ class AggreagateTopVolumeProcessor(GenericProcessorAggregate):
                         repay_before_24h = asset.totalRepay.totalUSD
                         supply_before_24h = asset.totalSupply.totalUSD
                         withdraw_before_24h = asset.totalWithdraw.totalUSD
-                        liquidation_before_24h = asset.totalLiquidatedCollateral.usd_supply
+                        liquidation_before_24h = asset.totalLiquidatedCollateral.totalUSD
 
                         if borrow_before_24h > 0:
                             volume_data[asset.address]['borrowChange24h'] = (
@@ -127,7 +127,7 @@ class AggreagateTopVolumeProcessor(GenericProcessorAggregate):
                             ) / withdraw_before_24h * 100
                         if liquidation_before_24h > 0:
                             volume_data[asset.address]['liquidationChange24h'] = (
-                                volume_data[asset.address]['totalLiquidatedCollateral'].usd_supply -
+                                volume_data[asset.address]['totalLiquidatedCollateral'].totalUSD -
                                 liquidation_before_24h
                             ) / liquidation_before_24h * 100
 

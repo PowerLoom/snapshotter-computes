@@ -65,16 +65,6 @@ class AaveSupplyData(BaseModel):
     token_supply: int = 0
     usd_supply: float = 0
 
-    def __add__(self, other: 'volumeData') -> 'volumeData':
-        self.token_supply += other.token_supply
-        self.usd_supply += other.usd_supply
-        return self
-
-    def __sub__(self, other: 'volumeData') -> 'volumeData':
-        self.token_supply -= other.token_supply
-        self.usd_supply -= other.usd_supply
-        return self
-
 
 class AaveDebtData(BaseModel):
     token_debt: int = 0
@@ -125,14 +115,14 @@ class eventVolumeData(BaseModel):
 class liquidationData(BaseModel):
     collateralAsset: str
     debtAsset: str
-    debtToCover: AaveDebtData
-    liquidatedCollateral: AaveSupplyData
+    debtToCover: volumeData
+    liquidatedCollateral: volumeData
     blockNumber: int
 
 
 class eventLiquidationData(BaseModel):
     logs: List[Dict]
-    totalLiquidatedCollateral: AaveSupplyData
+    totalLiquidatedCollateral: volumeData
     liquidations: List[liquidationData]
 
 
