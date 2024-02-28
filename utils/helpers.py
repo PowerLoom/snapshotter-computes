@@ -38,7 +38,6 @@ from .constants import VARIABLE_BURN_MINT_EVENT_SIGS
 
 helper_logger = logger.bind(module='PowerLoom|Aave|Helpers')
 
-
 async def get_asset_metadata(
     asset_address: str,
     redis_conn: aioredis.Redis,
@@ -605,16 +604,16 @@ def calculate_current_from_scaled(scaled_value: int, interest: int, index: int) 
     return rayMul(scaled_value, normalized)
 
 
-def rayMul(a: int, b: int):
-    x = Decimal(a) * Decimal(b)
-    y = x + Decimal(HALF_RAY)
-    z = y / Decimal(RAY)
+def rayMul(a: int, b: int) -> int:
+    x = Decimal(str(a)) * Decimal(str(b))
+    y = x + Decimal(str(HALF_RAY))
+    z = y / Decimal(str(RAY))
     return int(z)
 
 
-def rayDiv(a: int, b: int):
-    x = Decimal(b) / 2
-    y = Decimal(a) * Decimal(RAY)
+def rayDiv(a: int, b: int) -> int:
+    x = Decimal(str(b)) / Decimal(2)
+    y = Decimal(str(a)) * Decimal(RAY)
     z = (x + y) / b
     return int(z)
 
@@ -628,15 +627,15 @@ def calculate_linear_interest(
     current_timestamp: int,
     liquidity_rate: int,
 ):
-    result = Decimal(liquidity_rate) * Decimal(current_timestamp - last_update_timestamp)
-    result = result / SECONDS_IN_YEAR
+    result = Decimal(str(liquidity_rate)) * Decimal(current_timestamp - last_update_timestamp)
+    result = result / Decimal(SECONDS_IN_YEAR)
 
-    return Decimal(RAY) + result
+    return RAY + result
 
 # https://github.com/aave/aave-v3-core/blob/master/contracts/protocol/libraries/math/MathUtils.sol#L50
-def calculate_compound_interest(rate: int, current_timestamp: int, last_update_timestamp: int) -> Decimal:
+def calculate_compound_interest(rate: int, current_timestamp: int, last_update_timestamp: int) -> int:
     exp = current_timestamp - last_update_timestamp
-    base = Decimal(rate) / Decimal(SECONDS_IN_YEAR)
+    base = Decimal(str(rate)) / Decimal(SECONDS_IN_YEAR)
 
     if exp == 0:
         return int(RAY)
@@ -644,19 +643,22 @@ def calculate_compound_interest(rate: int, current_timestamp: int, last_update_t
     expMinusOne = exp - 1
     expMinusTwo = max(0, exp - 2)
 
-    basePowerTwo = rayMul(base, base)
+    basePowerTwo = rayMul(rate, rate) / Decimal(SECONDS_IN_YEAR * SECONDS_IN_YEAR)
     basePowerThree = rayMul(basePowerTwo, base)
 
     firstTerm = exp * base
-    secondTerm = Decimal(exp * expMinusOne * basePowerTwo) / Decimal(2)
-    thirdTerm = Decimal(exp * expMinusOne * expMinusTwo * basePowerThree) / Decimal(6)
+    firstTerm = Decimal(str(firstTerm))
+    secondTerm = exp * expMinusOne * basePowerTwo
+    secondTerm = Decimal(str(secondTerm)) / Decimal('2')
+    thirdTerm = exp * expMinusOne * expMinusTwo * basePowerThree
+    thirdTerm = Decimal(str(thirdTerm)) / Decimal('6')
 
-    interest = Decimal(RAY) + firstTerm + secondTerm + thirdTerm
+    interest = Decimal(str(RAY)) + firstTerm + secondTerm + thirdTerm
 
-    return interest
+    return int(interest)
 
 def convert_from_ray(value: int):
     with localcontext() as ctx:
         ctx.prec = 16
-        conv = Decimal(value) / Decimal(RAY)
+        conv = Decimal(str(value)) / Decimal(RAY)
         return float(conv)
