@@ -59,6 +59,7 @@ class UiDataProviderReserveData(BaseModel):
     totalScaledVariableDebt: int
     priceInMarketReferenceCurrency: int
     accruedToTreasury: int
+    isolationModeTotalDebt: int
 
 
 class AaveSupplyData(BaseModel):
@@ -82,6 +83,7 @@ class AssetTotalData(BaseModel):
     stableBorrowRate: int
     variableBorrowIndex: int
     lastUpdateTimestamp: int
+    isolationModeTotalDebt: int
     assetDetails: AssetDetailsData
     rateDetails: RateDetailsData
     timestamp: int = None

@@ -389,6 +389,7 @@ async def get_bulk_asset_data(
                     'totalScaledVariableDebt': data[27],
                     'priceInMarketReferenceCurrency': data[28],
                     'accruedToTreasury': data[39],
+                    'isolationModeTotalDebt': data[41],
                 }
 
                 asset_details = {

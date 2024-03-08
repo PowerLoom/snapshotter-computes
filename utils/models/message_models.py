@@ -36,6 +36,7 @@ class AavePoolTotalAssetSnapshot(SnapshotBase):
     stableBorrowRate: Dict[str, int]
     variableBorrowIndex: Dict[str, int]
     lastUpdateTimestamp: Dict[str, int]
+    isolationModeTotalDebt: Dict[str, int]
     assetDetails: Dict[str, AssetDetailsData]
     rateDetails: Dict[str, RateDetailsData]
     availableLiquidity: Dict[str, AaveSupplyData]
@@ -60,6 +61,7 @@ class AaveTopAssetSnapshot(BaseModel):
     liquidityApy: float
     totalVariableDebt: AaveTopDebtData
     variableApy: float
+    isIsolated: bool
 
 
 class AaveTopAssetsSnapshot(AggregateBase):

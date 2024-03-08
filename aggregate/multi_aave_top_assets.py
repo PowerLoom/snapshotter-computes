@@ -103,6 +103,9 @@ class AggreagateTopAssetsProcessor(GenericProcessorAggregate):
                 usd_debt=snapshot.totalVariableDebt[f'block{max_epoch_block}'].usd_debt,
             )
 
+            isIsolated = snapshot.isolationModeTotalDebt[f'block{max_epoch_block}'] > 0
+            asset_data[asset_metadata['address']]['isIsolated'] = isIsolated
+
         top_assets = []
         for asset in asset_data.values():
             self._logger.info(f'Got asset data: {asset}')

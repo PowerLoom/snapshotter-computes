@@ -242,6 +242,7 @@ async def get_asset_supply_and_debt_bulk(
             stableBorrowRate=asset_data.stableBorrowRate,
             variableBorrowIndex=asset_data.variableBorrowIndex,
             lastUpdateTimestamp=asset_data.lastUpdateTimestamp,
+            isolationModeTotalDebt=asset_data.isolationModeTotalDebt,
             assetDetails=asset_details,
             rateDetails=asset_rate_details,
             timestamp=timestamp,

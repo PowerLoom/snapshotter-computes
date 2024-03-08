@@ -47,6 +47,7 @@ class AssetTotalSupplyProcessor(GenericProcessorSnapshot):
         epoch_asset_snapshot_map_variable_borrow_rate = dict()
 
         epoch_asset_snapshot_map_last_update_timestamp = dict()
+        epoch_asset_snapshot_map_isolated_debt = dict()
         epoch_asset_snapshot_map_asset_details = dict()
         epoch_asset_snapshot_map_available_liquidity = dict()
         epoch_asset_snapshot_map_rate_details = dict()
@@ -103,6 +104,9 @@ class AssetTotalSupplyProcessor(GenericProcessorSnapshot):
             epoch_asset_snapshot_map_rate_details[
                 f'block{block_num}'
             ] = block_asset_supply_debt.rateDetails
+            epoch_asset_snapshot_map_isolated_debt[
+                f'block{block_num}'
+            ] = block_asset_supply_debt.isolationModeTotalDebt
 
             if fetch_ts:
                 if not block_asset_supply_debt.timestamp:
@@ -130,6 +134,7 @@ class AssetTotalSupplyProcessor(GenericProcessorSnapshot):
                 'stableBorrowRate': epoch_asset_snapshot_map_stable_borrow_rate,
                 'variableBorrowIndex': epoch_asset_snapshot_map_variable_borrow_index,
                 'lastUpdateTimestamp': epoch_asset_snapshot_map_last_update_timestamp,
+                'isolationModeTotalDebt': epoch_asset_snapshot_map_isolated_debt,
                 'assetDetails': epoch_asset_snapshot_map_asset_details,
                 'rateDetails': epoch_asset_snapshot_map_rate_details,
                 'availableLiquidity': epoch_asset_snapshot_map_available_liquidity,
