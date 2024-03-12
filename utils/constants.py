@@ -82,20 +82,6 @@ aave_oracle_contract_obj = current_node['web3_client'].eth.contract(
     abi=aave_oracle_abi,
 )
 
-dummy_stable_debt_contract_obj = current_node['web3_client'].eth.contract(
-    address=Web3.toChecksumAddress(
-        web3_constants.ADDRESS_ZERO,
-    ),
-    abi=stable_debt_token_abi,
-)
-
-dummy_variable_debt_contract_obj = current_node['web3_client'].eth.contract(
-    address=Web3.toChecksumAddress(
-        web3_constants.ADDRESS_ZERO,
-    ),
-    abi=vaiable_debt_token_abi,
-)
-
 # FUNCTION SIGNATURES and OTHER CONSTANTS
 AAVE_EVENT_SIGS = {
     'Withdraw': 'Withdraw(address,address,address,uint256)',
@@ -112,33 +98,6 @@ AAVE_EVENTS_ABI = {
     'LiquidationCall': pool_contract_obj.events.LiquidationCall._get_event_abi(),
 }
 AAVE_CORE_EVENTS = ('Withdraw', 'Supply', 'Borrow', 'Repay')
-
-VARIABLE_BURN_MINT_EVENT_SIGS = {
-    'Mint': 'Mint(address,address,uint256,uint256,uint256)',
-    'Burn': 'Burn(address,address,uint256,uint256,uint256)',
-}
-
-VARIABLE_BURN_MINT_EVENT_ABI = {
-    'Mint': dummy_variable_debt_contract_obj.events.Mint._get_event_abi(),
-    'Burn': dummy_variable_debt_contract_obj.events.Burn._get_event_abi(),
-}
-
-STABLE_BURN_MINT_EVENT_SIGS = {
-    'Mint': 'Mint(address,address,uint256,uint256,uint256,uint256,uint256,uint256)',
-    'Burn': 'Burn(address,uint256,uint256,uint256,uint256,uint256)',
-}
-
-STABLE_BURN_MINT_EVENT_ABI = {
-    'Mint': dummy_stable_debt_contract_obj.events.Mint._get_event_abi(),
-    'Burn': dummy_stable_debt_contract_obj.events.Burn._get_event_abi(),
-}
-
-tokens_decimals = {
-    'USDT': 6,
-    'DAI': 18,
-    'USDC': 6,
-    'WETH': 18,
-}
 
 # AAVE Base 27 format
 RAY = 1000000000000000000000000000
