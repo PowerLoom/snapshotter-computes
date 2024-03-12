@@ -199,105 +199,6 @@ async def get_pool_supply_events(
         raise err
 
 
-async def get_debt_burn_mint_events(
-    asset_address: str,
-    asset_metadata: dict,
-    rpc_helper: RpcHelper,
-    from_block: int,
-    to_block: int,
-    redis_conn: aioredis.Redis,
-):
-    try:
-
-        cached_event_dict = await redis_conn.zrangebyscore(
-            name=aave_cached_block_height_burn_mint_data.format(asset_address),
-            min=int(from_block),
-            max=int(to_block),
-        )
-
-        if cached_event_dict:
-            event_dict = {
-                json.loads(
-                    event.decode(
-                        'utf-8',
-                    ),
-                )['blockHeight']: json.loads(
-                    event.decode('utf-8'),
-                )['events']
-                for event in cached_event_dict
-            }
-            return event_dict
-
-        variable_event_sig, variable_event_abi = get_event_sig_and_abi(
-            VARIABLE_BURN_MINT_EVENT_SIGS,
-            VARIABLE_BURN_MINT_EVENT_ABI,
-        )
-
-        variable_events = await rpc_helper.get_events_logs(
-            contract_address=asset_metadata['reserve_addresses']['variable_debt_token'],
-            to_block=to_block,
-            from_block=from_block,
-            topics=[variable_event_sig],
-            event_abi=variable_event_abi,
-            redis_conn=redis_conn,
-        )
-
-        event_dict = {}
-
-        for block_num in range(from_block, to_block + 1):
-            event_dict[block_num] = list(filter(lambda x: x['blockNumber'] == block_num, variable_events))
-
-        stable_event_sig, stable_event_abi = get_event_sig_and_abi(
-            STABLE_BURN_MINT_EVENT_SIGS,
-            STABLE_BURN_MINT_EVENT_ABI,
-        )
-
-        stable_events = await rpc_helper.get_events_logs(
-            contract_address=asset_metadata['reserve_addresses']['stable_debt_token'],
-            to_block=to_block,
-            from_block=from_block,
-            topics=[stable_event_sig],
-            event_abi=stable_event_abi,
-            redis_conn=redis_conn,
-        )
-
-        for event in stable_events:
-            event_dict[event['blockNumber']].append(event)
-
-        if len(event_dict) > 0:
-
-            redis_cache_mapping = {
-                Web3.to_json({'blockHeight': height, 'events': events}): int(height)
-                for height, events in event_dict.items()
-            }
-
-            source_chain_epoch_size = int(await redis_conn.get(source_chain_epoch_size_key()))
-
-            await asyncio.gather(
-                redis_conn.zadd(
-                    name=aave_cached_block_height_burn_mint_data.format(asset_address),
-                    mapping=redis_cache_mapping,
-                ),
-                redis_conn.zremrangebyscore(
-                    name=aave_cached_block_height_burn_mint_data.format(asset_address),
-                    min=0,
-                    max=from_block - source_chain_epoch_size * 3,
-                ),
-            )
-
-        return event_dict
-
-    except Exception as err:
-        # this will be retried in next cycle
-        helper_logger.opt(exception=True).error(
-            (
-                f'Error while fetcing Aave variable mint and burn for {asset_address} '
-                f'in block range {from_block} : {to_block}'
-            ),
-        )
-        raise err
-
-
 def get_maker_pair_data(prop):
     prop = prop.lower()
     if prop.lower() == 'name':
@@ -306,6 +207,7 @@ def get_maker_pair_data(prop):
         return 'MKR'
     else:
         return 'Maker'
+
 
 async def get_bulk_asset_data(
     redis_conn: aioredis.Redis,
@@ -551,72 +453,16 @@ async def get_bulk_asset_data(
         )
         raise err
 
-def calculate_initial_scaled_supply(
-    supply: int,
-    current_timestamp: dict,
-    last_update: int,
-    liquidity_rate: int,
-    liquidity_index: int,
-) -> int:
-    interest = calculate_linear_interest(
-        last_update_timestamp=last_update,
-        current_timestamp=current_timestamp,
-        liquidity_rate=liquidity_rate,
-    )
-    normalized = calculate_normalized_value(
-        interest_rate=interest,
-        index=liquidity_index,
-    )
-    return rayDiv(supply, normalized)
 
 
-def calculate_initial_scaled_variable(
-    variable_debt: int,
-    variable_rate: int,
-    variable_index: int,
-    current_timestamp: int,
-    last_update: int,
-) -> int:
-    variable_interest = calculate_compound_interest_rate(
-        rate=variable_rate,
-        current_timestamp=current_timestamp,
-        last_update_timestamp=last_update,
-    )
-    normalized_variable_debt = calculate_normalized_value(
-        interest_rate=variable_interest,
-        index=variable_index,
-    )
-    return rayDiv(variable_debt, normalized_variable_debt)
-
-
-def calculate_initial_scaled_stable(
-    stable_debt: int,
-    avg_stable_rate: int,
-    current_timestamp: int,
-    last_update: int,
-) -> int:
-    stable_interest = calculate_compound_interest_rate(
-        rate=avg_stable_rate,
-        current_timestamp=current_timestamp,
-        last_update_timestamp=last_update,
-    )
-    return rayDiv(stable_debt, stable_interest)
-
-
-def calculate_scaled_from_current(current_value: int, interest: int, index: int) -> int:
-    normalized = calculate_normalized_value(
-        interest_rate=interest,
-        index=index,
-    )
-    return rayDiv(current_value, normalized)
-
-
+# Normalizes the interest rate using the given index, and then applies the rate to the scaled value
 def calculate_current_from_scaled(scaled_value: int, interest_rate: int, index: int) -> int:
     normalized = calculate_normalized_value(
         interest_rate=interest_rate,
         index=index,
     )
     return rayMul(scaled_value, normalized)
+
 
 # multiply two ray values, rounding half up to the nearest ray
 # on-chain implementation here:
@@ -627,6 +473,7 @@ def rayMul(a: int, b: int) -> int:
     z = y / Decimal(str(RAY))
     return int(z)
 
+
 # Divides two ray values, rounding half up to the nearest ray
 # on-chain implementation here:
 # https://github.com/aave/aave-v3-core/blob/master/contracts/protocol/libraries/math/WadRayMath.sol#L83
@@ -636,21 +483,11 @@ def rayDiv(a: int, b: int) -> int:
     z = (x + y) / b
     return int(z)
 
+
 # calculates the normalized interest rate value by multiplying the interest rate by the current rate index
 # example here: https://github.com/aave/aave-utilities/blob/master/packages/math-utils/src/pool-math.ts#L51
 def calculate_normalized_value(interest_rate: int, index: int) -> int:
     return rayMul(interest_rate, index)
-
-# https://github.com/aave/aave-v3-core/blob/master/contracts/protocol/libraries/math/MathUtils.sol#L23
-def calculate_linear_interest(
-    last_update_timestamp: int,
-    current_timestamp: int,
-    liquidity_rate: int,
-):
-    result = Decimal(str(liquidity_rate)) * Decimal(current_timestamp - last_update_timestamp)
-    result = result / Decimal(SECONDS_IN_YEAR)
-
-    return RAY + result
 
 
 # Aave uses a binomial approximation to calculate compound interest in V3 to save on gas costs
@@ -699,6 +536,7 @@ def calculate_compound_interest_rate(rate: int, current_timestamp: int, last_upd
     interest = Decimal(str(RAY)) + firstTerm + secondTerm + thirdTerm
 
     return int(interest)
+
 
 # converts a ray value to a float, rounding to 16 decimal places
 def convert_from_ray(value: int) -> float:
