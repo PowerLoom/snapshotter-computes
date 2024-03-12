@@ -50,6 +50,8 @@ class AssetSupplyVolumeProcessor(GenericProcessorSnapshot):
             max_block_timestamp = result['timestamp']
 
         result.pop('timestamp', None)
+
+        # flatten the event logs into a single list
         events = [log for key in result.keys() for log in result[key]['logs']]
 
         supply_volume_snapshot = AaveSupplyVolumeSnapshot(

@@ -140,8 +140,14 @@ tokens_decimals = {
     'WETH': 18,
 }
 
+# AAVE Base 27 format
 RAY = 1000000000000000000000000000
 HALF_RAY = 500000000000000000000000000
+
 SECONDS_IN_YEAR = 31536000
+
+# Decimal base for AAVE price oracle values
 ORACLE_DECIMALS = 8
+
+# Divisor for AAVE rate detail values
 DETAILS_BASIS = 10000

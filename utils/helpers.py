@@ -149,6 +149,7 @@ async def get_pool_supply_events(
                 AAVE_EVENTS_ABI,
             )
 
+            # events for all assets are emitted by the single pool contract when an action is taken
             events = await rpc_helper.get_events_logs(
                 contract_address=worker_settings.contract_addresses.aave_v3_pool,
                 to_block=to_block,
@@ -173,6 +174,7 @@ async def get_pool_supply_events(
 
                 source_chain_epoch_size = int(await redis_conn.get(source_chain_epoch_size_key()))
 
+                # save all assets' event data in redis and remove stale events
                 await asyncio.gather(
                     redis_conn.zadd(
                         name=aave_cached_block_height_core_event_data,
@@ -321,19 +323,25 @@ async def get_bulk_asset_data(
         if asset_list_set_cache:
             asset_set = {Web3.toChecksumAddress(asset.decode('utf-8')) for asset in asset_list_set_cache}
         else:
+            # if asset set does not exist, fetch it from the pool contract
+            # https://github.com/aave/aave-v3-core/blob/master/contracts/protocol/pool/Pool.sol#L516
             [asset_list] = await rpc_helper.web3_call(
                 tasks=[pool_contract_obj.functions.getReservesList()],
                 redis_conn=redis_conn,
             )
 
+            # save the asset set in redis for use in future epochs
             await redis_conn.sadd(
                 aave_pool_asset_set_data, *asset_list,
             )
             asset_set = set(asset_list)
 
         source_chain_epoch_size = int(await redis_conn.get(source_chain_epoch_size_key()))
-
+        
+        # PoolAddressProvider contract serves as a registry for the Aave protocol's core contracts
+        # to be consumed by the Aave UI and the protocol's contracts
         param = Web3.toChecksumAddress(worker_settings.contract_addresses.pool_address_provider)
+
         function = ui_pool_data_provider_contract_obj.functions.getReservesData(param)
 
         # generate types for abi decoding
@@ -353,6 +361,8 @@ async def get_bulk_asset_data(
             abi=ui_pool_data_provider_contract_obj.abi,
         )
 
+        # retrieve bulk asset data using the Aave UiPoolDataProviderV3 contract
+        # https://docs.aave.com/developers/periphery-contracts/uipooldataproviderv3#getreservesdata
         asset_data_bulk = await rpc_helper.batch_eth_call_on_block_range_hex_data(
             abi_dict=abi_dict,
             contract_address=worker_settings.contract_addresses.ui_pool_data_provider,
@@ -366,15 +376,19 @@ async def get_bulk_asset_data(
         all_assets_data_dict = {asset: {} for asset in asset_set}
         all_assets_price_dict = {block_num: {} for block_num in range(from_block, to_block + 1)}
 
+        # iterate over the bulk asset data response and decode the data
         for i, block_num in enumerate(range(from_block, to_block + 1)):
             decoded_assets_data = abi.decode(
                 (type_string, output_type[1]), asset_data_bulk[i],
             )
 
+            # each data point in the response array represents a single asset
             for data in decoded_assets_data[0]:
 
                 asset = Web3.toChecksumAddress(data[0])
 
+                # full response interface can be found in the following github repo:
+                # https://github.com/aave/aave-v3-periphery/blob/master/contracts/misc/interfaces/IUiPoolDataProviderV3.sol#L17
                 asset_data = {
                     'liquidityIndex': data[13],
                     'variableBorrowIndex': data[14],
@@ -433,7 +447,7 @@ async def get_bulk_asset_data(
                     all_assets_data_dict[asset][block_num] = data_dict
                     all_assets_price_dict[block_num][asset] = asset_data['priceInMarketReferenceCurrency']
 
-        # cache each data dict for later retrieval by snapshotter
+        # cache each data dict for later retrieval by snapshotter during compute 
         for address, data_dict in all_assets_data_dict.items():
             # cache data at height
             if len(data_dict) > 0:
@@ -550,7 +564,7 @@ def calculate_initial_scaled_supply(
         liquidity_rate=liquidity_rate,
     )
     normalized = calculate_normalized_value(
-        interest=interest,
+        interest_rate=interest,
         index=liquidity_index,
     )
     return rayDiv(supply, normalized)
@@ -563,13 +577,13 @@ def calculate_initial_scaled_variable(
     current_timestamp: int,
     last_update: int,
 ) -> int:
-    variable_interest = calculate_compound_interest(
+    variable_interest = calculate_compound_interest_rate(
         rate=variable_rate,
         current_timestamp=current_timestamp,
         last_update_timestamp=last_update,
     )
     normalized_variable_debt = calculate_normalized_value(
-        interest=variable_interest,
+        interest_rate=variable_interest,
         index=variable_index,
     )
     return rayDiv(variable_debt, normalized_variable_debt)
@@ -581,7 +595,7 @@ def calculate_initial_scaled_stable(
     current_timestamp: int,
     last_update: int,
 ) -> int:
-    stable_interest = calculate_compound_interest(
+    stable_interest = calculate_compound_interest_rate(
         rate=avg_stable_rate,
         current_timestamp=current_timestamp,
         last_update_timestamp=last_update,
@@ -591,36 +605,41 @@ def calculate_initial_scaled_stable(
 
 def calculate_scaled_from_current(current_value: int, interest: int, index: int) -> int:
     normalized = calculate_normalized_value(
-        interest=interest,
+        interest_rate=interest,
         index=index,
     )
     return rayDiv(current_value, normalized)
 
 
-def calculate_current_from_scaled(scaled_value: int, interest: int, index: int) -> int:
+def calculate_current_from_scaled(scaled_value: int, interest_rate: int, index: int) -> int:
     normalized = calculate_normalized_value(
-        interest=interest,
+        interest_rate=interest_rate,
         index=index,
     )
     return rayMul(scaled_value, normalized)
 
-
+# multiply two ray values, rounding half up to the nearest ray
+# on-chain implementation here:
+# https://github.com/aave/aave-v3-core/blob/master/contracts/protocol/libraries/math/WadRayMath.sol#L65
 def rayMul(a: int, b: int) -> int:
     x = Decimal(str(a)) * Decimal(str(b))
     y = x + Decimal(str(HALF_RAY))
     z = y / Decimal(str(RAY))
     return int(z)
 
-
+# Divides two ray values, rounding half up to the nearest ray
+# on-chain implementation here:
+# https://github.com/aave/aave-v3-core/blob/master/contracts/protocol/libraries/math/WadRayMath.sol#L83
 def rayDiv(a: int, b: int) -> int:
     x = Decimal(str(b)) / Decimal(2)
     y = Decimal(str(a)) * Decimal(RAY)
     z = (x + y) / b
     return int(z)
 
-
-def calculate_normalized_value(interest: int, index: int) -> int:
-    return rayMul(interest, index)
+# calculates the normalized interest rate value by multiplying the interest rate by the current rate index
+# example here: https://github.com/aave/aave-utilities/blob/master/packages/math-utils/src/pool-math.ts#L51
+def calculate_normalized_value(interest_rate: int, index: int) -> int:
+    return rayMul(interest_rate, index)
 
 # https://github.com/aave/aave-v3-core/blob/master/contracts/protocol/libraries/math/MathUtils.sol#L23
 def calculate_linear_interest(
@@ -633,32 +652,56 @@ def calculate_linear_interest(
 
     return RAY + result
 
+
+# Aave uses a binomial approximation to calculate compound interest in V3 to save on gas costs
+# The approximation follows the formula: (1+x)^n ~= 1 + n*x + [n/2 * (n-1)] * x^2 + [n/6 * (n-1) * (n-2) * x^3]
+# This implementation is based on the following Aave backend utility library:
+# https://github.com/aave/aave-utilities/blob/master/packages/math-utils/src/ray.math.ts#L52 
+# The on-chain implementation can be found here:
 # https://github.com/aave/aave-v3-core/blob/master/contracts/protocol/libraries/math/MathUtils.sol#L50
-def calculate_compound_interest(rate: int, current_timestamp: int, last_update_timestamp: int) -> int:
+def calculate_compound_interest_rate(rate: int, current_timestamp: int, last_update_timestamp: int) -> int:
+
+    # get the time elapsed in seconds since last update, n in the formula
     exp = current_timestamp - last_update_timestamp
+
+    # get the annualized rate per second, x in the formula
     base = Decimal(str(rate)) / Decimal(SECONDS_IN_YEAR)
 
+    # if the time elapsed is 0, return the base rate of 1
     if exp == 0:
         return int(RAY)
 
+    # (n - 1)
     expMinusOne = exp - 1
+    # (n - 2)
     expMinusTwo = max(0, exp - 2)
 
+    # pre-calculate base^2, equivalent to x^2 in the formula: (rate / SECONDS_IN_YEAR)^2
     basePowerTwo = rayMul(rate, rate) / Decimal(SECONDS_IN_YEAR * SECONDS_IN_YEAR)
+
+    # pre-calculate base^3, equivalent to x^3 in the formula
     basePowerThree = rayMul(basePowerTwo, base)
 
+    # calculate the first, second, and third terms of the binomial approximation
+    # n*x
     firstTerm = exp * base
     firstTerm = Decimal(str(firstTerm))
+
+    # [n/2 * (n-1)] * x^2
     secondTerm = exp * expMinusOne * basePowerTwo
     secondTerm = Decimal(str(secondTerm)) / Decimal('2')
+
+    # [n/6 * (n-1) * (n-2)] * x^3
     thirdTerm = exp * expMinusOne * expMinusTwo * basePowerThree
     thirdTerm = Decimal(str(thirdTerm)) / Decimal('6')
 
+    # calculate the total interest using the binomial approximation
     interest = Decimal(str(RAY)) + firstTerm + secondTerm + thirdTerm
 
     return int(interest)
 
-def convert_from_ray(value: int):
+# converts a ray value to a float, rounding to 16 decimal places
+def convert_from_ray(value: int) -> float:
     with localcontext() as ctx:
         ctx.prec = 16
         conv = Decimal(str(value)) / Decimal(RAY)

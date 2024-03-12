@@ -15,7 +15,7 @@ from ..redis_keys import aave_cached_block_height_asset_rate_details
 from .constants import AAVE_CORE_EVENTS
 from .constants import DETAILS_BASIS
 from .constants import ORACLE_DECIMALS
-from .helpers import calculate_compound_interest
+from .helpers import calculate_compound_interest_rate
 from .helpers import calculate_current_from_scaled
 from .helpers import convert_from_ray
 from .helpers import get_asset_metadata
@@ -91,6 +91,7 @@ async def get_asset_supply_and_debt_bulk(
     asset_rates_dict = {}
 
     # get cached asset data from redis
+    # data is retrieved in bulk by the asset_data preloader and is saved to the cache on epoch release
     [
         cached_asset_data_dict,
         cached_asset_details_dict,
@@ -119,6 +120,7 @@ async def get_asset_supply_and_debt_bulk(
         ),
     )
 
+    # decode and parse the cached data if it exists
     if cached_asset_data_dict and len(cached_asset_data_dict) == to_block - (from_block - 1):
         asset_data_dict = {
             json.loads(
@@ -161,35 +163,44 @@ async def get_asset_supply_and_debt_bulk(
         current_block_details = block_details_dict.get(block_num, None)
         timestamp = current_block_details.get('timestamp')
 
+        # get the asset data, details and rate details for the current block
         asset_data = asset_data_dict.get(block_num, None)
         asset_details = asset_details_dict.get(block_num, None)
         asset_rate_details = asset_rates_dict.get(block_num, None)
 
+        # initialize the data models using the retrieved data
         asset_data = UiDataProviderReserveData.parse_obj(asset_data)
         asset_details = AssetDetailsData.parse_obj(asset_details)
         asset_rate_details = RateDetailsData.parse_obj(asset_rate_details)
 
-        variable_interest = calculate_compound_interest(
+        # Calculate the accrued interest for the asset from the last update timestamp to the current block timestamp.
+        # Last update timestamp is updated when an action (borrow, supply, etc.) is taken on-chain, but interest 
+        # continues to accrue in the supply and debt token contracts between actions.
+        variable_interest = calculate_compound_interest_rate(
             rate=asset_data.variableBorrowRate,
             current_timestamp=timestamp,
             last_update_timestamp=asset_data.lastUpdateTimestamp,
 
         )
 
-        stable_interest = calculate_compound_interest(
+        stable_interest = calculate_compound_interest_rate(
             rate=asset_data.averageStableRate,
             current_timestamp=timestamp,
             last_update_timestamp=asset_data.stableDebtLastUpdateTimestamp,
 
         )
 
+        # Apply the interest rate to the scaled variable debt to get the current variable debt
+        # The scaled debt value is the value of the debt in ray at the last update timestamp
         total_variable_debt = calculate_current_from_scaled(
             scaled_value=asset_data.totalScaledVariableDebt,
             index=asset_data.variableBorrowIndex,
-            interest=variable_interest,
+            interest_rate=variable_interest,
         )
 
+        # stable debt is not scaled, so we can directly apply the interest rate to the stable debt
         total_stable_debt = rayMul(asset_data.totalPrincipalStableDebt, stable_interest)
+
         total_supply = asset_data.availableLiquidity + total_variable_debt + total_stable_debt
 
         asset_usd_price = asset_data.priceInMarketReferenceCurrency * (10 ** -ORACLE_DECIMALS)
@@ -200,7 +211,7 @@ async def get_asset_supply_and_debt_bulk(
         available_liquidity_usd = (asset_data.availableLiquidity * asset_usd_price) / \
             (10 ** int(asset_metadata['decimals']))
 
-        # Normalize asset detail rates
+        # Normalize asset detail rates, rates are returned in 5 decimal format
         asset_details.ltv = (asset_details.ltv / DETAILS_BASIS) * 100
         asset_details.liqThreshold = (asset_details.liqThreshold / DETAILS_BASIS) * 100
         asset_details.resFactor = (asset_details.resFactor / DETAILS_BASIS) * 100
@@ -209,7 +220,7 @@ async def get_asset_supply_and_debt_bulk(
         asset_details.eliqThreshold = (asset_details.eliqThreshold / DETAILS_BASIS) * 100
         asset_details.eliqBonus = ((asset_details.eliqBonus / DETAILS_BASIS) * 100) - 100
 
-        # Normalize rate detail rates
+        # Normalize rate detail rates, rates and slopes are return in RAY format
         asset_rate_details.utilRate = total_variable_debt / total_supply
         asset_rate_details.varRateSlope1 = convert_from_ray(asset_rate_details.varRateSlope1)
         asset_rate_details.varRateSlope2 = convert_from_ray(asset_rate_details.varRateSlope2)
@@ -298,6 +309,9 @@ async def get_asset_trade_volume(
         rpc_helper=rpc_helper,
     )
 
+    # fetch pre-cached prices for all assets in the pool
+    # Used to calculate the USD value of any debt that may be repaid during
+    # the liquidation of the current asset, along with the USD value of the asset itself
     price_dict = await get_all_asset_prices(
         from_block,
         to_block,
@@ -305,6 +319,8 @@ async def get_asset_trade_volume(
         rpc_helper,
     )
 
+    # fetch events for all assets in the pool from redis if cached
+    # event data is retrieved and cached in the volume_events preloader
     supply_events = await get_pool_supply_events(
         rpc_helper=rpc_helper,
         from_block=from_block,
@@ -364,10 +380,13 @@ async def get_asset_trade_volume(
     )
 
     for block_num in range(from_block, to_block + 1):
+
+        # get the asset price for the current block
         block_all_asset_prices = price_dict.get(block_num, None)
         asset_usd_price = block_all_asset_prices.get(asset_address, 0)
         asset_usd_price = asset_usd_price * (10 ** -ORACLE_DECIMALS) / (10 ** int(asset_metadata['decimals']))
 
+        # iterate over the current block's events and update the respective volume data
         for event in asset_supply_events.get(block_num, None):
             if event['event'] in AAVE_CORE_EVENTS:
                 amount = event['args']['amount']
@@ -389,13 +408,16 @@ async def get_asset_trade_volume(
                     epoch_results.withdraw.logs.append(event)
                     epoch_results.withdraw.totals += volume
 
-            # event is a LiquidationCall
+            # if the event is not in AAVE_CORE_EVENTS, then the event is a LiquidationCall
             else:
                 liquidated_collateral = event['args']['liquidatedCollateralAmount']
                 debt_to_cover = event['args']['debtToCover']
                 debt_asset = event['args']['debtAsset']
+
+                # get the price for the repaid debt asset
                 debt_usd_price = block_all_asset_prices.get(Web3.to_checksum_address(debt_asset), 0)
 
+                # fetch decimal data for the debt asset
                 debt_asset_metadata = await get_asset_metadata(
                     asset_address=debt_asset,
                     redis_conn=redis_conn,

@@ -21,7 +21,6 @@ class BulkAssetDataPreloader(GenericPreloader):
         min_chain_height = epoch.begin
         max_chain_height = epoch.end
         # get asset reserve data for all blocks in range for all assets in the Aave pool
-        # return dict of dicts {asset_address: {block_height: data, ...} ...}
         try:
             await get_bulk_asset_data(
                 redis_conn=redis_conn,
