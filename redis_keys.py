@@ -24,12 +24,6 @@ aave_cached_block_height_asset_rate_details = (
     ':{}:cachedAaveBlockHeightAssetRateDetails'
 )
 
-aave_cached_block_height_burn_mint_data = (
-    'aave:assetContract:' + settings.namespace +
-    ':{}:cachedAaveBlockHeightBurnMintData'
-)
-
-
 aave_pool_asset_set_data = (
     'aave:poolContract:' + settings.namespace + ':assetSetData'
 )

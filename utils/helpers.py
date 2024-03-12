@@ -17,7 +17,6 @@ from ..redis_keys import aave_cached_block_height_asset_data
 from ..redis_keys import aave_cached_block_height_asset_details
 from ..redis_keys import aave_cached_block_height_asset_rate_details
 from ..redis_keys import aave_cached_block_height_assets_prices
-from ..redis_keys import aave_cached_block_height_burn_mint_data
 from ..redis_keys import aave_cached_block_height_core_event_data
 from ..redis_keys import aave_pool_asset_set_data
 from ..settings.config import settings as worker_settings
@@ -29,11 +28,7 @@ from .constants import HALF_RAY
 from .constants import pool_contract_obj
 from .constants import RAY
 from .constants import SECONDS_IN_YEAR
-from .constants import STABLE_BURN_MINT_EVENT_ABI
-from .constants import STABLE_BURN_MINT_EVENT_SIGS
 from .constants import ui_pool_data_provider_contract_obj
-from .constants import VARIABLE_BURN_MINT_EVENT_ABI
-from .constants import VARIABLE_BURN_MINT_EVENT_SIGS
 
 
 helper_logger = logger.bind(module='PowerLoom|Aave|Helpers')
@@ -239,7 +234,7 @@ async def get_bulk_asset_data(
             asset_set = set(asset_list)
 
         source_chain_epoch_size = int(await redis_conn.get(source_chain_epoch_size_key()))
-        
+
         # PoolAddressProvider contract serves as a registry for the Aave protocol's core contracts
         # to be consumed by the Aave UI and the protocol's contracts
         param = Web3.toChecksumAddress(worker_settings.contract_addresses.pool_address_provider)
@@ -349,7 +344,7 @@ async def get_bulk_asset_data(
                     all_assets_data_dict[asset][block_num] = data_dict
                     all_assets_price_dict[block_num][asset] = asset_data['priceInMarketReferenceCurrency']
 
-        # cache each data dict for later retrieval by snapshotter during compute 
+        # cache each data dict for later retrieval by snapshotter during compute
         for address, data_dict in all_assets_data_dict.items():
             # cache data at height
             if len(data_dict) > 0:
@@ -493,7 +488,7 @@ def calculate_normalized_value(interest_rate: int, index: int) -> int:
 # Aave uses a binomial approximation to calculate compound interest in V3 to save on gas costs
 # The approximation follows the formula: (1+x)^n ~= 1 + n*x + [n/2 * (n-1)] * x^2 + [n/6 * (n-1) * (n-2) * x^3]
 # This implementation is based on the following Aave backend utility library:
-# https://github.com/aave/aave-utilities/blob/master/packages/math-utils/src/ray.math.ts#L52 
+# https://github.com/aave/aave-utilities/blob/master/packages/math-utils/src/ray.math.ts#L52
 # The on-chain implementation can be found here:
 # https://github.com/aave/aave-v3-core/blob/master/contracts/protocol/libraries/math/MathUtils.sol#L50
 def calculate_compound_interest_rate(rate: int, current_timestamp: int, last_update_timestamp: int) -> int:
