@@ -20,10 +20,6 @@ erc20_abi = read_json_file(
     worker_settings.uniswap_contract_abis.erc20,
     constants_logger,
 )
-router_contract_abi = read_json_file(
-    worker_settings.uniswap_contract_abis.router,
-    constants_logger,
-)
 uniswap_trade_events_abi = read_json_file(
     worker_settings.uniswap_contract_abis.trade_events,
     constants_logger,
@@ -35,12 +31,6 @@ factory_contract_abi = read_json_file(
 
 
 # Init Uniswap V2 Core contract Objects
-router_contract_obj = current_node['web3_client'].eth.contract(
-    address=Web3.toChecksumAddress(
-        worker_settings.contract_addresses.iuniswap_v2_router,
-    ),
-    abi=router_contract_abi,
-)
 factory_contract_obj = current_node['web3_client'].eth.contract(
     address=Web3.toChecksumAddress(
         worker_settings.contract_addresses.iuniswap_v2_factory,
@@ -59,9 +49,9 @@ usdc_eth_contract_obj = current_node['web3_client'].eth.contract(
     ),
     abi=pair_contract_abi,
 )
-eth_usdt_contract_obj = current_node['web3_client'].eth.contract(
+eth_usdbc_contract_obj = current_node['web3_client'].eth.contract(
     address=Web3.toChecksumAddress(
-        worker_settings.contract_addresses.USDT_WETH_PAIR,
+        worker_settings.contract_addresses.USDbC_WETH_PAIR,
     ),
     abi=pair_contract_abi,
 )
@@ -79,7 +69,7 @@ UNISWAP_EVENTS_ABI = {
     'Burn': usdc_eth_contract_obj.events.Burn._get_event_abi(),
 }
 tokens_decimals = {
-    'USDT': 6,
+    'USDbC': 6,
     'DAI': 18,
     'USDC': 6,
     'WETH': 18,
