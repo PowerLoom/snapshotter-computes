@@ -20,10 +20,6 @@ erc20_abi = read_json_file(
     worker_settings.uniswap_contract_abis.erc20,
     constants_logger,
 )
-router_contract_abi = read_json_file(
-    worker_settings.uniswap_contract_abis.router,
-    constants_logger,
-)
 uniswap_trade_events_abi = read_json_file(
     worker_settings.uniswap_contract_abis.trade_events,
     constants_logger,
@@ -35,12 +31,6 @@ factory_contract_abi = read_json_file(
 
 
 # Init Uniswap V2 Core contract Objects
-router_contract_obj = current_node['web3_client'].eth.contract(
-    address=Web3.to_checksum_address(
-        worker_settings.contract_addresses.iuniswap_v2_router,
-    ),
-    abi=router_contract_abi,
-)
 factory_contract_obj = current_node['web3_client'].eth.contract(
     address=Web3.to_checksum_address(
         worker_settings.contract_addresses.iuniswap_v2_factory,
