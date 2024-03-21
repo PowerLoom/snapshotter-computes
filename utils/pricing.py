@@ -6,7 +6,6 @@ from web3 import Web3
 from ..settings.config import settings as worker_settings
 from .constants import factory_contract_obj
 from .constants import pair_contract_abi
-from .constants import router_contract_abi
 from .helpers import get_pair
 from .helpers import get_pair_metadata
 
@@ -111,48 +110,76 @@ async def get_token_derived_eth(
         return token_derived_eth_dict
 
     # get white
-    router_abi_dict = get_contract_abi_dict(router_contract_abi)
-    token_derived_eth_list = await rpc_helper.batch_eth_call_on_block_range(
-        abi_dict=router_abi_dict,
-        function_name='getAmountsOut',
-        contract_address=worker_settings.contract_addresses.iuniswap_v2_router,
-        from_block=from_block,
-        to_block=to_block,
-        params=[
-            10 ** int(token_metadata['decimals']),
-            [
-                Web3.to_checksum_address(token_metadata['address']),
-                Web3.to_checksum_address(worker_settings.contract_addresses.WETH),
-            ],
-        ],
+    pair = await get_pair(
+        factory_contract_obj, token_address, worker_settings.contract_addresses.WETH,
+        rpc_helper,
     )
 
-    if len(token_derived_eth_list) < to_block - (from_block - 1):
+    if pair == '0x0000000000000000000000000000000000000000':
+        # No WETH pair found, price unavailable
+        for block_num in range(from_block, to_block + 1):
+            token_derived_eth_dict[block_num] = 0
+
+        return token_derived_eth_dict
+
+    pair_abi_dict = get_contract_abi_dict(pair_contract_abi)
+    pair_reserves_list = await rpc_helper.batch_eth_call_on_block_range(
+        abi_dict=pair_abi_dict,
+        function_name='getReserves',
+        contract_address=pair,
+        from_block=from_block,
+        to_block=to_block,
+    )
+
+    if len(pair_reserves_list) < to_block - (from_block - 1):
         pricing_logger.trace(
             (
-                'Unable to get token derived eth'
-                'from_block: {}, to_block: {}, token_derived_eth_list: {}'
+                'Unable to get pair price and white token reserves'
+                'from_block: {}, to_block: {}, pair_reserves_list: {}'
             ),
             from_block,
             to_block,
-            token_derived_eth_list,
+            pair_reserves_list,
         )
 
         raise Exception(
-            'Unable to get token derived eth'
+            'Unable to get pair price and white token reserves'
             f'from_block: {from_block}, to_block: {to_block}, '
-            f'got result: {token_derived_eth_list}',
+            f'got result: {pair_reserves_list}',
         )
+
+    pair_metadata = await get_pair_metadata(
+        pair_address=pair,
+        rpc_helper=rpc_helper,
+    )
 
     index = 0
     for block_num in range(from_block, to_block + 1):
-        if not token_derived_eth_list[index]:
-            token_derived_eth_dict[block_num] = 0
+        token_price = 0
 
-        _, derivedEth = token_derived_eth_list[index][0]
-        token_derived_eth_dict[block_num] = (
-            derivedEth / 10 ** 18 if derivedEth != 0 else 0
+        pair_reserve_token0 = pair_reserves_list[index][0] / 10 ** int(
+            pair_metadata['token0']['decimals'],
         )
+        pair_reserve_token1 = pair_reserves_list[index][1] / 10 ** int(
+            pair_metadata['token1']['decimals'],
+        )
+
+        if float(pair_reserve_token0) == float(0) or float(
+            pair_reserve_token1,
+        ) == float(0):
+            token_derived_eth_dict[block_num] = token_price
+        elif (
+            Web3.to_checksum_address(pair_metadata['token0']['address']) ==
+            token_address
+        ):
+            token_derived_eth_dict[block_num] = float(
+                pair_reserve_token1 / pair_reserve_token0,
+            )
+        else:
+            token_derived_eth_dict[block_num] = float(
+                pair_reserve_token0 / pair_reserve_token1,
+            )
+
         index += 1
 
     return token_derived_eth_dict
