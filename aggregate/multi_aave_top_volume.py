@@ -73,6 +73,7 @@ class AggreagateTopVolumeProcessor(GenericProcessorAggregate):
             snapshot.totalRepay.totalToken /= decimals
             snapshot.totalSupply.totalToken /= decimals
             snapshot.totalWithdraw.totalToken /= decimals
+            snapshot.totalLiquidatedCollateral.totalToken /= decimals
 
             volume_data[asset_metadata['address']] = {
                 'name': asset_metadata['name'],
