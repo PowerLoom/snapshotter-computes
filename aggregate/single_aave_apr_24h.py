@@ -92,7 +92,6 @@ class AggreagateSingleAprProcessor(GenericProcessorAggregate):
 
         aggregate_snapshot = AaveAprAggregateSnapshot(
             epochId=msg_obj.epochId,
-            timestamp=msg_obj.timestamp,
         )
         # 6h snapshots fetches
         snapshot_tasks = list()
@@ -146,6 +145,8 @@ class AggreagateSingleAprProcessor(GenericProcessorAggregate):
                     aggregate_snapshot, sample_size = self._add_aggregate_snapshot(
                         aggregate_snapshot, snapshot, sample_size,
                     )
+                    if snapshot.epochId == msg_obj.epochId:
+                        aggregate_snapshot.timestamp = snapshot.timestamp
 
         self._logger.debug(f'Final sample size: {sample_size} for project: {project_id}')
 
