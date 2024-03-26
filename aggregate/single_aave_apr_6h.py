@@ -55,17 +55,33 @@ class AggreagateSingleAprProcessor(GenericProcessorAggregate):
         previous_aggregate_snapshot.avgLiquidityRate = sample_size * \
             previous_aggregate_snapshot.avgLiquidityRate + current_liq_avg
         previous_aggregate_snapshot.avgLiquidityRate /= sample_size + 1
+        previous_aggregate_snapshot.avgLiquidityRate = round(
+            previous_aggregate_snapshot.avgLiquidityRate, 
+            8,
+        )
 
         previous_aggregate_snapshot.avgVariableRate = sample_size * \
             previous_aggregate_snapshot.avgVariableRate + current_variable_avg
         previous_aggregate_snapshot.avgVariableRate /= sample_size + 1
+        previous_aggregate_snapshot.avgVariableRate = round(
+            previous_aggregate_snapshot.avgVariableRate,
+            8,
+        )
 
         previous_aggregate_snapshot.avgStableRate = sample_size * previous_aggregate_snapshot.avgStableRate + current_stable_avg
         previous_aggregate_snapshot.avgStableRate /= sample_size + 1
+        previous_aggregate_snapshot.avgStableRate = round(
+            previous_aggregate_snapshot.avgStableRate, 
+            8,
+        )
 
         previous_aggregate_snapshot.avgUtilizationRate = sample_size * \
             previous_aggregate_snapshot.avgUtilizationRate + current_util_avg
         previous_aggregate_snapshot.avgUtilizationRate /= sample_size + 1
+        previous_aggregate_snapshot.avgUtilizationRate = round(
+            previous_aggregate_snapshot.avgUtilizationRate,
+            8,
+        )
 
         sample_size += 1
 
@@ -98,17 +114,33 @@ class AggreagateSingleAprProcessor(GenericProcessorAggregate):
         previous_aggregate_snapshot.avgLiquidityRate = sample_size * \
             previous_aggregate_snapshot.avgLiquidityRate - current_liq_avg
         previous_aggregate_snapshot.avgLiquidityRate /= sample_size - 1
+        previous_aggregate_snapshot.avgLiquidityRate = round(
+            previous_aggregate_snapshot.avgLiquidityRate, 
+            8,
+        )
 
         previous_aggregate_snapshot.avgVariableRate = sample_size * \
             previous_aggregate_snapshot.avgVariableRate - current_variable_avg
         previous_aggregate_snapshot.avgVariableRate /= sample_size - 1
+        previous_aggregate_snapshot.avgVariableRate = round(
+            previous_aggregate_snapshot.avgVariableRate,
+            8,
+        )
 
         previous_aggregate_snapshot.avgStableRate = sample_size * previous_aggregate_snapshot.avgStableRate - current_stable_avg
         previous_aggregate_snapshot.avgStableRate /= sample_size - 1
+        previous_aggregate_snapshot.avgStableRate = round(
+            previous_aggregate_snapshot.avgStableRate, 
+            8,
+        )
 
         previous_aggregate_snapshot.avgUtilizationRate = sample_size * \
             previous_aggregate_snapshot.avgUtilizationRate - current_util_avg
         previous_aggregate_snapshot.avgUtilizationRate /= sample_size - 1
+        previous_aggregate_snapshot.avgUtilizationRate = round(
+            previous_aggregate_snapshot.avgUtilizationRate,
+            8,
+        )
 
         sample_size -= 1
 
