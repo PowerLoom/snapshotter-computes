@@ -26,1944 +26,638 @@
     "0x0058a80ee31ab94c87211ff780445c52075ddc17"
   ],
   "initial_pairs": [
-    "0x6b0a3f7c79c4337b2aee930ca0b7a5e241da82af",
-    "0x12bcf75f37c790bb8fb4238520905ae33394bb66",
-    "0x74d0d34ce1d97c4c84e7bd5cd6cc95cdb481146a",
-    "0xa0da4a868de60e926c205475d34fe7c0da356f6b",
-    "0x9e8912301e5d0e637b84cd3fd27bb5553d9146dd",
-    "0x1005cffec1044cfd942ec26c29d043f6668919dd",
+    "0x88A43bbDF9D098eEC7bCEda4e2494615dfD9bB9C",
+    "0x60dc51ab5ad447f72d4c86fffcccb89038391471",
+    "0x2130168e246609de230f9785f93ba30299830827",
+    "0x80b07e6d8fe42d9b6bb9b8f769e08947e73ba24e",
+    "0x16905890a1d02b6f824387419319bf4188b961b0",
+    "0x71a4367f9ad136d05c41e95fc77de82c2d200ccd",
+    "0xc61c3ccf65ad82270e2eba667b83eed879d78874",
+    "0x0aedaa099a9878cd546182dc02d7480cb77098c8",
+    "0xabd9cbcd355076cf25e93955ba2e7bb86974c64a",
     "0x7e5c0a14aa2af95757d12ba1aa89b165b4304171",
-    "0x586e0e6209d69061a25ec7ff8b63a12a2cd27e38",
-    "0x4dec723f0fb109855630a13e5458c9f225689f18",
-    "0xe3c72f412cc4d2c9032be3b0898943e5592e2816",
-    "0x6a136826173d56c22df7dd61e88bb36f53b05445",
-    "0xbc622ae0e58bfbb1e3125ef7bc1d354030d6d4e6",
-    "0x4b9fd9d25efcbe2a78062ca9bb8932de5205e47f",
-    "0x7e61a02accdc5e4994969e5aa9c869b821200430",
-    "0x80435a714f7afb949ac2bc331ce1f24e35a2f3d8",
-    "0xeccbce5afd1720df4adfc3d2b328f034fc1c0005",
-    "0xf519f7404b12d69769a55b9adf9d6260a94ad7f7",
-    "0xdf86ae31684fcd7462e568d3af05080b80ad5ec1",
-    "0x08c06a11a4a4587d2cf1ad484ebaadb70d2ed233",
-    "0x45f4db10bb0102c133f1c70500124e4569f3edcd",
-    "0x3b4c10a4055e09d353df06bfb5e8fa4dfbca28cb",
-    "0xdc5762ec67e659306cab0877132c00c6ed1fd4bb",
-    "0x0f5b79530c235a91eba07ce262c28ec73631b29d",
-    "0x2b317d57a460b8aed206d34becd6a55b2901f07f",
-    "0x2ea5ee4a5e1bad1592cccf54aa666297390b6845",
-    "0x343969ab5bb1c3fc4c609134eaaf3de6cbdc8779",
+    "0x2c09841cc76a814e71d80971231381c944e40a00",
+    "0x234e8861c375129b41d48eecbf7434b9a1256f01",
+    "0x6a5f75b1b99b0c784831d593a3137ccc358d31e2",
+    "0xfa96f476b030c60011d8878ec1ef05c4b218f9c3",
+    "0x734c277caaef07a35bea020d8cc9d450e54dec26",
+    "0xa36d9624a58d7a9abaa5c0335c382829f7be8df4",
+    "0x6f82303e49d2a0b5581292f0bfe9bd9926cdd3bd",
+    "0x51eb872bc68137785abbd5586867cf00fa38cfa6",
+    "0x0795a759cbf9661bbe7913e7b9a6d79a37591683",
+    "0xa6feb64951bca54a489bad5c24ba5a62ab7e1339",
+    "0xc673ec2004b870ac4e948527f4474f616f3738c0",
+    "0x7afd51939cca0de455a99461e3ecf1d96a456671",
+    "0x12bcf75f37c790bb8fb4238520905ae33394bb66",
+    "0xfa2f6103d4b85c8a5f23103f4b848ddb5f7d0549",
     "0xde66c35e01ed8e619bf092352338ef94f2327337",
-    "0xb601d834539ef58200900502496a7eec99df7dba",
-    "0xc27f6798ee42e05fddbd01fa39c776dbfa205374",
-    "0x985f16e5e7f3358d084a535866c301f055a818b4",
-    "0x6763f5904608efd93cb4b8634f9cb90636e7805b",
-    "0xad7415ecd747d5f5a26a60fba0613534c973b4e4",
-    "0x75aecdee325443441eaa8b2d159fcaa4d851c57e",
-    "0xd38e0546f1017997cf531651208a9bc9df343035",
-    "0xc4df6d0f71d697487688bda6d9cdbf1a499c7ffa",
-    "0xc5a3ecfadaeedccd01c2ee0735963fd4a6353f2e",
+    "0x091a931a4e77c7bab013657fc218fcf1229ae16b",
+    "0xecf6701036fe645c8b1755b616ab20d713c3862f",
     "0x50f16aab823bc786f9c2647ef99599931c6c12ac",
-    "0x2c0174dae2a41622fffe410169d61a35b3aec4b9",
-    "0x01ecc5dcb40f9cb60d0e422db0db28f4a8fc1e41",
-    "0x9194ab97bbd53b04c99ea3b622f697ce85ece841",
-    "0x1cff59c24533ff40bb9f289ba1331c4f7b62fb40",
-    "0xc35ae86c6687b9ba3c36a1be3b0097690310d2e2",
-    "0x4e7b2ea5ef4081ddf524841b578a3c216ec71730",
-    "0x612005c0cdd8c97863fcc12563fbb3dd4c11ff21",
-    "0xd78ed09989c2c5f6a0bbe320ab31b1687fc91204",
-    "0x0b1d99a086cd90b4a9e2c1ce4252f06ac4027b3e",
-    "0xaab8f8cd76e025c985035695a85125992430b120",
+    "0xdb3cfcbcdd50c23b5198d1e112806f9e60b50cf8",
+    "0x621ba1e830e92d9652605af671f4aadae48d9558",
+    "0x45f4db10bb0102c133f1c70500124e4569f3edcd",
     "0x5c1cc3089a8231cde86301e13e69d1c9b0bb8b7c",
-    "0x9c1b482aa394e90fc113e3d1728ec85ede3094ed",
-    "0x50ac92055360e7919de999bc84875516bdec9f48",
-    "0x8dbb659c2cdc3275e3215e32137f4fa3b38fc75b",
-    "0x709c2c416121b54686fc894a6e4724d3298cfd32",
-    "0xe326f2f2095b0bc48b3b19c2f44c41ff54783171",
-    "0x0410bccc298b7551d951e23b69d93cd9bcb7ca19",
-    "0x18710a242fffb6c936a34245ec1fe6b28579e259",
-    "0x6284b2f358cae5801427fdb35c98366bf858672d",
-    "0xaa8e28c99f458bed0dc4bd59eeab63b24de31437",
-    "0x09277eb704229c88aacdc6c9a33469862c9969d5",
-    "0xa5e6451e21a44ecd8ea2771f457fd76a2e8d46ef",
-    "0x6cd47fc46b6c9d627af97dea8397f76749171389",
-    "0x2877b7ac5d2e4bd0a1e881d3e4b2ebd0a6f8ccd7",
-    "0xfdfa9634cd1aec3c9a5548c024f4af00ad21573e",
-    "0xf26849577b1380a03548e1663c407af73ae33d19",
-    "0x174d6cf8577688f4e66e467e14b96521a8189aa6",
-    "0x6f1237ebe06215b162f2a80f0f5f96bf337046d5",
-    "0x7fa7c424b91c2f4a1b1ae95591a224298a2a4447",
-    "0xb5138c089bbd5ff2a40608e55d2eeeaeba4f52da",
-    "0x095a2429f5d470f248138c61d07d5c8493a7860e",
-    "0xfc52b95f96d951420e12e61661ea9601451d3a3f",
-    "0x006ec94bb8e23ffffc83109b6bd9a10ddfaf13ec",
-    "0xb8dd905dd9409f53acec0b7e9c7c10660cb12600",
-    "0xf11556c8d4d99c6ce0b017a4b9d59639892ae5a2",
-    "0x6c58fbbd0ed15aaab5e1b61a26e598235ecbb3c7",
-    "0xa7289fefade658686c7a6cdc486f5aa47e024717",
-    "0x4cf5fd92955e9e4014218592c5a8b8773736744f",
-    "0x19ced0cf80d82ef387dc95d656701905b32ef476",
-    "0xb665e3c20a143a454a8bfc2c28ec8d52422da886",
-    "0x3cd693264c07d5df08ea28c3461991ac5de290ca",
-    "0xd2aeb063d1b562bde2806b64f910ae0a46192776",
-    "0x55fd4e76126c1af354994a53afa24e7a3b4e6da8",
-    "0xd1489da7e3bd7a39425e881dc596fd63d9239516",
-    "0x020ee166d2c41e7d9e599cfee3ac9bff2bb1163c",
-    "0x6029d061fcd90f4708a50a3ae798d548c15045ca",
-    "0x6a88e0e047320b5f72b0a846e75421c201e5b08d",
-    "0x2cbb3dcf27b462462684f6bf915d83d98bbe7673",
-    "0x51065b32a00334a98a4c7678de7ab4a20b9df2e6",
-    "0x9faf6a091d6ae0af29c0f77032ae3b5890ee2163",
-    "0x08bed61ffce45a41c0ef0260634a239bac763efe",
-    "0x38a12d7653c2f06b2c36863a30dc5b5cef786b18",
-    "0x38e88643bdec6ca3da488070ab4889a55d391310",
-    "0xc34873c4a2b01406290959ce43b665d8e3996a0e",
-    "0x7e87f71e71c89e5beaf40bfee92d2a20545dd7d8",
-    "0x8a332c439a76f8df95a0985c8d4468416e8ffae9",
-    "0x1021ad016f1dc2497092ab83c29cf023ff03ddf2",
-    "0xc90e2d0d48c6ec658d3af488d58420ecbd093dfe",
-    "0xf1a5c6cd3319a069e7381579c09429353d781784",
-    "0x5fe05a612fd887b243058573f5d5b0c5d41544e3",
-    "0x5c2e2f72a068e19d573b20827f4ece030be65a02",
-    "0xf4e7177c7c510b3785629be4106deb82b4cab1d1",
-    "0x1458a9775bbfdf00b8108215c6ddbf4df9a97cfb"
+    "0xb601d834539ef58200900502496a7eec99df7dba",
+    "0x2340ae3079e70110b39d8cff4ff214e1c8f44601",
+    "0x1bf1a0d71af2efe7d4d35fb0621049ba127be505"
 ],
   "metadata_cache": {
-    "0x6b0a3f7c79c4337b2aee930ca0b7a5e241da82af": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0xBbB68381FB767B9F58c03b6f4D125b88554002A1",
-        "name": "BASEOFMEME",
-        "symbol": "BOME",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "WETH-BOME"
-      }
-    },
-    "0x12bcf75f37c790bb8fb4238520905ae33394bb66": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0x8a5F9a6b653ecbDb406f9EB5F0C8dDba10919Aec",
-        "name": "bloo foster coin",
-        "symbol": "bloo",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "WETH-bloo"
-      }
-    },
-    "0x74d0d34ce1d97c4c84e7bd5cd6cc95cdb481146a": {
-      "token0": {
-        "address": "0x37dfF62A24A31a00b1e80516e9695B2a92a5AE41",
-        "name": "BOOK OF MEME",
-        "symbol": "BOME",
-        "decimals": 9
-      },
-      "token1": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "BOME-WETH"
-      }
-    },
-    "0xa0da4a868de60e926c205475d34fe7c0da356f6b": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0xe376a5d0344f2a652B1A2E055638f81AB7ca47Bc",
-        "name": "Bretta (Brett's Wife)",
-        "symbol": "BRETTA",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "WETH-BRETTA"
-      }
-    },
-    "0x9e8912301e5d0e637b84cd3fd27bb5553d9146dd": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0x76Be4F63efD2A0BA1C949b8b430413e64C59806A",
-        "name": "BaseInu",
-        "symbol": "BASU",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "WETH-BASU"
-      }
-    },
-    "0x1005cffec1044cfd942ec26c29d043f6668919dd": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0xDc58D89fe6bC91Da0ee1A08c72eE38730c92967F",
-        "name": "Polyhedra Network",
-        "symbol": "ZK",
-        "decimals": 9
-      },
-      "pair": {
-        "symbol": "WETH-ZK"
-      }
-    },
-    "0x7e5c0a14aa2af95757d12ba1aa89b165b4304171": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0xFe20C1B85ABa875EA8cecac8200bF86971968F3A",
-        "name": "BALD",
-        "symbol": "BALD",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "WETH-BALD"
-      }
-    },
-    "0x586e0e6209d69061a25ec7ff8b63a12a2cd27e38": {
-      "token0": {
-        "address": "0x26712bab7863c7407412353084C0A31d09D267C7",
-        "name": "LET ME DO IT FOR YOU",
-        "symbol": "BORZOI",
-        "decimals": 9
-      },
-      "token1": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "BORZOI-WETH"
-      }
-    },
-    "0x4dec723f0fb109855630a13e5458c9f225689f18": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0x935222446c8fA224Fd717e2550d48ebC0339ac07",
-        "name": "EIP-4844",
-        "symbol": "Dencun",
-        "decimals": 9
-      },
-      "pair": {
-        "symbol": "WETH-Dencun"
-      }
-    },
-    "0xe3c72f412cc4d2c9032be3b0898943e5592e2816": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0x9BAc37Cc1eaf4fF70Ed22dCf8FbCb26b9Af24542",
-        "name": "BASEDAI",
-        "symbol": "BASEDAI",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "WETH-BASEDAI"
-      }
-    },
-    "0x6a136826173d56c22df7dd61e88bb36f53b05445": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0x5f43fFA61595347122c46ebA3CD66E5afa687421",
-        "name": "JESSE",
-        "symbol": "JESSE",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "WETH-JESSE"
-      }
-    },
-    "0xbc622ae0e58bfbb1e3125ef7bc1d354030d6d4e6": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0xeD133b299FBE25D0B44364fD12b8bd6f78249717",
-        "name": "peetor spliff",
-        "symbol": "GOLD",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "WETH-GOLD"
-      }
-    },
-    "0x4b9fd9d25efcbe2a78062ca9bb8932de5205e47f": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0x787f21DE32f2ea0A6503E522C4f1b74Bde7fcA23",
-        "name": "ether.fi",
-        "symbol": "ETHFI",
-        "decimals": 9
-      },
-      "pair": {
-        "symbol": "WETH-ETHFI"
-      }
-    },
-    "0x7e61a02accdc5e4994969e5aa9c869b821200430": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0x4B5f025408a7bE8C65491f1B96D3a732196dC312",
-        "name": "Peng",
-        "symbol": "$PENG",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "WETH-$PENG"
-      }
-    },
-    "0x80435a714f7afb949ac2bc331ce1f24e35a2f3d8": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0x668290981068813430628C40B310a9D3dA750490",
-        "name": "FIAT",
-        "symbol": "$FIAT",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "WETH-$FIAT"
-      }
-    },
-    "0xeccbce5afd1720df4adfc3d2b328f034fc1c0005": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0x858B62b1Be5F5Eb85Fa2142a9B183d2af567730a",
-        "name": "Looksmaxxing",
-        "symbol": "LMAX",
-        "decimals": 9
-      },
-      "pair": {
-        "symbol": "WETH-LMAX"
-      }
-    },
-    "0xf519f7404b12d69769a55b9adf9d6260a94ad7f7": {
-      "token0": {
-        "address": "0x059D10f085a4C61e61f15394F6d0548BA6D430dc",
-        "name": "Astro X",
-        "symbol": "AstroX",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "AstroX-WETH"
-      }
-    },
-    "0xdf86ae31684fcd7462e568d3af05080b80ad5ec1": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0x85d0D0791196F658d162d13d81DA1A3111AfeE35",
-        "name": "Base Jesus",
-        "symbol": "TYBJ",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "WETH-TYBJ"
-      }
-    },
-    "0x08c06a11a4a4587d2cf1ad484ebaadb70d2ed233": {
-      "token0": {
-        "address": "0x3093cAde46745A21dE170332E306AE2E37667471",
-        "name": "BASEWIFHAT",
-        "symbol": "BIF",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "BIF-WETH"
-      }
-    },
-    "0x45f4db10bb0102c133f1c70500124e4569f3edcd": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0x42069BAbe14fB1802C5CB0F50BB9D2Ad6FEf55e2",
-        "name": "frok.ai",
-        "symbol": "FROK",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "WETH-FROK"
-      }
-    },
-    "0x3b4c10a4055e09d353df06bfb5e8fa4dfbca28cb": {
-      "token0": {
-        "address": "0x3F85bc3f5BfAb4B1ecaf5fa699B5e2236Ee5B9DD",
-        "name": "PEPEINMEME",
-        "symbol": "PIME",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "PIME-WETH"
-      }
-    },
-    "0xdc5762ec67e659306cab0877132c00c6ed1fd4bb": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0xC87aaf7825202B0a462F29c8E0e80ffae0873974",
-        "name": "zkSync",
-        "symbol": "ZKS",
-        "decimals": 9
-      },
-      "pair": {
-        "symbol": "WETH-ZKS"
-      }
-    },
-    "0x0f5b79530c235a91eba07ce262c28ec73631b29d": {
-      "token0": {
-        "address": "0x0d440FB3a576737F780b7D3e7F1CF175809ACf85",
-        "name": "Big Chungus",
-        "symbol": "BIG",
-        "decimals": 9
-      },
-      "token1": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "BIG-WETH"
-      }
-    },
-    "0x2b317d57a460b8aed206d34becd6a55b2901f07f": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0x46c578c63eE72da3ADdD979e72725310c927da17",
-        "name": "BABYPEPE",
-        "symbol": "BPEPE",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "WETH-BPEPE"
-      }
-    },
-    "0x2ea5ee4a5e1bad1592cccf54aa666297390b6845": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0x52Fdc24321615648BD8E15b38c14bd47b61eb7A3",
-        "name": "dogwifscarf ",
-        "symbol": "WIFS",
-        "decimals": 9
-      },
-      "pair": {
-        "symbol": "WETH-WIFS"
-      }
-    },
-    "0x343969ab5bb1c3fc4c609134eaaf3de6cbdc8779": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0xD064c53f043d5aee2Ac9503B13eE012BF2def1d0",
-        "name": "DeFido",
-        "symbol": "DEFIDO",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "WETH-DEFIDO"
-      }
-    },
-    "0xde66c35e01ed8e619bf092352338ef94f2327337": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0xFF0C532FDB8Cd566Ae169C1CB157ff2Bdc83E105",
-        "name": "Fren Pet",
-        "symbol": "Fren Pet",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "WETH-Fren Pet"
-      }
-    },
-    "0xb601d834539ef58200900502496a7eec99df7dba": {
-      "token0": {
-        "address": "0x356177B452dbae18B5a4b43b7B5324bFbae235Be",
-        "name": "DeFido",
-        "symbol": "DFD",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "DFD-WETH"
-      }
-    },
-    "0xc27f6798ee42e05fddbd01fa39c776dbfa205374": {
-      "token0": {
-        "address": "0x0058a80EE31ab94c87211Ff780445c52075ddc17",
-        "name": "Based Floki",
-        "symbol": "BLOKI",
-        "decimals": 9
-      },
-      "token1": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "BLOKI-WETH"
-      }
-    },
-    "0x985f16e5e7f3358d084a535866c301f055a818b4": {
-      "token0": {
-        "address": "0x240588cdA26001c7432010A69573FA056Fe1D6b4",
-        "name": "WHERE IS DEV",
-        "symbol": "DEV",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "DEV-WETH"
-      }
-    },
-    "0x6763f5904608efd93cb4b8634f9cb90636e7805b": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0x8aE85Dbc91e49675dbE39D8152C3efC791E4D232",
-        "name": "Boy's Club",
-        "symbol": "BOYS",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "WETH-BOYS"
-      }
-    },
-    "0xad7415ecd747d5f5a26a60fba0613534c973b4e4": {
-      "token0": {
-        "address": "0x07D9106Bb6Da9122D2D21Db81A59727bcAD79d72",
-        "name": "Puggy",
-        "symbol": "PUG",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "PUG-WETH"
-      }
-    },
-    "0x75aecdee325443441eaa8b2d159fcaa4d851c57e": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0x4D1647162c517656Db1434FdfcBeaA8a8f4C4AA0",
-        "name": "INT",
-        "symbol": "Integer",
-        "decimals": 0
-      },
-      "pair": {
-        "symbol": "WETH-Integer"
-      }
-    },
-    "0xd38e0546f1017997cf531651208a9bc9df343035": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0x430f4D0543E3aE29108b67e9A88Feb67E288777E",
-        "name": "Nyen Cet",
-        "symbol": "NYEN",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "WETH-NYEN"
-      }
-    },
-    "0xc4df6d0f71d697487688bda6d9cdbf1a499c7ffa": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0x6e9Fb4A6233F95a1ea7D5c552569C8Bb54a4F0BC",
-        "name": "Brigitte",
-        "symbol": "BRIGITTE",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "WETH-BRIGITTE"
-      }
-    },
-    "0xc5a3ecfadaeedccd01c2ee0735963fd4a6353f2e": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0xA3A93D7f566ccED937F02aFE22257C1cd82C5f49",
-        "name": "Munch",
-        "symbol": "MUNCH",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "WETH-MUNCH"
-      }
-    },
-    "0x50f16aab823bc786f9c2647ef99599931c6c12ac": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0x8011eef8FC855Df1c4f421443f306E19818e60D3",
-        "name": "duh",
-        "symbol": "DUH",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "WETH-DUH"
-      }
-    },
-    "0x2c0174dae2a41622fffe410169d61a35b3aec4b9": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0x52d7a8760fAfee0802cc64aB1A25A77030A29439",
-        "name": "Base Internet Token",
-        "symbol": "BIT",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "WETH-BIT"
-      }
-    },
-    "0x01ecc5dcb40f9cb60d0e422db0db28f4a8fc1e41": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0x54F959B0428C6E05b35B4735dDcFa3029B0ce97B",
-        "name": "PropyKeys",
-        "symbol": "PRO",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "WETH-PRO"
-      }
-    },
-    "0x9194ab97bbd53b04c99ea3b622f697ce85ece841": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0xf851C9250021C453Cc751B37466D2E0eDDaeaF20",
-        "name": "BaseDino",
-        "symbol": "BINO",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "WETH-BINO"
-      }
-    },
-    "0x1cff59c24533ff40bb9f289ba1331c4f7b62fb40": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0x47978a28890208479D84fd0803D1Bd326C9f15D0",
-        "name": "Based Chad",
-        "symbol": "BRO",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "WETH-BRO"
-      }
-    },
-    "0xc35ae86c6687b9ba3c36a1be3b0097690310d2e2": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0x77DBb33b702bee54AbD224748b5543361554f063",
-        "name": "Grumpy Cat on Base",
-        "symbol": "Grumpy",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "WETH-Grumpy"
-      }
-    },
-    "0x4e7b2ea5ef4081ddf524841b578a3c216ec71730": {
-      "token0": {
-        "address": "0x0dF92669001d91452093F89d2dE0D95BaE81e54d",
-        "name": "Elmo",
-        "symbol": "ELMO",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "ELMO-WETH"
-      }
-    },
-    "0x612005c0cdd8c97863fcc12563fbb3dd4c11ff21": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0x76113984C58c1dBb98EDF92Ac7DD9C8FC0AA063A",
-        "name": "VIKING",
-        "symbol": "VIKING",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "WETH-VIKING"
-      }
-    },
-    "0xd78ed09989c2c5f6a0bbe320ab31b1687fc91204": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0x61fB0d7aF0F8d82b49363E342d6f78dd438Be242",
-        "name": "Baseholder",
-        "symbol": "BAG",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "WETH-BAG"
-      }
-    },
-    "0x0b1d99a086cd90b4a9e2c1ce4252f06ac4027b3e": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0xC0E3E99507A8a1d8dAB7D1d8012cAd89CA9042e8",
-        "name": "Teh Gud Fother",
-        "symbol": "GUDFOTHER",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "WETH-GUDFOTHER"
-      }
-    },
-    "0xaab8f8cd76e025c985035695a85125992430b120": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0x6b8CCD5626fF3642E41C6D9840A60859a2aba4C3",
-        "name": "DarwinAI",
-        "symbol": "DarwinAI",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "WETH-DarwinAI"
-      }
-    },
-    "0x5c1cc3089a8231cde86301e13e69d1c9b0bb8b7c": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0x8ca99727813aF2a45Df365E920F59692DF436EE0",
-        "name": "SHADOW",
-        "symbol": "SHDW",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "WETH-SHDW"
-      }
-    },
-    "0x9c1b482aa394e90fc113e3d1728ec85ede3094ed": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0xD6Bea3Fc5aD8272E78301b50Afa10882Cf76381b",
-        "name": "Hoppy",
-        "symbol": "HOPPY",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "WETH-HOPPY"
-      }
-    },
-    "0x50ac92055360e7919de999bc84875516bdec9f48": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0x92B493E50fC55AE0992B4816547B403C59E5fe29",
-        "name": "BaldWifHat",
-        "symbol": "$BIF",
-        "decimals": 8
-      },
-      "pair": {
-        "symbol": "WETH-$BIF"
-      }
-    },
-    "0x8dbb659c2cdc3275e3215e32137f4fa3b38fc75b": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0x54570443415aF6681F799E68d3EA0Bc39262F6B7",
-        "name": "Based DAO",
-        "symbol": "BAO",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "WETH-BAO"
-      }
-    },
-    "0x709c2c416121b54686fc894a6e4724d3298cfd32": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0xD882C8Aea48FFEEb5Fc90Db0fb1205B465AB5066",
-        "name": "PutinX1000",
-        "symbol": "PutinX1000",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "WETH-PutinX1000"
-      }
-    },
-    "0xe326f2f2095b0bc48b3b19c2f44c41ff54783171": {
-      "token0": {
-        "address": "0x1af55C0415024e7dd94fF12E451E5FC40622688F",
-        "name": "BRETT's DAD (BRADD)",
-        "symbol": "$BRADD",
-        "decimals": 9
-      },
-      "token1": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "$BRADD-WETH"
-      }
-    },
-    "0x0410bccc298b7551d951e23b69d93cd9bcb7ca19": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0x543a7703CD3215C09770f28614fC1368f259594D",
-        "name": "HarvestHaven",
-        "symbol": "HVR",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "WETH-HVR"
-      }
-    },
-    "0x18710a242fffb6c936a34245ec1fe6b28579e259": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0xc27118Ec83105c53Dbb0bF4601f12d9a2BA64358",
-        "name": "blob",
-        "symbol": "BLOB",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "WETH-BLOB"
-      }
-    },
-    "0x6284b2f358cae5801427fdb35c98366bf858672d": {
-      "token0": {
-        "address": "0x4105925BF714125a7b7263Ee5640ADec32368C58",
-        "name": "Bloky",
-        "symbol": "BLOKY",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "BLOKY-WETH"
-      }
-    },
-    "0xaa8e28c99f458bed0dc4bd59eeab63b24de31437": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0xfff2f510EaA085DDf359Fcc0CE254Afd2C248D59",
-        "name": "ELNO MASQKUE",
-        "symbol": "ELNO",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "WETH-ELNO"
-      }
-    },
-    "0x09277eb704229c88aacdc6c9a33469862c9969d5": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0xa100b6E6b37d628E489e4577965Cb6f446D01a14",
-        "name": "BaseBonk",
-        "symbol": "BASEBONK",
-        "decimals": 9
-      },
-      "pair": {
-        "symbol": "WETH-BASEBONK"
-      }
-    },
-    "0xa5e6451e21a44ecd8ea2771f457fd76a2e8d46ef": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0xDcdE5B1Ebee394a279F66c3F319c3488ad85D3C2",
-        "name": "X BASE",
-        "symbol": "XBAS",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "WETH-XBAS"
-      }
-    },
-    "0x6cd47fc46b6c9d627af97dea8397f76749171389": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0xbd09642d0eeAE07ba01B42a108bb8aBA7a9dCdb3",
-        "name": "Bren Armsdrunk",
-        "symbol": "BREN",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "WETH-BREN"
-      }
-    },
-    "0x2877b7ac5d2e4bd0a1e881d3e4b2ebd0a6f8ccd7": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0xfd48736D882f34aeE6117Ad7097a2a1A1E7D8e7b",
-        "name": "Based Banana",
-        "symbol": "BANANA",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "WETH-BANANA"
-      }
-    },
-    "0xfdfa9634cd1aec3c9a5548c024f4af00ad21573e": {
-      "token0": {
-        "address": "0x0a2BD90eF16d4B079E5cf4eaF814182C91adD4b8",
-        "name": "melvin",
-        "symbol": "melvin",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "melvin-WETH"
-      }
-    },
-    "0xf26849577b1380a03548e1663c407af73ae33d19": {
-      "token0": {
-        "address": "0x2dd3D486E20cd1512151d3319f5f9A1879aA48c7",
-        "name": "ETHTrustFund",
-        "symbol": "$ETF",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "$ETF-WETH"
-      }
-    },
-    "0x174d6cf8577688f4e66e467e14b96521a8189aa6": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0xa1d4b6e0df1CfbB225FdD3B0B1680ea931d9C5cd",
-        "name": "Infinite",
-        "symbol": "INF",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "WETH-INF"
-      }
-    },
-    "0x6f1237ebe06215b162f2a80f0f5f96bf337046d5": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0xfff8f68284701d32a1a596280a52C1D7211b2F6E",
-        "name": "dogwifhat",
-        "symbol": "$WIF",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "WETH-$WIF"
-      }
-    },
-    "0x7fa7c424b91c2f4a1b1ae95591a224298a2a4447": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0x5ceEb4a7e560cc2C93D95cb3c13b33d1572a0B93",
-        "name": "PropyKeys Official (be aware of scams) propykeys.com ",
-        "symbol": "PRO",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "WETH-PRO"
-      }
-    },
-    "0xb5138c089bbd5ff2a40608e55d2eeeaeba4f52da": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0x6b5B4Bf9A178612C6B91bda5a312f2bcfE8328D2",
-        "name": "CATAI",
-        "symbol": "CATAI",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "WETH-CATAI"
-      }
-    },
-    "0x095a2429f5d470f248138c61d07d5c8493a7860e": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0x498643e82ef03487fa3447a61B12F720C5dCd1Be",
-        "name": "Base Ai",
-        "symbol": "BASEAI",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "WETH-BASEAI"
-      }
-    },
-    "0xfc52b95f96d951420e12e61661ea9601451d3a3f": {
-      "token0": {
-        "address": "0x10A328Aa7A02c2bd631Dba8D21C32980259Cb1F0",
-        "name": "TEQ Network",
-        "symbol": "TEQ",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "TEQ-WETH"
-      }
-    },
-    "0x006ec94bb8e23ffffc83109b6bd9a10ddfaf13ec": {
-      "token0": {
-        "address": "0x13Ae0201E126B142c1635D5FD5d4Ee042aC9aa24",
-        "name": "Moshi",
-        "symbol": "$MOSHI",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "$MOSHI-WETH"
-      }
-    },
-    "0xb8dd905dd9409f53acec0b7e9c7c10660cb12600": {
-      "token0": {
-        "address": "0x3b07850096a729C13e348529ED7901d9F2aCc158",
-        "name": "Deplex AI",
-        "symbol": "DXA",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "DXA-WETH"
-      }
-    },
-    "0xf11556c8d4d99c6ce0b017a4b9d59639892ae5a2": {
-      "token0": {
-        "address": "0x0EF702D104f99Fc984EC1c1df4e7ABf00692137B",
-        "name": "PENG",
-        "symbol": "PENG",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "PENG-WETH"
-      }
-    },
-    "0x6c58fbbd0ed15aaab5e1b61a26e598235ecbb3c7": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0x6180071168d4f9b3072C4fA99E8D9e4A71AAC8c3",
-        "name": "BASERUNNER",
-        "symbol": "BASERUNNER",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "WETH-BASERUNNER"
-      }
-    },
-    "0xa7289fefade658686c7a6cdc486f5aa47e024717": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0xD52C74D6A4a97E0262B1220B2988Ae8965516524",
-        "name": "Game Stop",
-        "symbol": "$GME",
-        "decimals": 8
-      },
-      "pair": {
-        "symbol": "WETH-$GME"
-      }
-    },
-    "0x4cf5fd92955e9e4014218592c5a8b8773736744f": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0xffB71923678dfb52C29E4a402bC29530BB9f4182",
-        "name": "BOOK OF MEME",
-        "symbol": "BOME",
-        "decimals": 1
-      },
-      "pair": {
-        "symbol": "WETH-BOME"
-      }
-    },
-    "0x19ced0cf80d82ef387dc95d656701905b32ef476": {
-      "token0": {
-        "address": "0x2e20DB77Ad802A27C1973409FC0a40DB1413Bc84",
-        "name": "Pepe Trump",
-        "symbol": "TRPepe",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "TRPepe-WETH"
-      }
-    },
-    "0xb665e3c20a143a454a8bfc2c28ec8d52422da886": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0x7b3feA044378F754BE6B3a16ae9a112B31FB0F26",
-        "name": "IntelliQuant AI",
-        "symbol": "$INQU",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "WETH-$INQU"
-      }
-    },
-    "0x3cd693264c07d5df08ea28c3461991ac5de290ca": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0x9dd093094A6be33059eFfa7e4A0A713ecBa1E740",
-        "name": "Claver.Ai",
-        "symbol": "CLAI",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "WETH-CLAI"
-      }
-    },
-    "0xd2aeb063d1b562bde2806b64f910ae0a46192776": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0xB5ec9D3F248BE60264eDDf87CA459fD3Db19772d",
-        "name": "X BASE",
-        "symbol": "XBASE",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "WETH-XBASE"
-      }
-    },
-    "0x55fd4e76126c1af354994a53afa24e7a3b4e6da8": {
-      "token0": {
-        "address": "0x3002627fb594e9AA77a3d8592b539f94866c31e4",
-        "name": "HUSKY",
-        "symbol": "HUSKY",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "HUSKY-WETH"
-      }
-    },
-    "0xd1489da7e3bd7a39425e881dc596fd63d9239516": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0xc17e424D4808c073234fAa7FFF757d3dA48D12F9",
-        "name": "BrenArmweak",
-        "symbol": "BREEN",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "WETH-BREEN"
-      }
-    },
-    "0x020ee166d2c41e7d9e599cfee3ac9bff2bb1163c": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0x43Aef46727aef0EeEf66259C0Fb3A86c72291964",
-        "name": "TINY",
-        "symbol": "TINY",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "WETH-TINY"
-      }
-    },
-    "0x6029d061fcd90f4708a50a3ae798d548c15045ca": {
-      "token0": {
-        "address": "0x2Ea0e1Ba47396E44EB507417a5b106C7993e61Ab",
-        "name": "NEXT",
-        "symbol": "NEXT",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "NEXT-WETH"
-      }
-    },
-    "0x6a88e0e047320b5f72b0a846e75421c201e5b08d": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0x51CdF15fb01817114231D15d6A6753532ba68935",
-        "name": "ZIPP",
-        "symbol": "ZIPP",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "WETH-ZIPP"
-      }
-    },
-    "0x2cbb3dcf27b462462684f6bf915d83d98bbe7673": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0x95ECBD6eda188A8913383B4164D80E2d996657aE",
-        "name": "BaseCola",
-        "symbol": "$COLA",
-        "decimals": 9
-      },
-      "pair": {
-        "symbol": "WETH-$COLA"
-      }
-    },
-    "0x51065b32a00334a98a4c7678de7ab4a20b9df2e6": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0xfb13c2387d80533339b3547c2024e38FF49AfA5c",
-        "name": "GrassSolanaL2",
-        "symbol": "GrassSolanaL2",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "WETH-GrassSolanaL2"
-      }
-    },
-    "0x9faf6a091d6ae0af29c0f77032ae3b5890ee2163": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0x7c90B694F25Dc31F168D66a9AD09a9e382149250",
-        "name": "SIK",
-        "symbol": "SIK",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "WETH-SIK"
-      }
-    },
-    "0x08bed61ffce45a41c0ef0260634a239bac763efe": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0xA274a3680ce4eB40F163fe719a177afE44Dd53e2",
-        "name": "VOLK",
-        "symbol": "VOLK",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "WETH-VOLK"
-      }
-    },
-    "0x38a12d7653c2f06b2c36863a30dc5b5cef786b18": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0x8770D10f615ecb0514724A03FaeDD94428fE5A86",
-        "name": "Chingon",
-        "symbol": "CHING",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "WETH-CHING"
-      }
-    },
-    "0x38e88643bdec6ca3da488070ab4889a55d391310": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0xe58FfBfEd453237EDb79Cb44FF55831A7D6Fa5BE",
-        "name": "pepecoin",
-        "symbol": "pepecoin",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "WETH-pepecoin"
-      }
-    },
-    "0xc34873c4a2b01406290959ce43b665d8e3996a0e": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0xe122F267861a29A3D9F6A3850528aa21cCF8711C",
-        "name": "POT",
-        "symbol": "POT",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "WETH-POT"
-      }
-    },
-    "0x7e87f71e71c89e5beaf40bfee92d2a20545dd7d8": {
-      "token0": {
-        "address": "0x13d7db194a8Cc48ba8a6f5154d96BCbC29De9Cb2",
-        "name": "Bounce Token",
-        "symbol": "Auction",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "Auction-WETH"
-      }
-    },
-    "0x8a332c439a76f8df95a0985c8d4468416e8ffae9": {
-      "token0": {
-        "address": "0x125498Df9c3f630BEF1cda8710B78509a943EE24",
-        "name": "BrettWifHat",
-        "symbol": "$BIF",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "$BIF-WETH"
-      }
-    },
-    "0x1021ad016f1dc2497092ab83c29cf023ff03ddf2": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0x5e0f466fFcE3dFEe3B57ccC964E0317ea54318A4",
-        "name": "PepeFork",
-        "symbol": "PORK",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "WETH-PORK"
-      }
-    },
-    "0xc90e2d0d48c6ec658d3af488d58420ecbd093dfe": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0x6Bb3b44cc60e107cc981C18710D6E1d77c3FD19a",
-        "name": "LORT",
-        "symbol": "LORT",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "WETH-LORT"
-      }
-    },
-    "0xf1a5c6cd3319a069e7381579c09429353d781784": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0xe8824f00f4df794fb69527094C01C21FAE37B422",
-        "name": "Chadimir Putni",
-        "symbol": "PUTNI",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "WETH-PUTNI"
-      }
-    },
-    "0x5fe05a612fd887b243058573f5d5b0c5d41544e3": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0xE14A3790A8Ede894df228299141fbd64D6021f21",
-        "name": "Shadow Node",
-        "symbol": "SVPN",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "WETH-SVPN"
-      }
-    },
-    "0x5c2e2f72a068e19d573b20827f4ece030be65a02": {
-      "token0": {
-        "address": "0x12766B89817e7A31A87FB54a6679b44181f3Bce1",
-        "name": "PUTIN",
-        "symbol": "PUTIN",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "PUTIN-WETH"
-      }
-    },
-    "0xf4e7177c7c510b3785629be4106deb82b4cab1d1": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0xd948785598187ea0546EB1268062C6735E3615D5",
-        "name": "Pemp",
-        "symbol": "PEMP",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "WETH-PEMP"
-      }
-    },
-    "0x1458a9775bbfdf00b8108215c6ddbf4df9a97cfb": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0xf7e57FB192A455066e144bA5EF53E339227B7bb9",
-        "name": "CraigWrightNOTSatoshi",
-        "symbol": "NOTS",
-        "decimals": 18
-      },
-      "pair": {
-        "symbol": "WETH-NOTS"
-      }
-    },
-      "0xe902EF54E437967c8b37D30E80ff887955c90DB6": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA",
-        "name": "USD Base Coin",
-        "symbol": "USDbC",
-        "decimals": 6
-      },
-      "pair": {
-        "symbol": "WETH-USDbC"
-      }
-    },
     "0x88A43bbDF9D098eEC7bCEda4e2494615dfD9bB9C": {
-      "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
-      },
-      "token1": {
-        "address": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-        "name": "USD Coin",
-        "symbol": "USDC",
-        "decimals": 6
-      },
-      "pair": {
-        "symbol": "WETH-USDC"
-      }
+        "token0": {
+            "address": "0x4200000000000000000000000000000000000006",
+            "name": "Wrapped Ether",
+            "symbol": "WETH",
+            "decimals": 18
+        },
+        "token1": {
+            "address": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+            "name": "USD Coin",
+            "symbol": "USDC",
+            "decimals": 6
+        },
+        "pair": {
+            "symbol": "WETH-USDC"
+        }
     },
-    "0xb2839134B8151964f19f6f3c7D59C70ae52852F5": {
+    "0x60dc51ab5ad447f72d4c86fffcccb89038391471": {
       "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
+          "address": "0x4200000000000000000000000000000000000006",
+          "name": "Wrapped Ether",
+          "symbol": "WETH",
+          "decimals": 18
       },
       "token1": {
-        "address": "0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb",
-        "name": "Dai Stablecoin",
-        "symbol": "DAI",
-        "decimals": 18
+          "address": "0xF1B4ddF712E108cf43711B1C39f2fDDb0d5Ce243",
+          "name": "BrianArmstrongCoinbaseUSDC2012Normie",
+          "symbol": "BASE",
+          "decimals": 18
       },
       "pair": {
-        "symbol": "WETH-DAI"
+          "symbol": "WETH-BASE"
       }
-    },
-    "0x45f4Db10bb0102c133F1C70500124e4569F3eDcD": {
+  },
+  "0x2130168e246609de230f9785f93ba30299830827": {
       "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
+          "address": "0x4200000000000000000000000000000000000006",
+          "name": "Wrapped Ether",
+          "symbol": "WETH",
+          "decimals": 18
       },
       "token1": {
-        "address": "0x42069BAbe14fB1802C5CB0F50BB9D2Ad6FEf55e2",
-        "name": "frok.ai",
-        "symbol": "FROK",
-        "decimals": 18
+          "address": "0xaA3ecAd0Cb644C0DE72110A905a57667C1a1cA96",
+          "name": "weirdo",
+          "symbol": "weirdo",
+          "decimals": 9
       },
       "pair": {
-        "symbol": "WETH-FROK"
+          "symbol": "WETH-weirdo"
       }
-    },
-    "0x5C1cC3089a8231cDE86301e13E69d1c9b0BB8b7C": {
+  },
+  "0x80b07e6d8fe42d9b6bb9b8f769e08947e73ba24e": {
       "token0": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
+          "address": "0x4200000000000000000000000000000000000006",
+          "name": "Wrapped Ether",
+          "symbol": "WETH",
+          "decimals": 18
       },
       "token1": {
-        "address": "0x8ca99727813aF2a45Df365E920F59692DF436EE0",
-        "name": "SHADOW",
-        "symbol": "SHDW",
-        "decimals": 18
+          "address": "0x43e94BD32ac8E57a6009cDE6790d95761120D4E9",
+          "name": "Dewn",
+          "symbol": "DEWN",
+          "decimals": 18
       },
       "pair": {
-        "symbol": "WETH-SHDW"
+          "symbol": "WETH-DEWN"
       }
-    },
-    "0xC27F6798ee42E05FdDbD01FA39C776dbfa205374": {
+  },
+  "0x16905890a1d02b6f824387419319bf4188b961b0": {
       "token0": {
-        "address": "0x0058a80EE31ab94c87211Ff780445c52075ddc17",
-        "name": "Based Floki",
-        "symbol": "BLOKI",
-        "decimals": 9
+          "address": "0x4200000000000000000000000000000000000006",
+          "name": "Wrapped Ether",
+          "symbol": "WETH",
+          "decimals": 18
       },
       "token1": {
-        "address": "0x4200000000000000000000000000000000000006",
-        "name": "Wrapped Ether",
-        "symbol": "WETH",
-        "decimals": 18
+          "address": "0xBC45647eA894030a4E9801Ec03479739FA2485F0",
+          "name": "Basenji",
+          "symbol": "BENJI",
+          "decimals": 18
       },
       "pair": {
-        "symbol": "BLOKI-WETH"
+          "symbol": "WETH-BENJI"
       }
-    },
-    "0xC5ACcD3e4f6dF1912498775807e0972B3ec43F29": {
+  },
+  "0x71a4367f9ad136d05c41e95fc77de82c2d200ccd": {
       "token0": {
-        "address": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-        "name": "USD Coin",
-        "symbol": "USDC",
-        "decimals": 6
+          "address": "0x4200000000000000000000000000000000000006",
+          "name": "Wrapped Ether",
+          "symbol": "WETH",
+          "decimals": 18
       },
       "token1": {
-        "address": "0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA",
-        "name": "USD Base Coin",
-        "symbol": "USDbC",
-        "decimals": 6
+          "address": "0xD2FAA0cAeE8421959aa13Fbd20A7ed7e93702FFE",
+          "name": "Balddog",
+          "symbol": "Baldo",
+          "decimals": 18
       },
       "pair": {
-        "symbol": "USDC-USDbC"
+          "symbol": "WETH-Baldo"
       }
-    },
-    "0x950847d1dd451B67a2fC1795C0C9a53Cf88E63A2": {
+  },
+  "0xc61c3ccf65ad82270e2eba667b83eed879d78874": {
       "token0": {
-        "address": "0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb",
-        "name": "Dai Stablecoin",
-        "symbol": "DAI",
-        "decimals": 18
+          "address": "0x4200000000000000000000000000000000000006",
+          "name": "Wrapped Ether",
+          "symbol": "WETH",
+          "decimals": 18
       },
       "token1": {
-        "address": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-        "name": "USD Coin",
-        "symbol": "USDC",
-        "decimals": 6
+          "address": "0x4229c271c19CA5F319fb67b4BC8A40761A6d6299",
+          "name": "NEGED",
+          "symbol": "NEGED",
+          "decimals": 18
       },
       "pair": {
-        "symbol": "DAI-USDC"
+          "symbol": "WETH-NEGED"
       }
-    }
+  },
+  "0x0aedaa099a9878cd546182dc02d7480cb77098c8": {
+      "token0": {
+          "address": "0x4200000000000000000000000000000000000006",
+          "name": "Wrapped Ether",
+          "symbol": "WETH",
+          "decimals": 18
+      },
+      "token1": {
+          "address": "0xD9eA93A38D1771C870128f9134D4622d331C04C8",
+          "name": "Make America Based Again",
+          "symbol": "MABA",
+          "decimals": 18
+      },
+      "pair": {
+          "symbol": "WETH-MABA"
+      }
+  },
+  "0xabd9cbcd355076cf25e93955ba2e7bb86974c64a": {
+      "token0": {
+          "address": "0x35e15F328Eca06CC5757D518FA9c2f912634DDA5",
+          "name": "ROOST ON BASE",
+          "symbol": "ROOST",
+          "decimals": 18
+      },
+      "token1": {
+          "address": "0x4200000000000000000000000000000000000006",
+          "name": "Wrapped Ether",
+          "symbol": "WETH",
+          "decimals": 18
+      },
+      "pair": {
+          "symbol": "ROOST-WETH"
+      }
+  },
+  "0x7e5c0a14aa2af95757d12ba1aa89b165b4304171": {
+      "token0": {
+          "address": "0x4200000000000000000000000000000000000006",
+          "name": "Wrapped Ether",
+          "symbol": "WETH",
+          "decimals": 18
+      },
+      "token1": {
+          "address": "0xFe20C1B85ABa875EA8cecac8200bF86971968F3A",
+          "name": "BALD",
+          "symbol": "BALD",
+          "decimals": 18
+      },
+      "pair": {
+          "symbol": "WETH-BALD"
+      }
+  },
+  "0x2c09841cc76a814e71d80971231381c944e40a00": {
+      "token0": {
+          "address": "0x4200000000000000000000000000000000000006",
+          "name": "Wrapped Ether",
+          "symbol": "WETH",
+          "decimals": 18
+      },
+      "token1": {
+          "address": "0xa7152fA3b1fA9ec858e959164758A66f1ECF33F7",
+          "name": "Chicky",
+          "symbol": "CHICKY",
+          "decimals": 18
+      },
+      "pair": {
+          "symbol": "WETH-CHICKY"
+      }
+  },
+  "0x234e8861c375129b41d48eecbf7434b9a1256f01": {
+      "token0": {
+          "address": "0x4200000000000000000000000000000000000006",
+          "name": "Wrapped Ether",
+          "symbol": "WETH",
+          "decimals": 18
+      },
+      "token1": {
+          "address": "0x74575a6D8B0172640F2752C39B1c2c872BD1c600",
+          "name": "Mind Goblin",
+          "symbol": "MIND",
+          "decimals": 18
+      },
+      "pair": {
+          "symbol": "WETH-MIND"
+      }
+  },
+  "0x6a5f75b1b99b0c784831d593a3137ccc358d31e2": {
+      "token0": {
+          "address": "0x4200000000000000000000000000000000000006",
+          "name": "Wrapped Ether",
+          "symbol": "WETH",
+          "decimals": 18
+      },
+      "token1": {
+          "address": "0xfDaA3FA1B956Ee131dB1A5ECe054832298d9d378",
+          "name": "Spire Ai",
+          "symbol": "SPIRE ",
+          "decimals": 18
+      },
+      "pair": {
+          "symbol": "WETH-SPIRE "
+      }
+  },
+  "0xfa96f476b030c60011d8878ec1ef05c4b218f9c3": {
+      "token0": {
+          "address": "0x4200000000000000000000000000000000000006",
+          "name": "Wrapped Ether",
+          "symbol": "WETH",
+          "decimals": 18
+      },
+      "token1": {
+          "address": "0x7b8D415f5239ae5e0f485971529B4f798e63b0B4",
+          "name": "BLUBI",
+          "symbol": "BLUBI",
+          "decimals": 18
+      },
+      "pair": {
+          "symbol": "WETH-BLUBI"
+      }
+  },
+  "0x734c277caaef07a35bea020d8cc9d450e54dec26": {
+      "token0": {
+          "address": "0x1445914fa252878FbAF2d65723a3766b6A77b7D8",
+          "name": "Luffy INU",
+          "symbol": "LUFFY",
+          "decimals": 18
+      },
+      "token1": {
+          "address": "0x4200000000000000000000000000000000000006",
+          "name": "Wrapped Ether",
+          "symbol": "WETH",
+          "decimals": 18
+      },
+      "pair": {
+          "symbol": "LUFFY-WETH"
+      }
+  },
+  "0xa36d9624a58d7a9abaa5c0335c382829f7be8df4": {
+      "token0": {
+          "address": "0x4200000000000000000000000000000000000006",
+          "name": "Wrapped Ether",
+          "symbol": "WETH",
+          "decimals": 18
+      },
+      "token1": {
+          "address": "0xd11A584DE5fA50a4Ee560C48aB44DbB31823d9bc",
+          "name": "Buttman",
+          "symbol": "BUTT",
+          "decimals": 18
+      },
+      "pair": {
+          "symbol": "WETH-BUTT"
+      }
+  },
+  "0x6f82303e49d2a0b5581292f0bfe9bd9926cdd3bd": {
+      "token0": {
+          "address": "0x0993FD00A1E1e6c98A228129d5780DAA13015Ea1",
+          "name": "Tiki",
+          "symbol": "TIKI",
+          "decimals": 18
+      },
+      "token1": {
+          "address": "0x4200000000000000000000000000000000000006",
+          "name": "Wrapped Ether",
+          "symbol": "WETH",
+          "decimals": 18
+      },
+      "pair": {
+          "symbol": "TIKI-WETH"
+      }
+  },
+  "0x51eb872bc68137785abbd5586867cf00fa38cfa6": {
+      "token0": {
+          "address": "0x4200000000000000000000000000000000000006",
+          "name": "Wrapped Ether",
+          "symbol": "WETH",
+          "decimals": 18
+      },
+      "token1": {
+          "address": "0x6F10607507afF450b8Cf0A6fa2641a781889DdfA",
+          "name": "MILO",
+          "symbol": "MILO",
+          "decimals": 9
+      },
+      "pair": {
+          "symbol": "WETH-MILO"
+      }
+  },
+  "0x0795a759cbf9661bbe7913e7b9a6d79a37591683": {
+      "token0": {
+          "address": "0x160F7692e76cb4fa1F69d76F05519CE7709F08b9",
+          "name": "based morning",
+          "symbol": "bm",
+          "decimals": 8
+      },
+      "token1": {
+          "address": "0x4200000000000000000000000000000000000006",
+          "name": "Wrapped Ether",
+          "symbol": "WETH",
+          "decimals": 18
+      },
+      "pair": {
+          "symbol": "bm-WETH"
+      }
+  },
+  "0xa6feb64951bca54a489bad5c24ba5a62ab7e1339": {
+      "token0": {
+          "address": "0x4200000000000000000000000000000000000006",
+          "name": "Wrapped Ether",
+          "symbol": "WETH",
+          "decimals": 18
+      },
+      "token1": {
+          "address": "0xe39CDF97c8c55C4dc373B5f2C45c77807cD744C4",
+          "name": "BasedAi",
+          "symbol": "BasedAi",
+          "decimals": 18
+      },
+      "pair": {
+          "symbol": "WETH-BasedAi"
+      }
+  },
+  "0xc673ec2004b870ac4e948527f4474f616f3738c0": {
+      "token0": {
+          "address": "0x4200000000000000000000000000000000000006",
+          "name": "Wrapped Ether",
+          "symbol": "WETH",
+          "decimals": 18
+      },
+      "token1": {
+          "address": "0x4c40454659C8ec1283355d8e3911bA1745FF6Fd1",
+          "name": "Blue Chip",
+          "symbol": "CHIP",
+          "decimals": 9
+      },
+      "pair": {
+          "symbol": "WETH-CHIP"
+      }
+  },
+  "0x7afd51939cca0de455a99461e3ecf1d96a456671": {
+      "token0": {
+          "address": "0x4200000000000000000000000000000000000006",
+          "name": "Wrapped Ether",
+          "symbol": "WETH",
+          "decimals": 18
+      },
+      "token1": {
+          "address": "0xacfc203140394D0112Aa1838d14D658A6fA80B5b",
+          "name": "BASE OF MAGA",
+          "symbol": "TRUMP",
+          "decimals": 10
+      },
+      "pair": {
+          "symbol": "WETH-TRUMP"
+      }
+  },
+  "0x12bcf75f37c790bb8fb4238520905ae33394bb66": {
+      "token0": {
+          "address": "0x4200000000000000000000000000000000000006",
+          "name": "Wrapped Ether",
+          "symbol": "WETH",
+          "decimals": 18
+      },
+      "token1": {
+          "address": "0x8a5F9a6b653ecbDb406f9EB5F0C8dDba10919Aec",
+          "name": "bloo foster coin",
+          "symbol": "bloo",
+          "decimals": 18
+      },
+      "pair": {
+          "symbol": "WETH-bloo"
+      }
+  },
+  "0xfa2f6103d4b85c8a5f23103f4b848ddb5f7d0549": {
+      "token0": {
+          "address": "0x4200000000000000000000000000000000000006",
+          "name": "Wrapped Ether",
+          "symbol": "WETH",
+          "decimals": 18
+      },
+      "token1": {
+          "address": "0x7EF0BbEDE3677B9Ecafed6330606572C8689048e",
+          "name": "Base Dogecoin",
+          "symbol": "DOGE",
+          "decimals": 10
+      },
+      "pair": {
+          "symbol": "WETH-DOGE"
+      }
+  },
+  "0xde66c35e01ed8e619bf092352338ef94f2327337": {
+      "token0": {
+          "address": "0x4200000000000000000000000000000000000006",
+          "name": "Wrapped Ether",
+          "symbol": "WETH",
+          "decimals": 18
+      },
+      "token1": {
+          "address": "0xFF0C532FDB8Cd566Ae169C1CB157ff2Bdc83E105",
+          "name": "Fren Pet",
+          "symbol": "Fren Pet",
+          "decimals": 18
+      },
+      "pair": {
+          "symbol": "WETH-Fren Pet"
+      }
+  },
+  "0x091a931a4e77c7bab013657fc218fcf1229ae16b": {
+      "token0": {
+          "address": "0x4200000000000000000000000000000000000006",
+          "name": "Wrapped Ether",
+          "symbol": "WETH",
+          "decimals": 18
+      },
+      "token1": {
+          "address": "0xFd008f937B4d73EEb00Cf74CE90c392be5f07F96",
+          "name": "MOON INU",
+          "symbol": "MOON",
+          "decimals": 18
+      },
+      "pair": {
+          "symbol": "WETH-MOON"
+      }
+  },
+  "0xecf6701036fe645c8b1755b616ab20d713c3862f": {
+      "token0": {
+          "address": "0x1C1eC1bb5f12F24c97231165B13F3Eab9d4Ec00e",
+          "name": "2FAI",
+          "symbol": "2FAI",
+          "decimals": 9
+      },
+      "token1": {
+          "address": "0x4200000000000000000000000000000000000006",
+          "name": "Wrapped Ether",
+          "symbol": "WETH",
+          "decimals": 18
+      },
+      "pair": {
+          "symbol": "2FAI-WETH"
+      }
+  },
+  "0x50f16aab823bc786f9c2647ef99599931c6c12ac": {
+      "token0": {
+          "address": "0x4200000000000000000000000000000000000006",
+          "name": "Wrapped Ether",
+          "symbol": "WETH",
+          "decimals": 18
+      },
+      "token1": {
+          "address": "0x8011eef8FC855Df1c4f421443f306E19818e60D3",
+          "name": "duh",
+          "symbol": "DUH",
+          "decimals": 18
+      },
+      "pair": {
+          "symbol": "WETH-DUH"
+      }
+  },
+  "0xdb3cfcbcdd50c23b5198d1e112806f9e60b50cf8": {
+      "token0": {
+          "address": "0x162a643424985183AC0355744a3f24d36684B64f",
+          "name": "GrokGrok",
+          "symbol": "GrokGrok",
+          "decimals": 18
+      },
+      "token1": {
+          "address": "0x4200000000000000000000000000000000000006",
+          "name": "Wrapped Ether",
+          "symbol": "WETH",
+          "decimals": 18
+      },
+      "pair": {
+          "symbol": "GrokGrok-WETH"
+      }
+  },
+  "0x621ba1e830e92d9652605af671f4aadae48d9558": {
+      "token0": {
+          "address": "0x4200000000000000000000000000000000000006",
+          "name": "Wrapped Ether",
+          "symbol": "WETH",
+          "decimals": 18
+      },
+      "token1": {
+          "address": "0x922775d6B47206511027A007932160ba3903498a",
+          "name": "BaseDoge",
+          "symbol": "BaseDoge",
+          "decimals": 9
+      },
+      "pair": {
+          "symbol": "WETH-BaseDoge"
+      }
+  },
+  "0x45f4db10bb0102c133f1c70500124e4569f3edcd": {
+      "token0": {
+          "address": "0x4200000000000000000000000000000000000006",
+          "name": "Wrapped Ether",
+          "symbol": "WETH",
+          "decimals": 18
+      },
+      "token1": {
+          "address": "0x42069BAbe14fB1802C5CB0F50BB9D2Ad6FEf55e2",
+          "name": "frok.ai",
+          "symbol": "FROK",
+          "decimals": 18
+      },
+      "pair": {
+          "symbol": "WETH-FROK"
+      }
+  },
+  "0x5c1cc3089a8231cde86301e13e69d1c9b0bb8b7c": {
+      "token0": {
+          "address": "0x4200000000000000000000000000000000000006",
+          "name": "Wrapped Ether",
+          "symbol": "WETH",
+          "decimals": 18
+      },
+      "token1": {
+          "address": "0x8ca99727813aF2a45Df365E920F59692DF436EE0",
+          "name": "SHADOW",
+          "symbol": "SHDW",
+          "decimals": 18
+      },
+      "pair": {
+          "symbol": "WETH-SHDW"
+      }
+  },
+  "0xb601d834539ef58200900502496a7eec99df7dba": {
+      "token0": {
+          "address": "0x356177B452dbae18B5a4b43b7B5324bFbae235Be",
+          "name": "DeFido",
+          "symbol": "DFD",
+          "decimals": 18
+      },
+      "token1": {
+          "address": "0x4200000000000000000000000000000000000006",
+          "name": "Wrapped Ether",
+          "symbol": "WETH",
+          "decimals": 18
+      },
+      "pair": {
+          "symbol": "DFD-WETH"
+      }
+  },
+  "0x2340ae3079e70110b39d8cff4ff214e1c8f44601": {
+      "token0": {
+          "address": "0x4200000000000000000000000000000000000006",
+          "name": "Wrapped Ether",
+          "symbol": "WETH",
+          "decimals": 18
+      },
+      "token1": {
+          "address": "0xD6BBac6486D93cB576Cacf085d307c8EE69BBFe9",
+          "name": "Surge",
+          "symbol": "SURGE",
+          "decimals": 9
+      },
+      "pair": {
+          "symbol": "WETH-SURGE"
+      }
+  },
+  "0x1bf1a0d71af2efe7d4d35fb0621049ba127be505": {
+      "token0": {
+          "address": "0x4200000000000000000000000000000000000006",
+          "name": "Wrapped Ether",
+          "symbol": "WETH",
+          "decimals": 18
+      },
+      "token1": {
+          "address": "0xf129FA476B8AA4a02F909CC0FB2568C56a2755FC",
+          "name": "King Floki",
+          "symbol": "KINGFLOKI",
+          "decimals": 18
+      },
+      "pair": {
+          "symbol": "WETH-KINGFLOKI"
+      }
+  }
   },
   "static_pairs": true
 }
