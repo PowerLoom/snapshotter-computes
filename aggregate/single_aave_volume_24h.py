@@ -3,9 +3,6 @@ import json
 
 from ipfs_client.main import AsyncIPFSClient
 from redis import asyncio as aioredis
-
-from ..utils.models.message_models import UniswapTradesAggregateSnapshot
-from ..utils.models.message_models import UniswapTradesSnapshot
 from snapshotter.utils.callback_helpers import GenericProcessorAggregate
 from snapshotter.utils.data_utils import get_project_epoch_snapshot_bulk
 from snapshotter.utils.data_utils import get_project_first_epoch
@@ -17,41 +14,42 @@ from snapshotter.utils.redis.redis_keys import project_finalized_data_zset
 from snapshotter.utils.redis.redis_keys import submitted_base_snapshots_key
 from snapshotter.utils.rpc import RpcHelper
 
+from ..utils.models.message_models import AaveSupplyVolumeSnapshot
+from ..utils.models.message_models import AaveVolumeAggregateSnapshot
 
-class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
+
+class AggregateSupplyVolumeProcessor(GenericProcessorAggregate):
     transformation_lambdas = None
 
     def __init__(self) -> None:
         self.transformation_lambdas = []
-        self._logger = logger.bind(module='AggregateTradeVolumeProcessor24h')
+        self._logger = logger.bind(module='AggregateSupplyVolumeProcessor24h')
 
     def _add_aggregate_snapshot(
         self,
-        previous_aggregate_snapshot: UniswapTradesAggregateSnapshot,
-        current_snapshot: UniswapTradesSnapshot,
+        previous_aggregate_snapshot: AaveVolumeAggregateSnapshot,
+        current_snapshot: AaveSupplyVolumeSnapshot,
     ):
 
-        previous_aggregate_snapshot.totalTrade += current_snapshot.totalTrade
-        previous_aggregate_snapshot.totalFee += current_snapshot.totalFee
-        previous_aggregate_snapshot.token0TradeVolume += current_snapshot.token0TradeVolume
-        previous_aggregate_snapshot.token1TradeVolume += current_snapshot.token1TradeVolume
-        previous_aggregate_snapshot.token0TradeVolumeUSD += current_snapshot.token0TradeVolumeUSD
-        previous_aggregate_snapshot.token1TradeVolumeUSD += current_snapshot.token1TradeVolumeUSD
+        previous_aggregate_snapshot.totalBorrow += current_snapshot.borrow
+        previous_aggregate_snapshot.totalRepay += current_snapshot.repay
+        previous_aggregate_snapshot.totalSupply += current_snapshot.supply
+        previous_aggregate_snapshot.totalWithdraw += current_snapshot.withdraw
+        previous_aggregate_snapshot.totalLiquidatedCollateral += current_snapshot.liquidation
 
         return previous_aggregate_snapshot
 
     def _remove_aggregate_snapshot(
         self,
-        previous_aggregate_snapshot: UniswapTradesAggregateSnapshot,
-        current_snapshot: UniswapTradesSnapshot,
+        previous_aggregate_snapshot: AaveVolumeAggregateSnapshot,
+        current_snapshot: AaveSupplyVolumeSnapshot,
     ):
 
-        previous_aggregate_snapshot.totalTrade -= current_snapshot.totalTrade
-        previous_aggregate_snapshot.totalFee -= current_snapshot.totalFee
-        previous_aggregate_snapshot.token0TradeVolume -= current_snapshot.token0TradeVolume
-        previous_aggregate_snapshot.token1TradeVolume -= current_snapshot.token1TradeVolume
-        previous_aggregate_snapshot.token0TradeVolumeUSD -= current_snapshot.token0TradeVolumeUSD
-        previous_aggregate_snapshot.token1TradeVolumeUSD -= current_snapshot.token1TradeVolumeUSD
+        previous_aggregate_snapshot.totalBorrow -= current_snapshot.borrow
+        previous_aggregate_snapshot.totalRepay -= current_snapshot.repay
+        previous_aggregate_snapshot.totalSupply -= current_snapshot.supply
+        previous_aggregate_snapshot.totalWithdraw -= current_snapshot.withdraw
+        previous_aggregate_snapshot.totalLiquidatedCollateral -= current_snapshot.liquidation
 
         return previous_aggregate_snapshot
 
@@ -91,16 +89,16 @@ class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
             tail_epoch_id, msg_obj.epochId - 1, msg_obj.projectId,
         )
 
-        aggregate_snapshot = UniswapTradesAggregateSnapshot.parse_obj({'epochId': msg_obj.epochId})
+        aggregate_snapshot = AaveVolumeAggregateSnapshot.parse_obj({'epochId': msg_obj.epochId})
         if extrapolated_flag:
             aggregate_snapshot.complete = False
         if current_epoch_underlying_data:
-            current_snapshot = UniswapTradesSnapshot.parse_obj(current_epoch_underlying_data)
+            current_snapshot = AaveSupplyVolumeSnapshot.parse_obj(current_epoch_underlying_data)
             aggregate_snapshot = self._add_aggregate_snapshot(aggregate_snapshot, current_snapshot)
 
         for snapshot_data in snapshots_data:
             if snapshot_data:
-                snapshot = UniswapTradesSnapshot.parse_obj(snapshot_data)
+                snapshot = AaveSupplyVolumeSnapshot.parse_obj(snapshot_data)
                 aggregate_snapshot = self._add_aggregate_snapshot(aggregate_snapshot, snapshot)
 
         await redis.delete(f'calculate_from_scratch:{project_id}')
@@ -118,7 +116,7 @@ class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
         project_id: str,
 
     ):
-        self._logger.info(f'Building trade volume aggregate snapshot for {msg_obj}')
+        self._logger.info(f'Building supply volume aggregate snapshot for {msg_obj}')
 
         # aggregate project first epoch
         project_first_epoch = await get_project_first_epoch(
@@ -179,7 +177,7 @@ class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
                     msg_obj, redis, rpc_helper, anchor_rpc_helper, ipfs_reader, protocol_state_contract, project_id,
                 )
 
-            aggregate_snapshot = UniswapTradesAggregateSnapshot.parse_obj(project_last_finalized_data)
+            aggregate_snapshot = AaveVolumeAggregateSnapshot.parse_obj(project_last_finalized_data)
             # updating epochId to current epoch
             aggregate_snapshot.epochId = msg_obj.epochId
 
@@ -238,7 +236,7 @@ class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
 
             for snapshot_data in base_snapshots:
                 if snapshot_data:
-                    snapshot = UniswapTradesSnapshot.parse_obj(snapshot_data)
+                    snapshot = AaveSupplyVolumeSnapshot.parse_obj(snapshot_data)
                     aggregate_snapshot = self._add_aggregate_snapshot(aggregate_snapshot, snapshot)
 
             # Remove from tail if needed
@@ -257,7 +255,7 @@ class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
 
                 for snapshot_data in tail_epoch_snapshots:
                     if snapshot_data:
-                        snapshot = UniswapTradesSnapshot.parse_obj(snapshot_data)
+                        snapshot = AaveSupplyVolumeSnapshot.parse_obj(snapshot_data)
                         aggregate_snapshot = self._remove_aggregate_snapshot(aggregate_snapshot, snapshot)
 
             if aggregate_complete_flag:

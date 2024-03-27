@@ -5,12 +5,8 @@ from pydantic import BaseModel
 from pydantic.dataclasses import dataclass
 
 
-class ReserveConfiguration(BaseModel):
-    data: int
-
-
 @dataclass
-class data_provider_reserve_data():
+class DataProviderReserveData():
     unbacked: int
     accruedToTreasuryScaled: int
     totalAToken: int
@@ -23,70 +19,118 @@ class data_provider_reserve_data():
     liquidityIndex: int
     variableBorrowIndex: int
     lastUpdateTimestamp: int
+    timestamp: int = None
 
 
-@dataclass
-class pool_reserve_data():
-    configuration: int
+class AssetDetailsData(BaseModel):
+    ltv: float
+    liqThreshold: float
+    liqBonus: float
+    resFactor: float
+    borrowCap: int
+    supplyCap: int
+    eLtv: float
+    eliqThreshold: float
+    eliqBonus: float
+
+
+class RateDetailsData(BaseModel):
+    varRateSlope1: float
+    varRateSlope2: float
+    stableRateSlope1: float
+    stableRateSlope2: float
+    baseStableRate: float
+    baseVarRate: float
+    optimalRate: float
+    utilRate: float = 0
+
+
+class UiDataProviderReserveData(BaseModel):
     liquidityIndex: int
-    currentLiquidityRate: int
     variableBorrowIndex: int
-    currentVariableBorrowRate: int
-    currentStableBorrowRate: int
+    liquidityRate: int
+    variableBorrowRate: int
+    stableBorrowRate: int
     lastUpdateTimestamp: int
-    reserve_id: int
-    aTokenAddress: str
-    stableDebtTokenAddress: str
-    variableDebtTokenAddress: str
-    interestRateStrategyAddress: str
+    availableLiquidity: int
+    totalPrincipalStableDebt: int
+    averageStableRate: int
+    stableDebtLastUpdateTimestamp: int
+    totalScaledVariableDebt: int
+    priceInMarketReferenceCurrency: int
     accruedToTreasury: int
-    unbacked: int
     isolationModeTotalDebt: int
 
 
-class trade_data(BaseModel):
-    totalTradesUSD: float
-    totalFeeUSD: float
-    token0TradeVolume: float
-    token1TradeVolume: float
-    token0TradeVolumeUSD: float
-    token1TradeVolumeUSD: float
+class AaveSupplyData(BaseModel):
+    token_supply: int = 0
+    usd_supply: float = 0
 
-    def __add__(self, other: 'trade_data') -> 'trade_data':
-        self.totalTradesUSD += other.totalTradesUSD
-        self.totalFeeUSD += other.totalFeeUSD
-        self.token0TradeVolume += other.token0TradeVolume
-        self.token1TradeVolume += other.token1TradeVolume
-        self.token0TradeVolumeUSD += other.token0TradeVolumeUSD
-        self.token1TradeVolumeUSD += other.token1TradeVolumeUSD
+
+class AaveDebtData(BaseModel):
+    token_debt: int = 0
+    usd_debt: float = 0
+
+
+class AssetTotalData(BaseModel):
+    totalSupply: AaveSupplyData
+    availableLiquidity: AaveSupplyData
+    totalStableDebt: AaveDebtData
+    totalVariableDebt: AaveDebtData
+    liquidityRate: int
+    liquidityIndex: int
+    variableBorrowRate: int
+    stableBorrowRate: int
+    variableBorrowIndex: int
+    lastUpdateTimestamp: int
+    isolationModeTotalDebt: int
+    assetDetails: AssetDetailsData
+    rateDetails: RateDetailsData
+    timestamp: int = None
+
+
+class volumeData(BaseModel):
+    totalUSD: float = 0.0
+    totalToken: int = 0
+
+    def __add__(self, other: 'volumeData') -> 'volumeData':
+        self.totalUSD += other.totalUSD
+        self.totalToken += other.totalToken
         return self
 
-    def __sub__(self, other: 'trade_data') -> 'trade_data':
-        self.totalTradesUSD -= other.totalTradesUSD
-        self.totalFeeUSD -= other.totalFeeUSD
-        self.token0TradeVolume -= other.token0TradeVolume
-        self.token1TradeVolume -= other.token1TradeVolume
-        self.token0TradeVolumeUSD -= other.token0TradeVolumeUSD
-        self.token1TradeVolumeUSD -= other.token1TradeVolumeUSD
+    def __sub__(self, other: 'volumeData') -> 'volumeData':
+        self.totalUSD -= other.totalUSD
+        self.totalToken -= other.totalToken
         return self
 
-    def __abs__(self) -> 'trade_data':
-        self.totalTradesUSD = abs(self.totalTradesUSD)
-        self.totalFeeUSD = abs(self.totalFeeUSD)
-        self.token0TradeVolume = abs(self.token0TradeVolume)
-        self.token1TradeVolume = abs(self.token1TradeVolume)
-        self.token0TradeVolumeUSD = abs(self.token0TradeVolumeUSD)
-        self.token1TradeVolumeUSD = abs(self.token1TradeVolumeUSD)
+    def __abs__(self) -> 'volumeData':
+        self.totalUSD = abs(self.totalUSD)
+        self.totalToken = abs(self.totalToken)
         return self
 
 
-class event_trade_data(BaseModel):
+class eventVolumeData(BaseModel):
     logs: List[Dict]
-    trades: trade_data
+    totals: volumeData
 
 
-class epoch_event_trade_data(BaseModel):
-    Swap: event_trade_data
-    Mint: event_trade_data
-    Burn: event_trade_data
-    Trades: trade_data
+class liquidationData(BaseModel):
+    collateralAsset: str
+    debtAsset: str
+    debtToCover: volumeData
+    liquidatedCollateral: volumeData
+    blockNumber: int
+
+
+class eventLiquidationData(BaseModel):
+    logs: List[Dict]
+    totalLiquidatedCollateral: volumeData
+    liquidations: List[liquidationData]
+
+
+class epochEventVolumeData(BaseModel):
+    borrow: eventVolumeData
+    repay: eventVolumeData
+    supply: eventVolumeData
+    withdraw: eventVolumeData
+    liquidation: eventLiquidationData

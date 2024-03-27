@@ -4,50 +4,36 @@ aave_asset_contract_data = (
     'aave:assetContract:' + settings.namespace + ':{}:AssetContractData'
 )
 
-uniswap_pair_contract_tokens_addresses = (
-    'uniswap:pairContract:' + settings.namespace + ':{}:PairContractTokensAddresses'
-)
-uniswap_pair_contract_tokens_data = (
-    'uniswap:pairContract:' + settings.namespace + ':{}:PairContractTokensData'
+aave_cached_block_height_asset_price = (
+    'aave:assetContract:' + settings.namespace +
+    ':{}:cachedAaveBlockHeightAssetPrice'
 )
 
-uinswap_token_pair_contract_mapping = (
-    'uniswap:tokens:' + settings.namespace + ':PairContractAddress'
+aave_cached_block_height_asset_data = (
+    'aave:assetContract:' + settings.namespace +
+    ':{}:cachedAaveBlockHeightAssetData'
 )
 
-uniswap_V2_summarized_snapshots_zset = (
-    'uniswap:V2PairsSummarySnapshot:' + settings.namespace + ':snapshotsZset'
-)
-uniswap_V2_snapshot_at_blockheight = (
-    'uniswap:V2PairsSummarySnapshot:' + settings.namespace + ':snapshot:{}'
-)  # block_height
-uniswap_v2_daily_stats_snapshot_zset = (
-    'uniswap:V2DailyStatsSnapshot:' + settings.namespace + ':snapshotsZset'
-)
-uniswap_V2_daily_stats_at_blockheight = (
-    'uniswap:V2DailyStatsSnapshot:' + settings.namespace + ':snapshot:{}'
-)  # block_height
-uniswap_v2_tokens_snapshot_zset = (
-    'uniswap:V2TokensSummarySnapshot:' + settings.namespace + ':snapshotsZset'
-)
-uniswap_V2_tokens_at_blockheight = (
-    'uniswap:V2TokensSummarySnapshot:' + settings.namespace + ':{}'
-)  # block_height
-
-uniswap_pair_cached_recent_logs = (
-    'uniswap:pairContract:' + settings.namespace + ':{}:recentLogs'
+aave_cached_block_height_asset_details = (
+    'aave:assetContract:' + settings.namespace +
+    ':{}:cachedAaveBlockHeightAssetDetails'
 )
 
-uniswap_tokens_pair_map = (
-    'uniswap:pairContract:' + settings.namespace + ':tokensPairMap'
+aave_cached_block_height_asset_rate_details = (
+    'aave:assetContract:' + settings.namespace +
+    ':{}:cachedAaveBlockHeightAssetRateDetails'
 )
 
-uniswap_pair_cached_block_height_token_price = (
-    'uniswap:pairContract:' + settings.namespace +
-    ':{}:cachedPairBlockHeightTokenPrice'
+aave_pool_asset_set_data = (
+    'aave:poolContract:' + settings.namespace + ':assetSetData'
 )
 
-uniswap_token_derived_eth_cached_block_height = (
-    'uniswap:token:' + settings.namespace +
-    ':{}:cachedDerivedEthBlockHeight'
+aave_cached_block_height_core_event_data = (
+    'aave:poolContract:' + settings.namespace +
+    ':cachedAaveBlockHeightEventData'
+)
+
+aave_cached_block_height_assets_prices = (
+    'aave:poolContract:' + settings.namespace +
+    ':cachedAaveBlockHeightAssetsPrices'
 )

@@ -4,6 +4,13 @@ from typing import List
 from pydantic import BaseModel
 from snapshotter.utils.models.message_models import AggregateBase
 
+from .data_models import AaveDebtData
+from .data_models import AaveSupplyData
+from .data_models import AssetDetailsData
+from .data_models import liquidationData
+from .data_models import RateDetailsData
+from .data_models import volumeData
+
 
 class EpochBaseSnapshot(BaseModel):
     begin: int
@@ -19,111 +26,103 @@ class SnapshotBase(BaseModel):
 class AavePoolTotalAssetSnapshot(SnapshotBase):
     totalAToken: Dict[
         str,
-        float,
+        AaveSupplyData,
     ]  # block number to corresponding total supply
-    liquidityRate: Dict[str, float]
-    liquidityIndex: Dict[str, float]
-    totalVariableDebt: Dict[str, float]
-    totalStableDebt: Dict[str, float]
-    variableBorrowRate: Dict[str, float]
-    stableBorrowRate: Dict[str, float]
-    variableBorrowIndex: Dict[str, float]
+    liquidityRate: Dict[str, int]
+    liquidityIndex: Dict[str, int]
+    totalVariableDebt: Dict[str, AaveDebtData]
+    totalStableDebt: Dict[str, AaveDebtData]
+    variableBorrowRate: Dict[str, int]
+    stableBorrowRate: Dict[str, int]
+    variableBorrowIndex: Dict[str, int]
     lastUpdateTimestamp: Dict[str, int]
+    isolationModeTotalDebt: Dict[str, int]
+    assetDetails: Dict[str, AssetDetailsData]
+    rateDetails: Dict[str, RateDetailsData]
+    availableLiquidity: Dict[str, AaveSupplyData]
 
 
-class UniswapPairTotalReservesSnapshot(SnapshotBase):
-    token0Reserves: Dict[
-        str,
-        float,
-    ]  # block number to corresponding total reserves
-    token1Reserves: Dict[
-        str,
-        float,
-    ]  # block number to corresponding total reserves
-    token0ReservesUSD: Dict[str, float]
-    token1ReservesUSD: Dict[str, float]
-    token0Prices: Dict[str, float]
-    token1Prices: Dict[str, float]
+class AaveTopSupplyData(BaseModel):
+    token_supply: float
+    usd_supply: float
 
 
-class logsTradeModel(BaseModel):
-    logs: List
-    trades: Dict[str, float]
+class AaveTopDebtData(BaseModel):
+    token_debt: float
+    usd_debt: float
 
 
-class UniswapTradeEvents(BaseModel):
-    Swap: logsTradeModel
-    Mint: logsTradeModel
-    Burn: logsTradeModel
-    Trades: Dict[str, float]
-
-
-class UniswapTradesSnapshot(SnapshotBase):
-    totalTrade: float  # in USD
-    totalFee: float  # in USD
-    token0TradeVolume: float  # in token native decimals supply
-    token1TradeVolume: float  # in token native decimals supply
-    token0TradeVolumeUSD: float
-    token1TradeVolumeUSD: float
-    events: UniswapTradeEvents
-
-
-class UniswapTradesAggregateSnapshot(AggregateBase):
-    totalTrade: float = 0  # in USD
-    totalFee: float = 0  # in USD
-    token0TradeVolume: float = 0  # in token native decimals supply
-    token1TradeVolume: float = 0  # in token native decimals supply
-    token0TradeVolumeUSD: float = 0
-    token1TradeVolumeUSD: float = 0
-    complete: bool = True
-
-
-class UniswapTopTokenSnapshot(BaseModel):
+class AaveTopAssetSnapshot(BaseModel):
     name: str
     symbol: str
     decimals: int
     address: str
-    price: float
-    priceChange24h: float
-    volume24h: float
-    liquidity: float
+    totalAToken: AaveTopSupplyData
+    liquidityApy: float
+    totalVariableDebt: AaveTopDebtData
+    variableApy: float
+    isIsolated: bool
 
 
-class UniswapTopTokensSnapshot(AggregateBase):
-    tokens: List[UniswapTopTokenSnapshot] = []
+class AaveTopAssetsSnapshot(AggregateBase):
+    assets: List[AaveTopAssetSnapshot] = []
     complete: bool = True
 
 
-class UniswapTopPair24hSnapshot(BaseModel):
+class AaveMarketStatsSnapshot(AggregateBase):
+    totalMarketSize: float
+    totalAvailable: float
+    totalBorrows: float
+    marketChange24h: float
+    availableChange24h: float
+    borrowChange24h: float
+    complete: bool = True
+
+
+class AaveAprAggregateSnapshot(AggregateBase):
+    avgLiquidityRate: float = 0
+    avgVariableRate: float = 0
+    avgStableRate: float = 0
+    avgUtilizationRate: float = 0
+    timestamp: int = 0
+    complete: bool = True
+
+
+class AaveSupplyVolumeSnapshot(SnapshotBase):
+    borrow: volumeData
+    repay: volumeData
+    supply: volumeData
+    withdraw: volumeData
+    liquidation: volumeData
+    events: List[Dict]
+    liquidationList: List[liquidationData]
+
+
+class AaveVolumeAggregateSnapshot(AggregateBase):
+    totalBorrow: volumeData = volumeData()
+    totalRepay: volumeData = volumeData()
+    totalSupply: volumeData = volumeData()
+    totalWithdraw: volumeData = volumeData()
+    totalLiquidatedCollateral: volumeData = volumeData()
+    complete: bool = True
+
+
+class AaveTopAssetVolumeSnapshot(BaseModel):
     name: str
+    symbol: str
     address: str
-    liquidity: float
-    volume24h: float
-    fee24h: float
+    totalBorrow: volumeData
+    totalRepay: volumeData
+    totalSupply: volumeData
+    totalWithdraw: volumeData
+    totalLiquidatedCollateral: volumeData
+    borrowChange24h: float
+    repayChange24h: float
+    supplyChange24h: float
+    withdrawChange24h: float
+    liquidationChange24h: float
 
 
-class UniswapTopPairs24hSnapshot(AggregateBase):
-    pairs: List[UniswapTopPair24hSnapshot] = []
-    complete: bool = True
-
-
-class UniswapTopPair7dSnapshot(BaseModel):
-    name: str
-    address: str
-    volume7d: float
-    fee7d: float
-
-
-class UniswapTopPairs7dSnapshot(AggregateBase):
-    pairs: List[UniswapTopPair7dSnapshot] = []
-    complete: bool = True
-
-
-class UniswapStatsSnapshot(AggregateBase):
-    volume24h: float = 0
-    tvl: float = 0
-    fee24h: float = 0
-    volumeChange24h: float = 0
-    tvlChange24h: float = 0
-    feeChange24h: float = 0
+class AaveTopAssetsVolumeSnapshot(AggregateBase):
+    assets: List[AaveTopAssetVolumeSnapshot] = []
     complete: bool = True

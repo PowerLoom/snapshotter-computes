@@ -5,23 +5,22 @@ from snapshotter.utils.redis.redis_conn import RedisPoolCache
 from snapshotter.utils.redis.redis_keys import source_chain_epoch_size_key
 from snapshotter.utils.rpc import RpcHelper
 
-from ..pool_total_supply import AssetTotalSupplyProcessor
-from ..utils.helpers import get_bulk_asset_data
-from ..utils.models.message_models import AavePoolTotalAssetSnapshot
+from ..pool_supply_volume import AssetSupplyVolumeProcessor
+from ..utils.models.message_models import AaveSupplyVolumeSnapshot
 
 
 async def test_total_supply_processor():
     # Mock your parameters
-    from_block = 18780760
+    from_block = 19287450  # WETH liquidationCall events
     to_block = from_block + 9
     snapshot_process_message = PowerloomSnapshotProcessMessage(
-        data_source='0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0',
+        data_source='0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
         begin=from_block,
         end=to_block,
         epochId=1,
     )
 
-    processor = AssetTotalSupplyProcessor()
+    processor = AssetSupplyVolumeProcessor()
     rpc_helper = RpcHelper()
     aioredis_pool = RedisPoolCache()
     await aioredis_pool.populate()
@@ -33,23 +32,13 @@ async def test_total_supply_processor():
         to_block - from_block,
     )
 
-    # simulate preloader call
-    await get_bulk_asset_data(
-        redis_conn=redis_conn,
-        rpc_helper=rpc_helper,
-        from_block=from_block,
-        to_block=to_block,
-    )
-
-    asset_total_snapshot = await processor.compute(
+    asset_volume_snapshot = await processor.compute(
         epoch=snapshot_process_message,
         redis_conn=redis_conn,
         rpc_helper=rpc_helper,
     )
 
-    assert isinstance(asset_total_snapshot, AavePoolTotalAssetSnapshot)
-    assert len(asset_total_snapshot.totalAToken) == (to_block - from_block + 1), 'Should return data for all blocks'
-    assert len(asset_total_snapshot.liquidityIndex) == (to_block - from_block + 1), 'Should return data for all blocks'
+    assert isinstance(asset_volume_snapshot, AaveSupplyVolumeSnapshot)
 
     print('PASSED')
 
