@@ -6,6 +6,7 @@ from web3 import Web3
 from ..settings.config import settings as worker_settings
 from .constants import factory_contract_obj
 from .constants import pair_contract_abi
+from .constants import tokens_decimals
 from .helpers import get_pair
 from .helpers import get_pair_metadata
 
@@ -148,20 +149,22 @@ async def get_token_derived_eth(
             f'got result: {pair_reserves_list}',
         )
 
-    pair_metadata = await get_pair_metadata(
-        pair_address=pair,
-        rpc_helper=rpc_helper,
-    )
+    if Web3.to_checksum_address(worker_settings.contract_addresses.WETH) < token_address:
+        token0_decimals = tokens_decimals['WETH']
+        token1_decimals = int(token_metadata['decimals'])
+    else:
+        token0_decimals = int(token_metadata['decimals'])
+        token1_decimals = tokens_decimals['WETH']
 
     index = 0
     for block_num in range(from_block, to_block + 1):
         token_price = 0
 
         pair_reserve_token0 = pair_reserves_list[index][0] / 10 ** int(
-            pair_metadata['token0']['decimals'],
+            token0_decimals,
         )
         pair_reserve_token1 = pair_reserves_list[index][1] / 10 ** int(
-            pair_metadata['token1']['decimals'],
+            token1_decimals,
         )
 
         if float(pair_reserve_token0) == float(0) or float(
@@ -169,7 +172,7 @@ async def get_token_derived_eth(
         ) == float(0):
             token_derived_eth_dict[block_num] = token_price
         elif (
-            Web3.to_checksum_address(pair_metadata['token0']['address']) ==
+            Web3.to_checksum_address(worker_settings.contract_addresses.WETH) >
             token_address
         ):
             token_derived_eth_dict[block_num] = float(

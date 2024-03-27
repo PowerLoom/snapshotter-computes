@@ -57,3 +57,10 @@ UNISWAP_EVENTS_ABI = {
     'Mint': pair_contract_obj.events.Mint._get_event_abi(),
     'Burn': pair_contract_obj.events.Burn._get_event_abi(),
 }
+
+tokens_decimals = {
+    'USDbC': 6,
+    'DAI': 18,
+    'USDC': 6,
+    'WETH': 18,
+}
