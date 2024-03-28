@@ -1,5 +1,7 @@
 import asyncio
 import json
+from decimal import Decimal
+from decimal import getcontext
 
 from ipfs_client.main import AsyncIPFSClient
 from redis import asyncio as aioredis
@@ -20,6 +22,9 @@ from ..utils.constants import RAY
 from ..utils.models.message_models import AaveAprAggregateSnapshot
 from ..utils.models.message_models import AavePoolTotalAssetSnapshot
 
+# set decimal precision to 16 to prevent lossy conversions
+getcontext().prec = 16
+
 
 class AggreagateSingleAprProcessor(GenericProcessorAggregate):
     transformation_lambdas = None
@@ -36,52 +41,48 @@ class AggreagateSingleAprProcessor(GenericProcessorAggregate):
     ):
 
         # build averages and normalize values
-        current_liq_avg = sum(current_snapshot.liquidityRate.values()) / len(current_snapshot.liquidityRate.values())
-        current_liq_avg /= RAY
+        denominator = len(current_snapshot.liquidityRate.values())
+        denominator = Decimal(denominator)
+        ray_decimal = Decimal(RAY)
 
-        current_variable_avg = sum(current_snapshot.variableBorrowRate.values()) / \
-            len(current_snapshot.variableBorrowRate.values())
-        current_variable_avg /= RAY
+        current_liq_sum = sum(current_snapshot.liquidityRate.values())
+        current_liq_avg = Decimal(current_liq_sum) / denominator
+        current_liq_avg /= ray_decimal
 
-        current_stable_avg = sum(current_snapshot.stableBorrowRate.values()) / \
-            len(current_snapshot.stableBorrowRate.values())
-        current_stable_avg /= RAY
+        current_variable_sum = sum(current_snapshot.variableBorrowRate.values())
+        current_variable_avg = Decimal(current_variable_sum) / denominator
+        current_variable_avg /= ray_decimal
 
-        current_util_avg = sum(
+        current_stable_sum = sum(current_snapshot.stableBorrowRate.values())
+        current_stable_avg = Decimal(current_stable_sum) / denominator
+        current_stable_avg /= ray_decimal
+
+        current_util_sum = sum(
             [details.utilRate for details in current_snapshot.rateDetails.values()],
-        ) / len(current_snapshot.rateDetails.values())
+        )
+        # floats must be converted to strings to avoid precison loss for Decimals
+        current_util_avg = Decimal(str(current_util_sum)) / denominator
 
         # increment rolling averages
-        previous_aggregate_snapshot.avgLiquidityRate = sample_size * \
-            previous_aggregate_snapshot.avgLiquidityRate + current_liq_avg
-        previous_aggregate_snapshot.avgLiquidityRate /= sample_size + 1
-        previous_aggregate_snapshot.avgLiquidityRate = round(
-            previous_aggregate_snapshot.avgLiquidityRate, 
-            8,
-        )
+        denominator = Decimal(sample_size + 1)
 
-        previous_aggregate_snapshot.avgVariableRate = sample_size * \
-            previous_aggregate_snapshot.avgVariableRate + current_variable_avg
-        previous_aggregate_snapshot.avgVariableRate /= sample_size + 1
-        previous_aggregate_snapshot.avgVariableRate = round(
-            previous_aggregate_snapshot.avgVariableRate,
-            8,
-        )
+        numerator = Decimal(sample_size) * Decimal(str(previous_aggregate_snapshot.avgLiquidityRate)) + current_liq_avg
+        previous_aggregate_snapshot.avgLiquidityRate = numerator / denominator
+        previous_aggregate_snapshot.avgLiquidityRate = float(previous_aggregate_snapshot.avgLiquidityRate)
 
-        previous_aggregate_snapshot.avgStableRate = sample_size * previous_aggregate_snapshot.avgStableRate + current_stable_avg
-        previous_aggregate_snapshot.avgStableRate /= sample_size + 1
-        previous_aggregate_snapshot.avgStableRate = round(
-            previous_aggregate_snapshot.avgStableRate, 
-            8,
-        )
+        numerator = Decimal(sample_size) * \
+            Decimal(str(previous_aggregate_snapshot.avgVariableRate)) + current_variable_avg
+        previous_aggregate_snapshot.avgVariableRate = numerator / denominator
+        previous_aggregate_snapshot.avgVariableRate = float(previous_aggregate_snapshot.avgVariableRate)
 
-        previous_aggregate_snapshot.avgUtilizationRate = sample_size * \
-            previous_aggregate_snapshot.avgUtilizationRate + current_util_avg
-        previous_aggregate_snapshot.avgUtilizationRate /= sample_size + 1
-        previous_aggregate_snapshot.avgUtilizationRate = round(
-            previous_aggregate_snapshot.avgUtilizationRate,
-            8,
-        )
+        numerator = Decimal(sample_size) * Decimal(str(previous_aggregate_snapshot.avgStableRate)) + current_stable_avg
+        previous_aggregate_snapshot.avgStableRate = numerator / denominator
+        previous_aggregate_snapshot.avgStableRate = float(previous_aggregate_snapshot.avgStableRate)
+
+        numerator = Decimal(sample_size) * \
+            Decimal(str(previous_aggregate_snapshot.avgUtilizationRate)) + current_util_avg
+        previous_aggregate_snapshot.avgUtilizationRate = numerator / denominator
+        previous_aggregate_snapshot.avgUtilizationRate = float(previous_aggregate_snapshot.avgUtilizationRate)
 
         sample_size += 1
 
@@ -95,52 +96,48 @@ class AggreagateSingleAprProcessor(GenericProcessorAggregate):
     ):
 
         # build averages and normalize values
-        current_liq_avg = sum(current_snapshot.liquidityRate.values()) / len(current_snapshot.liquidityRate.values())
-        current_liq_avg /= RAY
+        denominator = len(current_snapshot.liquidityRate.values())
+        denominator = Decimal(denominator)
+        ray_decimal = Decimal(RAY)
 
-        current_variable_avg = sum(current_snapshot.variableBorrowRate.values()) / \
-            len(current_snapshot.variableBorrowRate.values())
-        current_variable_avg /= RAY
+        current_liq_sum = sum(current_snapshot.liquidityRate.values())
+        current_liq_avg = Decimal(current_liq_sum) / denominator
+        current_liq_avg /= ray_decimal
 
-        current_stable_avg = sum(current_snapshot.stableBorrowRate.values()) / \
-            len(current_snapshot.stableBorrowRate.values())
-        current_stable_avg /= RAY
+        current_variable_sum = sum(current_snapshot.variableBorrowRate.values())
+        current_variable_avg = Decimal(current_variable_sum) / denominator
+        current_variable_avg /= ray_decimal
 
-        current_util_avg = sum(
+        current_stable_sum = sum(current_snapshot.stableBorrowRate.values())
+        current_stable_avg = Decimal(current_stable_sum) / denominator
+        current_stable_avg /= ray_decimal
+
+        current_util_sum = sum(
             [details.utilRate for details in current_snapshot.rateDetails.values()],
-        ) / len(current_snapshot.rateDetails.values())
+        )
+        # floats must be converted to strings to avoid precison loss for Decimals
+        current_util_avg = Decimal(str(current_util_sum)) / denominator
 
         # decrement rolling averages
-        previous_aggregate_snapshot.avgLiquidityRate = sample_size * \
-            previous_aggregate_snapshot.avgLiquidityRate - current_liq_avg
-        previous_aggregate_snapshot.avgLiquidityRate /= sample_size - 1
-        previous_aggregate_snapshot.avgLiquidityRate = round(
-            previous_aggregate_snapshot.avgLiquidityRate, 
-            8,
-        )
+        denominator = Decimal(sample_size - 1)
 
-        previous_aggregate_snapshot.avgVariableRate = sample_size * \
-            previous_aggregate_snapshot.avgVariableRate - current_variable_avg
-        previous_aggregate_snapshot.avgVariableRate /= sample_size - 1
-        previous_aggregate_snapshot.avgVariableRate = round(
-            previous_aggregate_snapshot.avgVariableRate,
-            8,
-        )
+        numerator = Decimal(sample_size) * Decimal(str(previous_aggregate_snapshot.avgLiquidityRate)) - current_liq_avg
+        previous_aggregate_snapshot.avgLiquidityRate = numerator / denominator
+        previous_aggregate_snapshot.avgLiquidityRate = float(previous_aggregate_snapshot.avgLiquidityRate)
 
-        previous_aggregate_snapshot.avgStableRate = sample_size * previous_aggregate_snapshot.avgStableRate - current_stable_avg
-        previous_aggregate_snapshot.avgStableRate /= sample_size - 1
-        previous_aggregate_snapshot.avgStableRate = round(
-            previous_aggregate_snapshot.avgStableRate, 
-            8,
-        )
+        numerator = Decimal(sample_size) * \
+            Decimal(str(previous_aggregate_snapshot.avgVariableRate)) - current_variable_avg
+        previous_aggregate_snapshot.avgVariableRate = numerator / denominator
+        previous_aggregate_snapshot.avgVariableRate = float(previous_aggregate_snapshot.avgVariableRate)
 
-        previous_aggregate_snapshot.avgUtilizationRate = sample_size * \
-            previous_aggregate_snapshot.avgUtilizationRate - current_util_avg
-        previous_aggregate_snapshot.avgUtilizationRate /= sample_size - 1
-        previous_aggregate_snapshot.avgUtilizationRate = round(
-            previous_aggregate_snapshot.avgUtilizationRate,
-            8,
-        )
+        numerator = Decimal(sample_size) * Decimal(str(previous_aggregate_snapshot.avgStableRate)) - current_stable_avg
+        previous_aggregate_snapshot.avgStableRate = numerator / denominator
+        previous_aggregate_snapshot.avgStableRate = float(previous_aggregate_snapshot.avgStableRate)
+
+        numerator = Decimal(sample_size) * \
+            Decimal(str(previous_aggregate_snapshot.avgUtilizationRate)) - current_util_avg
+        previous_aggregate_snapshot.avgUtilizationRate = numerator / denominator
+        previous_aggregate_snapshot.avgUtilizationRate = float(previous_aggregate_snapshot.avgUtilizationRate)
 
         sample_size -= 1
 
