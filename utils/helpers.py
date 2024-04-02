@@ -243,7 +243,7 @@ async def get_pair_metadata(
         raise err
 
 
-def truncate(number, decimals=0):
+def truncate(number, decimals=5):
     """
     Returns a value truncated to a specific number of decimal places.
     """
