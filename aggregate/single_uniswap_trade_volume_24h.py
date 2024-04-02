@@ -3,7 +3,7 @@ import json
 
 from ipfs_client.main import AsyncIPFSClient
 from redis import asyncio as aioredis
-
+from ..utils.helpers import truncate
 from ..utils.models.message_models import UniswapTradesAggregateSnapshot
 from ..utils.models.message_models import UniswapTradesSnapshot
 from snapshotter.utils.callback_helpers import GenericProcessorAggregate
@@ -55,6 +55,15 @@ class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
 
         return previous_aggregate_snapshot
 
+    def _truncate_snapshot(self, snapshot: UniswapTradesAggregateSnapshot):
+        snapshot.totalTrade = truncate(snapshot.totalTrade)
+        snapshot.totalFee = truncate(snapshot.totalFee)
+        snapshot.token0TradeVolume = truncate(snapshot.token0TradeVolume)
+        snapshot.token1TradeVolume = truncate(snapshot.token1TradeVolume)
+        snapshot.token0TradeVolumeUSD = truncate(snapshot.token0TradeVolumeUSD)
+        snapshot.token1TradeVolumeUSD = truncate(snapshot.token1TradeVolumeUSD)
+        return snapshot
+
     async def _calculate_from_scratch(
         self,
         msg_obj: PowerloomSnapshotSubmittedMessage,
@@ -105,7 +114,7 @@ class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
 
         await redis.delete(f'calculate_from_scratch:{project_id}')
 
-        return aggregate_snapshot
+        return self._truncate_snapshot(aggregate_snapshot)
 
     async def compute(
         self,
@@ -265,4 +274,4 @@ class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
             else:
                 aggregate_snapshot.complete = False
 
-            return aggregate_snapshot
+            return self._truncate_snapshot(aggregate_snapshot)
