@@ -2,7 +2,7 @@ import asyncio
 import json
 from decimal import Decimal
 from decimal import localcontext
-
+import math
 from eth_abi import abi
 from redis import asyncio as aioredis
 from snapshotter.utils.default_logger import logger
@@ -539,3 +539,18 @@ def convert_from_ray(value: int) -> float:
         ctx.prec = 16
         conv = Decimal(str(value)) / Decimal(RAY)
         return float(conv)
+
+
+def truncate(number, decimals=5):
+    """
+    Returns a value truncated to a specific number of decimal places.
+    """
+    if not isinstance(decimals, int):
+        raise TypeError("decimal places must be an integer.")
+    elif decimals < 0:
+        raise ValueError("decimal places has to be 0 or more.")
+    elif decimals == 0:
+        return math.trunc(number)
+
+    factor = 10.0 ** decimals
+    return math.trunc(number * factor) / factor
