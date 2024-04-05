@@ -1,5 +1,6 @@
 from typing import Dict
 from typing import List
+from typing import Optional
 
 from pydantic import BaseModel
 
@@ -9,6 +10,11 @@ class EpochBaseSnapshot(BaseModel):
 
 
 class SnapshotBase(BaseModel):
-    contract: str
+    contract: Optional[str]
     chainHeightRange: EpochBaseSnapshot
     timestamp: int
+
+
+class BlockDetailsSnapshot(SnapshotBase):
+    blockTimestamps: Dict[str, int]
+    blockTransactions: Dict[str, List[str]]
