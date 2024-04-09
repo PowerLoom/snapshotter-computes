@@ -230,9 +230,11 @@ class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
                     )
                 else:
                     self._logger.error(
-                        f'Error fetching base unfinalized snapshot, cancelling aggregation for epoch {msg_obj.epochId}',
+                        f'Error fetching base unfinalized snapshot, building from scratch for epoch {msg_obj.epochId}',
                     )
-                    return None
+                    return await self._calculate_from_scratch(
+                        msg_obj, redis, rpc_helper, anchor_rpc_helper, ipfs_reader, protocol_state_contract, project_id,
+                    )
 
             base_snapshots = base_finalized_snapshots + base_unfinalized_snapshots
 
