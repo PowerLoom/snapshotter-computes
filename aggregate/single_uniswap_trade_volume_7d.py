@@ -3,8 +3,6 @@ import asyncio
 import pydantic
 from ipfs_client.main import AsyncIPFSClient
 from redis import asyncio as aioredis
-
-from ..utils.models.message_models import UniswapTradesAggregateSnapshot
 from snapshotter.modules.computes.utils.helpers import get_pair_metadata
 from snapshotter.utils.callback_helpers import GenericProcessorSingleProjectAggregate
 from snapshotter.utils.data_utils import get_project_epoch_snapshot
@@ -14,13 +12,16 @@ from snapshotter.utils.default_logger import logger
 from snapshotter.utils.models.message_models import PowerloomSnapshotSubmittedMessage
 from snapshotter.utils.rpc import RpcHelper
 
+from ..utils.helpers import truncate
+from ..utils.models.message_models import UniswapTradesAggregateSnapshot
+
 
 class AggregateTradeVolumeProcessor(GenericProcessorSingleProjectAggregate):
     transformation_lambdas = None
 
     def __init__(self) -> None:
         self.transformation_lambdas = []
-        self._logger = logger.bind(module="AggregateTradeVolumeProcessor7d")
+        self._logger = logger.bind(module='AggregateTradeVolumeProcessor7d')
 
     def _add_aggregate_snapshot(
         self,
@@ -29,18 +30,10 @@ class AggregateTradeVolumeProcessor(GenericProcessorSingleProjectAggregate):
     ):
         previous_aggregate_snapshot.totalTrade += current_snapshot.totalTrade
         previous_aggregate_snapshot.totalFee += current_snapshot.totalFee
-        previous_aggregate_snapshot.token0TradeVolume += (
-            current_snapshot.token0TradeVolume
-        )
-        previous_aggregate_snapshot.token1TradeVolume += (
-            current_snapshot.token1TradeVolume
-        )
-        previous_aggregate_snapshot.token0TradeVolumeUSD += (
-            current_snapshot.token0TradeVolumeUSD
-        )
-        previous_aggregate_snapshot.token1TradeVolumeUSD += (
-            current_snapshot.token1TradeVolumeUSD
-        )
+        previous_aggregate_snapshot.token0TradeVolume += current_snapshot.token0TradeVolume
+        previous_aggregate_snapshot.token1TradeVolume += current_snapshot.token1TradeVolume
+        previous_aggregate_snapshot.token0TradeVolumeUSD += current_snapshot.token0TradeVolumeUSD
+        previous_aggregate_snapshot.token1TradeVolumeUSD += current_snapshot.token1TradeVolumeUSD
 
         return previous_aggregate_snapshot
 
@@ -51,20 +44,21 @@ class AggregateTradeVolumeProcessor(GenericProcessorSingleProjectAggregate):
     ):
         previous_aggregate_snapshot.totalTrade -= current_snapshot.totalTrade
         previous_aggregate_snapshot.totalFee -= current_snapshot.totalFee
-        previous_aggregate_snapshot.token0TradeVolume -= (
-            current_snapshot.token0TradeVolume
-        )
-        previous_aggregate_snapshot.token1TradeVolume -= (
-            current_snapshot.token1TradeVolume
-        )
-        previous_aggregate_snapshot.token0TradeVolumeUSD -= (
-            current_snapshot.token0TradeVolumeUSD
-        )
-        previous_aggregate_snapshot.token1TradeVolumeUSD -= (
-            current_snapshot.token1TradeVolumeUSD
-        )
+        previous_aggregate_snapshot.token0TradeVolume -= current_snapshot.token0TradeVolume
+        previous_aggregate_snapshot.token1TradeVolume -= current_snapshot.token1TradeVolume
+        previous_aggregate_snapshot.token0TradeVolumeUSD -= current_snapshot.token0TradeVolumeUSD
+        previous_aggregate_snapshot.token1TradeVolumeUSD -= current_snapshot.token1TradeVolumeUSD
 
         return previous_aggregate_snapshot
+
+    def _truncate_snapshot(self, snapshot: UniswapTradesAggregateSnapshot):
+        snapshot.totalTrade = truncate(snapshot.totalTrade)
+        snapshot.totalFee = truncate(snapshot.totalFee)
+        snapshot.token0TradeVolume = truncate(snapshot.token0TradeVolume)
+        snapshot.token1TradeVolume = truncate(snapshot.token1TradeVolume)
+        snapshot.token0TradeVolumeUSD = truncate(snapshot.token0TradeVolumeUSD)
+        snapshot.token1TradeVolumeUSD = truncate(snapshot.token1TradeVolumeUSD)
+        return snapshot
 
     async def compute(
         self,
@@ -77,10 +71,10 @@ class AggregateTradeVolumeProcessor(GenericProcessorSingleProjectAggregate):
         project_id: str,
     ):
         self._logger.info(
-            f"Building 7 day trade volume aggregate snapshot against {msg_obj}"
+            f'Building 7 day trade volume aggregate snapshot against {msg_obj}',
         )
 
-        contract = project_id.split(":")[-2]
+        contract = project_id.split(':')[-2]
 
         pair_metadata = await get_pair_metadata(
             pair_address=contract,
@@ -93,13 +87,13 @@ class AggregateTradeVolumeProcessor(GenericProcessorSingleProjectAggregate):
         # 24h snapshots fetches
         snapshot_tasks = list()
         self._logger.debug(
-            "fetching 24hour aggregates spaced out by 1 day over 7 days..."
+            'fetching 24hour aggregates spaced out by 1 day over 7 days...',
         )
         # 1. find one day tail epoch
         count = 0
         self._logger.debug(
-            "fetch # {}: queueing task for 24h aggregate snapshot for project ID {}"
-            " at currently received epoch ID {} with snasphot CID {}",
+            'fetch # {}: queueing task for 24h aggregate snapshot for project ID {}'
+            ' at currently received epoch ID {} with snasphot CID {}',
             count,
             msg_obj.projectId,
             msg_obj.epochId,
@@ -129,8 +123,8 @@ class AggregateTradeVolumeProcessor(GenericProcessorSingleProjectAggregate):
             count += 1
             if not seek_stop_flag or count > 1:
                 self._logger.debug(
-                    "fetch # {}: for 7d aggregated trade volume calculations: "
-                    "queueing task for 24h aggregate snapshot for project ID {} at rewinded epoch ID {}",
+                    'fetch # {}: for 7d aggregated trade volume calculations: '
+                    'queueing task for 24h aggregate snapshot for project ID {} at rewinded epoch ID {}',
                     count,
                     msg_obj.projectId,
                     tail_epoch_id,
@@ -148,15 +142,15 @@ class AggregateTradeVolumeProcessor(GenericProcessorSingleProjectAggregate):
             head_epoch = tail_epoch_id - 1
         if count == 7:
             self._logger.info(
-                "fetch # {}: reached 7 day limit for 24h aggregate snapshots for project ID {} at rewinded epoch ID {}",
+                'fetch # {}: reached 7 day limit for 24h aggregate snapshots for project ID {} at rewinded epoch ID {}',
                 count,
                 msg_obj.projectId,
                 tail_epoch_id,
             )
         all_snapshots = await asyncio.gather(*snapshot_tasks, return_exceptions=True)
         self._logger.debug(
-            "for 7d aggregated trade volume calculations: fetched {} "
-            "24h aggregated trade volume snapshots for project ID {}: {}",
+            'for 7d aggregated trade volume calculations: fetched {} '
+            '24h aggregated trade volume snapshots for project ID {}: {}',
             len(all_snapshots),
             msg_obj.projectId,
             all_snapshots,
@@ -165,12 +159,12 @@ class AggregateTradeVolumeProcessor(GenericProcessorSingleProjectAggregate):
             if not isinstance(single_24h_snapshot, BaseException):
                 try:
                     snapshot = UniswapTradesAggregateSnapshot.parse_obj(
-                        single_24h_snapshot
+                        single_24h_snapshot,
                     )
                 except pydantic.ValidationError:
                     pass
                 else:
                     aggregate_snapshot = self._add_aggregate_snapshot(
-                        aggregate_snapshot, snapshot
+                        aggregate_snapshot, snapshot,
                     )
         return aggregate_snapshot
