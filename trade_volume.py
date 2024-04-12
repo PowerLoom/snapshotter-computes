@@ -3,11 +3,13 @@ import time
 from redis import asyncio as aioredis
 
 from .utils.core import get_pair_trade_volume
+from snapshotter.utils.models.message_models import PowerloomSnapshotProcessMessage
+from snapshotter.utils.callback_helpers import GenericProcessorSnapshot
+from snapshotter.utils.default_logger import logger
+from snapshotter.utils.rpc import RpcHelper
+
+from .utils.models.message_models import EpochBaseSnapshot
 from .utils.models.message_models import UniswapTradesSnapshot
-from pooler.utils.callback_helpers import GenericProcessorSnapshot
-from pooler.utils.default_logger import logger
-from pooler.utils.models.message_models import EpochBaseSnapshot
-from pooler.utils.rpc import RpcHelper
 
 
 class TradeVolumeProcessor(GenericProcessorSnapshot):
@@ -21,12 +23,16 @@ class TradeVolumeProcessor(GenericProcessorSnapshot):
 
     async def compute(
         self,
-        min_chain_height: int,
-        max_chain_height: int,
-        data_source_contract_address: str,
+        epoch: PowerloomSnapshotProcessMessage,
         redis_conn: aioredis.Redis,
         rpc_helper: RpcHelper,
-    ):
+    ):  
+        
+        min_chain_height = epoch.begin
+        max_chain_height = epoch.end
+
+        data_source_contract_address = epoch.data_source
+
         self._logger.debug(
             f"trade volume {data_source_contract_address}, computation init time {time.time()}"
         )
@@ -66,7 +72,7 @@ class TradeVolumeProcessor(GenericProcessorSnapshot):
         snapshot.pop("timestamp", None)
         trade_volume_snapshot = UniswapTradesSnapshot(
             contract=data_source_contract_address,
-            chainHeightRange=EpochBaseSnapshot(begin=epoch_begin, end=epoch_end),
+            epoch=EpochBaseSnapshot(begin=epoch_begin, end=epoch_end),
             timestamp=max_block_timestamp,
             totalTrade=float(f"{total_trades_in_usd: .6f}"),
             totalFee=float(f"{total_fee_in_usd: .6f}"),
