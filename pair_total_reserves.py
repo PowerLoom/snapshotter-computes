@@ -6,11 +6,13 @@ from typing import Union
 from redis import asyncio as aioredis
 
 from .utils.core import get_pair_reserves
+from snapshotter.utils.models.message_models import PowerloomSnapshotProcessMessage
+from snapshotter.utils.callback_helpers import GenericProcessorSnapshot
+from snapshotter.utils.default_logger import logger
+from snapshotter.utils.rpc import RpcHelper
+
+from .utils.models.message_models import EpochBaseSnapshot
 from .utils.models.message_models import UniswapPairTotalReservesSnapshot
-from pooler.utils.callback_helpers import GenericProcessorSnapshot
-from pooler.utils.default_logger import logger
-from pooler.utils.models.message_models import EpochBaseSnapshot
-from pooler.utils.rpc import RpcHelper
 
 
 class PairTotalReservesProcessor(GenericProcessorSnapshot):
@@ -22,12 +24,16 @@ class PairTotalReservesProcessor(GenericProcessorSnapshot):
 
     async def compute(
         self,
-        min_chain_height: int,
-        max_chain_height: int,
-        data_source_contract_address: str,
+        epoch: PowerloomSnapshotProcessMessage,
         redis_conn: aioredis.Redis,
         rpc_helper: RpcHelper,
     ) -> Optional[Dict[str, Union[int, float]]]:
+        
+        min_chain_height = epoch.begin
+        max_chain_height = epoch.end
+
+        data_source_contract_address = epoch.data_source
+
         epoch_reserves_snapshot_map_token0 = dict()
         epoch_prices_snapshot_map_token0 = dict()
         epoch_prices_snapshot_map_token1 = dict()
