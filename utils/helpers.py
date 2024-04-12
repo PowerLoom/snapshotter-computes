@@ -1,6 +1,6 @@
 import asyncio
 from decimal import Decimal, getcontext
-import functools
+import math
 from functools import reduce
 import json
 
@@ -523,6 +523,20 @@ async def get_token_eth_quote_from_uniswap(
     except Exception as e:
         helper_logger.debug(f"error while fetching token price for {token_address}, error_msg:{e}") 
         raise e
+    
+def truncate(number, decimals=5):
+    """
+    Returns a value truncated to a specific number of decimal places.
+    """
+    if not isinstance(decimals, int):
+        raise TypeError("decimal places must be an integer.")
+    elif decimals < 0:
+        raise ValueError("decimal places has to be 0 or more.")
+    elif decimals == 0:
+        return math.trunc(number)
+
+    factor = 10.0 ** decimals
+    return math.trunc(number * factor) / factor
         
 
 
