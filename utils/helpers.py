@@ -1,5 +1,4 @@
 import asyncio
-from decimal import Decimal, getcontext
 import math
 from functools import reduce
 import json
@@ -8,7 +7,6 @@ from redis import asyncio as aioredis
 from web3 import Web3
 
 from snapshotter.utils.snapshot_utils import get_eth_price_usd, sqrtPriceX96ToTokenPrices
-
 from ..redis_keys import uniswap_pair_contract_tokens_addresses
 from ..redis_keys import uniswap_cached_block_height_token_eth_price
 from ..redis_keys import uniswap_pair_contract_tokens_data
@@ -17,11 +15,9 @@ from ..settings.config import settings as worker_settings
 from .constants import current_node
 from .constants import erc20_abi
 from .constants import pair_contract_abi
-from .constants import quoter_1inch_contract_abi
 from .constants import factory_contract_obj
 from snapshotter.utils.default_logger import logger
 from snapshotter.utils.rpc import RpcHelper, get_contract_abi_dict
-getcontext().prec = 36
 
 helper_logger = logger.bind(module="PowerLoom|Uniswap|Helpers")
 
@@ -293,30 +289,8 @@ async def  get_token_eth_price_dict(
 
     # get token price function takes care of its own rate limit
     # TODO repetitious refactor
-    try: 
-        # 1 token / x token
-        # token_eth_quote = await rpc_helper.batch_eth_call_on_block_range(
-        #     abi_dict= get_contract_abi_dict(
-        #         abi=quoter_1inch_contract_abi
-        #     ),
-        #     contract_address=worker_settings.contract_addresses.QUOTER_1INCH,
-        #     from_block=from_block,
-        #     to_block=to_block,
-        #     function_name="getRateToEthWithThreshold",
-        #     params=[
-        #         token_address,
-        #         True, 
-        #         int(5)
-        #     ],
-        #     redis_conn=redis_conn,
-        # )
-        block_counter = 0
-        # sum = reduce(lambda x, y: x + y[0], token_eth_quote, 0)
-        # # case to handle tokens that cannot be quoted by spot aggregator
-        # uniswap_quote_flag = False
-        # if sum == 0:
-            # get addresses of uniswapv3 pools that contain token and weth
-           
+    try:
+
         token_eth_quote = await get_token_eth_quote_from_uniswap(
             token_address=token_address,
             token_decimals=token_decimals,
@@ -325,13 +299,11 @@ async def  get_token_eth_price_dict(
             redis_conn=redis_conn,
             rpc_helper=rpc_helper,
         )
-        uniswap_quote_flag = True
         
+        block_counter = 0
         # parse token_eth_quote and store in dict
         if len(token_eth_quote) > 0:
-            token_eth_quote = [(quote[0] * int((Decimal(10) ** (Decimal(-36) + Decimal(token_decimals))))) for quote in token_eth_quote] \
-                if not uniswap_quote_flag \
-                else [(quote[0]) for quote in token_eth_quote]
+            token_eth_quote = [quote[0] for quote in token_eth_quote]
             for block_num in range(from_block, to_block + 1):
                 token_eth_price_dict[block_num] = token_eth_quote[block_counter]
                 block_counter += 1
