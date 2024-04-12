@@ -9,3 +9,4 @@ temp/*
 **/*aggregator.json
 config/*settings.json
 **/*.backup
+.pre-commit-config.yaml
