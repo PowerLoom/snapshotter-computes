@@ -3,7 +3,10 @@ import json
 
 from ipfs_client.main import AsyncIPFSClient
 from redis import asyncio as aioredis
-from snapshotter.utils.callback_helpers import GenericProcessorSingleProjectAggregate
+from ..utils.helpers import truncate
+from ..utils.models.message_models import UniswapTradesAggregateSnapshot
+from ..utils.models.message_models import UniswapTradesSnapshot
+from snapshotter.utils.callback_helpers import GenericProcessorAggregate
 from snapshotter.utils.data_utils import get_project_epoch_snapshot_bulk
 from snapshotter.utils.data_utils import get_project_first_epoch
 from snapshotter.utils.data_utils import get_submission_data
@@ -14,12 +17,8 @@ from snapshotter.utils.redis.redis_keys import project_finalized_data_zset
 from snapshotter.utils.redis.redis_keys import submitted_base_snapshots_key
 from snapshotter.utils.rpc import RpcHelper
 
-from ..utils.helpers import truncate
-from ..utils.models.message_models import UniswapTradesAggregateSnapshot
-from ..utils.models.message_models import UniswapTradesSnapshot
 
-
-class AggregateTradeVolumeProcessor(GenericProcessorSingleProjectAggregate):
+class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
     transformation_lambdas = None
 
     def __init__(self) -> None:
@@ -31,6 +30,7 @@ class AggregateTradeVolumeProcessor(GenericProcessorSingleProjectAggregate):
         previous_aggregate_snapshot: UniswapTradesAggregateSnapshot,
         current_snapshot: UniswapTradesSnapshot,
     ):
+
         previous_aggregate_snapshot.totalTrade += current_snapshot.totalTrade
         previous_aggregate_snapshot.totalFee += current_snapshot.totalFee
         previous_aggregate_snapshot.token0TradeVolume += current_snapshot.token0TradeVolume
@@ -45,6 +45,7 @@ class AggregateTradeVolumeProcessor(GenericProcessorSingleProjectAggregate):
         previous_aggregate_snapshot: UniswapTradesAggregateSnapshot,
         current_snapshot: UniswapTradesSnapshot,
     ):
+
         previous_aggregate_snapshot.totalTrade -= current_snapshot.totalTrade
         previous_aggregate_snapshot.totalFee -= current_snapshot.totalFee
         previous_aggregate_snapshot.token0TradeVolume -= current_snapshot.token0TradeVolume
@@ -84,58 +85,36 @@ class AggregateTradeVolumeProcessor(GenericProcessorSingleProjectAggregate):
             value='true',
             ex=300,
         )
-
         # source project tail epoch
         tail_epoch_id, extrapolated_flag = await get_tail_epoch_id(
-            redis,
-            protocol_state_contract,
-            anchor_rpc_helper,
-            msg_obj.epochId,
-            86400,
-            msg_obj.projectId,
+            redis, protocol_state_contract, anchor_rpc_helper, msg_obj.epochId, 86400, msg_obj.projectId,
         )
 
         # for the first epoch, using submitted cid
         current_epoch_underlying_data = await get_submission_data(
-            redis,
-            msg_obj.snapshotCid,
-            ipfs_reader,
-            project_id,
+            redis, msg_obj.snapshotCid, ipfs_reader, project_id,
         )
 
         snapshots_data = await get_project_epoch_snapshot_bulk(
-            redis,
-            protocol_state_contract,
-            anchor_rpc_helper,
-            ipfs_reader,
-            tail_epoch_id,
-            msg_obj.epochId - 1,
-            msg_obj.projectId,
+            redis, protocol_state_contract, anchor_rpc_helper, ipfs_reader,
+            tail_epoch_id, msg_obj.epochId - 1, msg_obj.projectId,
         )
 
-        aggregate_snapshot = UniswapTradesAggregateSnapshot.parse_obj(
-            {'epochId': msg_obj.epochId},
-        )
+        aggregate_snapshot = UniswapTradesAggregateSnapshot.parse_obj({'epochId': msg_obj.epochId})
         if extrapolated_flag:
             aggregate_snapshot.complete = False
         if current_epoch_underlying_data:
-            current_snapshot = UniswapTradesSnapshot.parse_obj(
-                current_epoch_underlying_data,
-            )
-            aggregate_snapshot = self._add_aggregate_snapshot(
-                aggregate_snapshot, current_snapshot,
-            )
+            current_snapshot = UniswapTradesSnapshot.parse_obj(current_epoch_underlying_data)
+            aggregate_snapshot = self._add_aggregate_snapshot(aggregate_snapshot, current_snapshot)
 
         for snapshot_data in snapshots_data:
             if snapshot_data:
                 snapshot = UniswapTradesSnapshot.parse_obj(snapshot_data)
-                aggregate_snapshot = self._add_aggregate_snapshot(
-                    aggregate_snapshot, snapshot,
-                )
+                aggregate_snapshot = self._add_aggregate_snapshot(aggregate_snapshot, snapshot)
 
         await redis.delete(f'calculate_from_scratch:{project_id}')
 
-        return aggregate_snapshot
+        return self._truncate_snapshot(aggregate_snapshot)
 
     async def compute(
         self,
@@ -146,33 +125,23 @@ class AggregateTradeVolumeProcessor(GenericProcessorSingleProjectAggregate):
         ipfs_reader: AsyncIPFSClient,
         protocol_state_contract,
         project_id: str,
+
     ):
         self._logger.info(f'Building trade volume aggregate snapshot for {msg_obj}')
 
         # aggregate project first epoch
         project_first_epoch = await get_project_first_epoch(
-            redis,
-            protocol_state_contract,
-            anchor_rpc_helper,
-            project_id,
+            redis, protocol_state_contract, anchor_rpc_helper, project_id,
         )
 
         # If no past snapshots exist, then aggregate will be current snapshot
         if project_first_epoch == 0:
             return await self._calculate_from_scratch(
-                msg_obj,
-                redis,
-                rpc_helper,
-                anchor_rpc_helper,
-                ipfs_reader,
-                protocol_state_contract,
-                project_id,
+                msg_obj, redis, rpc_helper, anchor_rpc_helper, ipfs_reader, protocol_state_contract, project_id,
             )
 
         else:
-            self._logger.info(
-                'project_first_epoch is not 0, building aggregate from previous aggregate',
-            )
+            self._logger.info('project_first_epoch is not 0, building aggregate from previous aggregate')
 
             # get key with highest score
             project_last_finalized = await redis.zrevrangebyscore(
