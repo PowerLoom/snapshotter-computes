@@ -109,10 +109,6 @@ async def get_pair_reserves(
         max=int(from_block - 1),
     )
 
-    initial_reserves = None
-
-    # cached reserves flag to dictate whether we grab events from from_block or from_block + 1
-
     if cached_reserves_dict:
         loaded_dict = json.loads(cached_reserves_dict[0])
         initial_reserves = [int(loaded_dict['token0_reserves']), int(loaded_dict['token1_reserves'])]
@@ -176,7 +172,7 @@ async def get_pair_reserves(
 
         token0USD = token0Amount * token0_price_map.get(block_num, 0) * \
             (10 ** -int(pair_per_token_metadata['token0']['decimals']))
-        token1USD = token1Amount * (token1_price_map.get(block_num, 0)) * \
+        token1USD = token1Amount * token1_price_map.get(block_num, 0) * \
             (10 ** -int(pair_per_token_metadata['token1']['decimals']))
 
         token0Price = token0_price_map.get(block_num, 0)
@@ -544,7 +540,7 @@ async def get_pair_trade_volume(
                 epoch_results.Burn.logs.append(processed_log)
                 epoch_results.Burn.trades += trades_result
 
-        # At the end of txHash logs we must normalize trade values, so it don't affect result of other txHash logs
+        # At the end of txHash logs we must normalize trade values, so it does not affect result of other txHash logs
         epoch_results.Trades += abs(tx_hash_trades)
     epoch_trade_logs = epoch_results.dict()
     max_block_details = block_details_dict.get(max_chain_height, dict())
