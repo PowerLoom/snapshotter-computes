@@ -13,7 +13,7 @@ from snapshotter.utils.models.message_models import PowerloomCalculateAggregateM
 from snapshotter.utils.rpc import RpcHelper
 
 
-class AggreagateStatsProcessor(GenericProcessorAggregate):
+class AggregateStatsProcessor(GenericProcessorAggregate):
     transformation_lambdas = None
 
     def __init__(self) -> None:
