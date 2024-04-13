@@ -63,3 +63,11 @@ uniswap_pair_cached_block_height_reserves = (
 )
 
 uniswap_v3_monitored_pairs = 'uniswap:monitoredPairs'
+
+uniswap_v3_best_pair_map = (
+    "uniswap:pairContract:" + settings.namespace + ":bestPairMap"
+)
+
+uniswap_v3_token_stable_pair_map = (
+    f"uniswap:pairContract:" + settings.namespace + ":{}:tokenStablePairMap"
+)

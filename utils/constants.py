@@ -102,3 +102,18 @@ UNISWAP_EVENTS_ABI = {
     'Mint': pool_contract_obj.events.Mint._get_event_abi(),
     'Burn': pool_contract_obj.events.Burn._get_event_abi(),
 }
+
+TOKENS_DECIMALS = {
+    worker_settings.contract_addresses.USDT: 6,
+    worker_settings.contract_addresses.DAI: 18,
+    worker_settings.contract_addresses.USDC: 6,
+    worker_settings.contract_addresses.WETH: 18,
+}
+
+STABLE_TOKENS_LIST = [
+    worker_settings.contract_addresses.USDC,
+    worker_settings.contract_addresses.USDT,
+    worker_settings.contract_addresses.DAI,
+]
+
+ZERO_ADDRESS = '0x' + '0' * 40

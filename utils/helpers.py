@@ -15,11 +15,16 @@ from ..redis_keys import uniswap_cached_block_height_token_eth_price
 from ..redis_keys import uniswap_pair_contract_tokens_addresses
 from ..redis_keys import uniswap_pair_contract_tokens_data
 from ..redis_keys import uniswap_tokens_pair_map
+from ..redis_keys import uniswap_v3_best_pair_map
+from ..redis_keys import uniswap_v3_token_stable_pair_map
 from ..settings.config import settings as worker_settings
 from .constants import current_node
 from .constants import erc20_abi
 from .constants import factory_contract_obj
 from .constants import pair_contract_abi
+from .constants import STABLE_TOKENS_LIST
+from .constants import TOKENS_DECIMALS
+from .constants import ZER0_ADDRESS
 
 helper_logger = logger.bind(module='PowerLoom|Uniswap|Helpers')
 
@@ -341,6 +346,139 @@ async def get_token_eth_price_dict(
         raise e
 
 
+async def get_token_pair_address_with_fees(
+    token0: str,
+    token1: str,
+    redis_conn: aioredis.Redis,
+    rpc_helper: RpcHelper,
+):
+
+    # check if pair cache exists
+    pair_address_cache = await redis_conn.hget(
+        uniswap_v3_best_pair_map,
+        f'{Web3.to_checksum_address(token0)}-{Web3.to_checksum_address(token1)}',
+    )
+    if pair_address_cache:
+        pair_address_cache = pair_address_cache.decode('utf-8')
+        return Web3.to_checksum_address(pair_address_cache)
+
+    tasks = [
+        get_pair(
+            factory_contract_obj=factory_contract_obj, token0=token0, token1=token1,
+            fee=int(10000), redis_conn=redis_conn, rpc_helper=rpc_helper,
+        ),
+        get_pair(
+            factory_contract_obj=factory_contract_obj, token0=token0, token1=token1,
+            fee=int(3000), redis_conn=redis_conn, rpc_helper=rpc_helper,
+        ),
+        get_pair(
+            factory_contract_obj=factory_contract_obj, token0=token0, token1=token1,
+            fee=int(500), redis_conn=redis_conn, rpc_helper=rpc_helper,
+        ),
+        get_pair(
+            factory_contract_obj=factory_contract_obj, token0=token0, token1=token1,
+            fee=int(100), redis_conn=redis_conn, rpc_helper=rpc_helper,
+        ),
+    ]
+    pair_address_list = await asyncio.gather(*tasks)
+    pair_address_list = sorted([pair for pair in pair_address_list if pair != ZER0_ADDRESS])
+    best_pair = pair_address_list[0] if len(pair_address_list) > 0 else ZER0_ADDRESS
+
+    # cache the pair address
+    await redis_conn.hset(
+        name=uniswap_v3_best_pair_map,
+        mapping={
+            f'{Web3.to_checksum_address(token0)}-{Web3.to_checksum_address(token1)}':
+                best_pair,
+        },
+    )
+
+    return best_pair
+
+
+async def get_token_stable_pair_data(
+    token: str,
+    token_decimals: int,
+    redis_conn: aioredis.Redis,
+    rpc_helper: RpcHelper,
+):
+    # check if pair cache exists
+    token_stable_pair_data_cache = await redis_conn.hgetall(
+        uniswap_v3_token_stable_pair_map.format(Web3.to_checksum_address(token)),
+    )
+    if token_stable_pair_data_cache:
+        token0 = token_stable_pair_data_cache[b'token0'].decode(
+            'utf-8',
+        )
+        token1 = token_stable_pair_data_cache[b'token1'].decode(
+            'utf-8',
+        )
+        token0_decimals = token_stable_pair_data_cache[b'token0_decimals'].decode(
+            'utf-8',
+        )
+        token1_decimals = token_stable_pair_data_cache[b'token1_decimals'].decode(
+            'utf-8',
+        )
+        pair = token_stable_pair_data_cache[b'pair'].decode(
+            'utf-8',
+        )
+
+        data = {
+            'token0': token0,
+            'token1': token1,
+            'token0_decimals': token0_decimals,
+            'token1_decimals': token1_decimals,
+            'pair': pair,
+        }
+
+        return data
+
+    token_stable_pair = ZER0_ADDRESS
+    token0 = token
+    token1 = ZER0_ADDRESS
+    token0_decimals = token_decimals
+    token1_decimals = 0
+    for stable_token in STABLE_TOKENS_LIST:
+
+        if int(token, 16) < int(stable_token, 16):
+            token0, token1 = token, stable_token
+            token0_decimals, token1_decimals = token_decimals, TOKENS_DECIMALS.get(stable_token, 0)
+        else:
+            token0, token1 = stable_token, token
+            token0_decimals, token1_decimals = TOKENS_DECIMALS.get(stable_token, 0), token_decimals
+
+        pair = await get_token_pair_address_with_fees(
+            token0=token0,
+            token1=token1,
+            redis_conn=redis_conn,
+            rpc_helper=rpc_helper,
+        )
+
+        if pair != ZER0_ADDRESS:
+            token_stable_pair = pair
+            break
+
+    # cache the token-stable pair data
+    await redis_conn.hset(
+        name=uniswap_v3_token_stable_pair_map.format(Web3.to_checksum_address(token)),
+        mapping={
+            'token0': token0,
+            'token1': token1,
+            'token0_decimals': token0_decimals,
+            'token1_decimals': token1_decimals,
+            'pair': token_stable_pair,
+        },
+    )
+
+    return {
+        'token0': token0,
+        'token1': token1,
+        'token0_decimals': token0_decimals,
+        'token1_decimals': token1_decimals,
+        'pair': token_stable_pair,
+    }
+
+
 async def get_token_eth_quote_from_uniswap(
     token_address,
     token_decimals,
@@ -353,42 +491,28 @@ async def get_token_eth_quote_from_uniswap(
     token0 = token_address
     token1 = worker_settings.contract_addresses.WETH
     token0_decimals = token_decimals
-    token1_decimals = 18
+    token1_decimals = TOKENS_DECIMALS.get(worker_settings.contract_addresses.WETH, 18)
     if int(token1, 16) < int(token0, 16):
         token0, token1 = token1, token0
         token0_decimals, token1_decimals = token1_decimals, token0_decimals
 
     # first attempt to price from a token weth pool
     try:
-        tasks = [
-            get_pair(
-                factory_contract_obj=factory_contract_obj, token0=token0, token1=token1,
-                fee=int(10000), redis_conn=redis_conn, rpc_helper=rpc_helper,
-            ),
-            get_pair(
-                factory_contract_obj=factory_contract_obj, token0=token0, token1=token1,
-                fee=int(3000), redis_conn=redis_conn, rpc_helper=rpc_helper,
-            ),
-            get_pair(
-                factory_contract_obj=factory_contract_obj, token0=token0, token1=token1,
-                fee=int(500), redis_conn=redis_conn, rpc_helper=rpc_helper,
-            ),
-            get_pair(
-                factory_contract_obj=factory_contract_obj, token0=token0, token1=token1,
-                fee=int(100), redis_conn=redis_conn, rpc_helper=rpc_helper,
-            ),
-        ]
-        pair_address_list = await asyncio.gather(*tasks)
-        pair_address_list = sorted([pair for pair in pair_address_list if pair != '0x' + '0' * 40])
+        token_weth_pair = await get_token_pair_address_with_fees(
+            token0=token0,
+            token1=token1,
+            redis_conn=redis_conn,
+            rpc_helper=rpc_helper,
+        )
 
         token_eth_quote = []
 
-        if len(pair_address_list) > 0:
+        if token_weth_pair != ZER0_ADDRESS:
             response = await rpc_helper.batch_eth_call_on_block_range(
                 abi_dict=get_contract_abi_dict(
                     abi=pair_contract_abi,
                 ),
-                contract_address=pair_address_list[0],
+                contract_address=token_weth_pair,
                 from_block=from_block,
                 to_block=to_block,
                 function_name='slot0',
@@ -396,7 +520,7 @@ async def get_token_eth_quote_from_uniswap(
                 redis_conn=redis_conn,
             )
             sqrtP_list = [slot0[0] for slot0 in response]
-            token_eth_quote = []
+
             for sqrtP in sqrtP_list:
                 price0, price1 = sqrtPriceX96ToTokenPrices(sqrtP, token0_decimals, token1_decimals)
 
@@ -409,121 +533,36 @@ async def get_token_eth_quote_from_uniswap(
         else:
             # since we couldnt find a token/weth pool, attempt to find a token/stable pool
             #  TODO -- rewrite with multicall
-
-            token0 = token_address
-            token1 = worker_settings.contract_addresses.USDC
-            token0_decimals = token_decimals
-            token1_decimals = 6
-
-            eth_usd_price_dict = await get_eth_price_usd(
-                from_block=from_block,
-                to_block=to_block,
+            token_stable_pair_data = await get_token_stable_pair_data(
+                token=token_address,
+                token_decimals=token_decimals,
                 redis_conn=redis_conn,
                 rpc_helper=rpc_helper,
             )
 
-            if int(token1, 16) < int(token0, 16):
-                token0, token1 = token1, token0
-                token0_decimals, token1_decimals = token1_decimals, token0_decimals
-
-            tasks = [
-                get_pair(
-                    factory_contract_obj=factory_contract_obj, token0=token0, token1=token1,
-                    fee=int(10000), redis_conn=redis_conn, rpc_helper=rpc_helper,
-                ),
-                get_pair(
-                    factory_contract_obj=factory_contract_obj, token0=token0, token1=token1,
-                    fee=int(3000), redis_conn=redis_conn, rpc_helper=rpc_helper,
-                ),
-                get_pair(
-                    factory_contract_obj=factory_contract_obj, token0=token0, token1=token1,
-                    fee=int(500), redis_conn=redis_conn, rpc_helper=rpc_helper,
-                ),
-                get_pair(
-                    factory_contract_obj=factory_contract_obj, token0=token0, token1=token1,
-                    fee=int(100), redis_conn=redis_conn, rpc_helper=rpc_helper,
-                ),
-            ]
-
-            pair_address_list = await asyncio.gather(*tasks)
-            pair_address_list = sorted([pair for pair in pair_address_list if pair != '0x' + '0' * 40])
-
-            if len(pair_address_list) == 0:
-                token0 = token_address
-                token1 = worker_settings.contract_addresses.USDT
-                token0_decimals = token_decimals
-                token1_decimals = 6
-
-                if int(token1, 16) < int(token0, 16):
-                    token0, token1 = token1, token0
-                    token0_decimals, token1_decimals = token1_decimals, token0_decimals
-
-                tasks = [
-                    get_pair(
-                        factory_contract_obj=factory_contract_obj, token0=token0, token1=token1,
-                        fee=int(10000), redis_conn=redis_conn, rpc_helper=rpc_helper,
-                    ),
-                    get_pair(
-                        factory_contract_obj=factory_contract_obj, token0=token0, token1=token1,
-                        fee=int(3000), redis_conn=redis_conn, rpc_helper=rpc_helper,
-                    ),
-                    get_pair(
-                        factory_contract_obj=factory_contract_obj, token0=token0, token1=token1,
-                        fee=int(500), redis_conn=redis_conn, rpc_helper=rpc_helper,
-                    ),
-                    get_pair(
-                        factory_contract_obj=factory_contract_obj, token0=token0, token1=token1,
-                        fee=int(100), redis_conn=redis_conn, rpc_helper=rpc_helper,
-                    ),
-                ]
-
-                pair_address_list = await asyncio.gather(*tasks)
-                pair_address_list = sorted([pair for pair in pair_address_list if pair != '0x' + '0' * 40])
-
-            if len(pair_address_list) == 0:
-                token0 = token_address
-                token1 = worker_settings.contract_addresses.DAI
-                token0_decimals = token_decimals
-                token1_decimals = 18
-
-                if int(token1, 16) < int(token0, 16):
-                    token0, token1 = token1, token0
-                    token0_decimals, token1_decimals = token1_decimals, token0_decimals
-
-                tasks = [
-                    get_pair(
-                        factory_contract_obj=factory_contract_obj, token0=token0, token1=token1,
-                        fee=int(10000), redis_conn=redis_conn, rpc_helper=rpc_helper,
-                    ),
-                    get_pair(
-                        factory_contract_obj=factory_contract_obj, token0=token0, token1=token1,
-                        fee=int(3000), redis_conn=redis_conn, rpc_helper=rpc_helper,
-                    ),
-                    get_pair(
-                        factory_contract_obj=factory_contract_obj, token0=token0, token1=token1,
-                        fee=int(500), redis_conn=redis_conn, rpc_helper=rpc_helper,
-                    ),
-                    get_pair(
-                        factory_contract_obj=factory_contract_obj, token0=token0, token1=token1,
-                        fee=int(100), redis_conn=redis_conn, rpc_helper=rpc_helper,
-                    ),
-                ]
-
-                pair_address_list = await asyncio.gather(*tasks)
-                pair_address_list = sorted([pair for pair in pair_address_list if pair != '0x' + '0' * 40])
-
-            if len(pair_address_list) > 0:
+            if token_stable_pair_data['pair'] != ZER0_ADDRESS:
                 response = await rpc_helper.batch_eth_call_on_block_range(
                     abi_dict=get_contract_abi_dict(
                         abi=pair_contract_abi,
                     ),
-                    contract_address=pair_address_list[0],
+                    contract_address=token_stable_pair_data['pair'],
                     from_block=from_block,
                     to_block=to_block,
                     function_name='slot0',
                     params=[],
                     redis_conn=redis_conn,
                 )
+
+                eth_usd_price_dict = await get_eth_price_usd(
+                    from_block=from_block,
+                    to_block=to_block,
+                    redis_conn=redis_conn,
+                    rpc_helper=rpc_helper,
+                )
+
+                token0_decimals = token_stable_pair_data['token0_decimals']
+                token1_decimals = token_stable_pair_data['token1_decimals']
+
                 sqrtP_list = [slot0[0] for slot0 in response]
                 sqrtP_eth_list = [block_price for block_price in eth_usd_price_dict.values()]
                 token_eth_quote = []
