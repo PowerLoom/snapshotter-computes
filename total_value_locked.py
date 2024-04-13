@@ -8,8 +8,6 @@ from eth_abi import abi
 from eth_typing import Address
 from eth_typing.evm import Address
 from eth_typing.evm import ChecksumAddress
-from web3 import Web3
-from web3.contract import Contract
 
 from .utils.constants import helper_contract
 from .utils.constants import UNISWAP_TRADE_EVENT_SIGS
@@ -18,9 +16,7 @@ from .utils.constants import override_address
 from .utils.constants import univ3_helper_bytecode
 from .utils.constants import UNISWAP_EVENTS_ABI
 from .utils.constants import MAX_TICK, MIN_TICK
-from .redis_keys import uniswap_cached_tick_data_block_height
 
-from snapshotter.settings.config import settings
 from snapshotter.utils.rpc import RpcHelper, get_event_sig_and_abi
 from snapshotter.utils.default_logger import logger
 
@@ -66,7 +62,6 @@ def calculate_tvl_from_ticks(ticks, pair_metadata, sqrt_price):
     elif int_fee == 10000:
         tick_spacing = Decimal(200)
     # https://atiselsts.github.io/pdfs/uniswap-v3-liquidity-math.pdf
-    
 
     for i in range(len(ticks)):
         tick = ticks[i]
@@ -94,8 +89,7 @@ def calculate_tvl_from_ticks(ticks, pair_metadata, sqrt_price):
                 sqrtPriceHigh,
             )
             
-        else: 
-
+        else:
             token0_liquidity += get_token0_in_pool(
                 liquidity_total,
                 sqrt_price,
@@ -106,28 +100,23 @@ def calculate_tvl_from_ticks(ticks, pair_metadata, sqrt_price):
                 sqrtPriceLow,
                 sqrt_price,
             )   
-        
-            
+     
     return (int(token0_liquidity), int(token1_liquidity))
 
 
 def get_token0_in_pool(
     liquidity: int,
-    
     sqrtPriceLow: int,
     sqrtPriceHigh: int,
 ) -> int:
-    
     return liquidity * (sqrtPriceHigh - sqrtPriceLow) / (sqrtPriceLow * sqrtPriceHigh) // 1
 
 
 def get_token1_in_pool(
     liquidity: int,
-    
     sqrtPriceLow: int,
     sqrtPriceHigh: int,
 ) -> int:
-    
     return liquidity * (sqrtPriceHigh - sqrtPriceLow) // 1
 
 
@@ -200,22 +189,6 @@ async def get_tick_info(
         pair_per_token_metadata,
     
 ):
-    
-    ticks_list = []
-    slot0 = 0
-    cached_tick_dict = await redis_conn.zrangebyscore(
-        name=uniswap_cached_tick_data_block_height.format(
-                Web3.to_checksum_address(pair_address),
-        ),
-        min=int(from_block),
-        max=int(from_block),
-    )
-
-    if cached_tick_dict:
-        tick_dict = json.loads(cached_tick_dict[0])
-        return tick_dict["ticks_list"], tick_dict["slot0"]
-    
-        # get token price function takes care of its own rate limit
     try: 
         overrides = {
             override_address: {"code": univ3_helper_bytecode},
@@ -259,35 +232,15 @@ async def get_tick_info(
             rpc_helper.web3_call(tick_tasks, redis_conn, overrides=overrides, block=from_block),
             rpc_helper.web3_call(slot0_tasks, redis_conn, block=from_block,),
             )
-            
+        
+        ticks_list = []
         for ticks in tickDataResponse:
             ticks_list.append(transform_tick_bytes_to_list(ticks))
 
         ticks_list = functools.reduce(lambda x, y: x + y, ticks_list)
         
         slot0 = slot0Response[0]
-        
 
-        # if len(ticks_list) > 0:
-        #     redis_cache_mapping = {
-        #         json.dumps({"blockHeight": from_block, "slot0": slot0, "ticks_list": ticks_list,}): int(from_block)
-        #     }
-
-        #     await asyncio.gather(
-        #         redis_conn.zadd(
-        #             name=uniswap_cached_tick_data_block_height.format(
-        #                 Web3.to_checksum_address(pair_address),
-        #             ),
-        #             mapping=redis_cache_mapping,
-        #         ),
-        #         redis_conn.zremrangebyscore(
-        #             name=uniswap_cached_tick_data_block_height.format(
-        #                 Web3.to_checksum_address(pair_address),
-        #             ),
-        #             min=0,
-        #             max=from_block - 20, # shouldn't need to keep all tick data in this implementation
-        #         ),
-        #     )
         return ticks_list, slot0
     except Exception as err:
         tvl_logger.warning('Failed to get tick data for pair {} at block {} with error {}', pair_address, from_block, err)
