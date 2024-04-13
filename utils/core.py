@@ -24,9 +24,7 @@ from .helpers import get_pair_metadata
 from .models.data_models import epoch_event_trade_data
 from .models.data_models import event_trade_data
 from .models.data_models import trade_data
-from .pricing import (
-    get_token_price_in_block_range,
-)
+from .pricing import get_token_price_in_block_range
 
 core_logger = logger.bind(module='PowerLoom|UniswapCore')
 
@@ -96,7 +94,7 @@ async def get_pair_reserves(
 
         ),
     )
-    
+
     core_logger.debug(
         f'Total reserves fetched token prices for: {pair_address}',
     )
@@ -141,7 +139,7 @@ async def get_pair_reserves(
         to_block=to_block,
         redis_con=redis_conn,
     )
-    
+
     core_logger.debug(
         f'Total reserves fetched event data for : {pair_address}',
     )
@@ -153,30 +151,33 @@ async def get_pair_reserves(
     pair_reserves_dict = dict()
 
     block_event_dict = dict()
-    
+
     for block_num in range(from_block, to_block + 1):
         block_event_dict[block_num] = list(filter(lambda x: x if x.get('blockNumber') == block_num else None, events))
 
     for block_num, events in block_event_dict.items():
         events_in_block = block_event_dict.get(block_num, [])
 
-        # Swap events use ints and mint events are positive, so only need to subtract burn events. 
-        
+        # Swap events use ints and mint events are positive, so only need to subtract burn events.
+
         token0Amount += reduce(
             lambda acc, event: acc - event['args']['amount0']
             if event['event'] == 'Burn'
-            else acc + event['args']['amount0'], events_in_block, 0)
+            else acc + event['args']['amount0'], events_in_block, 0,
+        )
         token1Amount += reduce(
             lambda acc, event: acc - event['args']['amount1']
-            if event['event'] == 'Burn' 
-            else acc + event['args']['amount1'], events_in_block, 0)
-        
-        token0AmountNormalized = token0Amount / (10 ** int(pair_per_token_metadata["token0"]["decimals"]))
-        token1AmountNormalized = token1Amount / (10 ** int(pair_per_token_metadata["token1"]["decimals"]))
+            if event['event'] == 'Burn'
+            else acc + event['args']['amount1'], events_in_block, 0,
+        )
 
-        token0USD = token0Amount * token0_price_map.get(block_num, 0) * (10 ** -int(pair_per_token_metadata["token0"]["decimals"]))
-        token1USD = token1Amount * (token1_price_map.get(block_num, 0)) * (10 ** -int(pair_per_token_metadata["token1"]["decimals"]))
-        
+        token0AmountNormalized = token0Amount / (10 ** int(pair_per_token_metadata['token0']['decimals']))
+        token1AmountNormalized = token1Amount / (10 ** int(pair_per_token_metadata['token1']['decimals']))
+
+        token0USD = token0Amount * token0_price_map.get(block_num, 0) * \
+            (10 ** -int(pair_per_token_metadata['token0']['decimals']))
+        token1USD = token1Amount * (token1_price_map.get(block_num, 0)) * \
+            (10 ** -int(pair_per_token_metadata['token1']['decimals']))
 
         token0Price = token0_price_map.get(block_num, 0)
         token1Price = token1_price_map.get(block_num, 0)
@@ -210,11 +211,11 @@ async def get_pair_reserves(
             f' {from_block} - {to_block} | pair_contract: {pair_address}'
         ),
     )
-    
+
     # here we store the final block in the epoch reserves in redis so they may be used as
     # a starting point in the next epoch
     end_block = pair_reserves_dict.get(to_block, None)
-    
+
     if end_block:
         redis_cache_mapping = {
             json.dumps({'blockHeight': to_block, 'token0_reserves': end_block['token0TokenAmt'], 'token1_reserves': end_block['token1TokenAmt']}): int(to_block),
@@ -243,7 +244,7 @@ async def get_pair_reserves(
                 f' {pair_address} | epoch: {from_block} - {to_block}'
             ),
         )
-    
+
     return pair_reserves_dict
 
 
@@ -625,13 +626,12 @@ async def get_liquidity_depth(
         from_block=from_block,
         redis_conn=redis_conn,
     )
-    
+
     liquidity_depth_initial = calculate_liquidity_depth(
         ticks_list,
         slot0[0],
         pair_per_token_metadata,
     )
-
 
     for block_num in range(from_block, to_block + 1):
         liquidity_depth_dict[block_num] = liquidity_depth_initial
