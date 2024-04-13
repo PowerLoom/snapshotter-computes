@@ -18,11 +18,11 @@ class SnapshotBase(BaseModel):
 class UniswapPairTotalReservesSnapshot(SnapshotBase):
     token0Reserves: Dict[
         str,
-        dict,
+        float,
     ]  # block number to corresponding total reserves
     token1Reserves: Dict[
         str,
-        dict,
+        float,
     ]  # block number to corresponding total reserves
     token0ReservesUSD: Dict[str, float]
     token1ReservesUSD: Dict[str, float]

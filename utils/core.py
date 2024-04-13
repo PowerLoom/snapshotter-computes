@@ -171,6 +171,9 @@ async def get_pair_reserves(
             if event['event'] == 'Burn' 
             else acc + event['args']['amount1'], events_in_block, 0)
         
+        token0AmountNormalized = token0Amount / (10 ** int(pair_per_token_metadata["token0"]["decimals"]))
+        token1AmountNormalized = token1Amount / (10 ** int(pair_per_token_metadata["token1"]["decimals"]))
+
         token0USD = token0Amount * token0_price_map.get(block_num, 0) * (10 ** -int(pair_per_token_metadata["token0"]["decimals"]))
         token1USD = token1Amount * (token1_price_map.get(block_num, 0)) * (10 ** -int(pair_per_token_metadata["token1"]["decimals"]))
         
@@ -190,8 +193,10 @@ async def get_pair_reserves(
         )
 
         pair_reserves_dict[block_num] = {
-            'token0': {'reserves': token0Amount, 'decimals': pair_per_token_metadata['token0']['decimals']},
-            'token1': {'reserves': token1Amount, 'decimals': pair_per_token_metadata['token1']['decimals']},
+            'token0': token0AmountNormalized,
+            'token1': token1AmountNormalized,
+            'token0TokenAmt': token0Amount,
+            'token1TokenAmt': token1Amount,
             'token0USD': round(token0USD, 2),
             'token1USD': round(token1USD, 2),
             'token0Price': token0Price,
@@ -212,7 +217,7 @@ async def get_pair_reserves(
     
     if end_block:
         redis_cache_mapping = {
-            json.dumps({'blockHeight': to_block, 'token0_reserves': end_block['token0']['reserves'], 'token1_reserves': end_block['token1']['reserves']}): int(to_block),
+            json.dumps({'blockHeight': to_block, 'token0_reserves': end_block['token0TokenAmt'], 'token1_reserves': end_block['token1TokenAmt']}): int(to_block),
         }
 
         await asyncio.gather(
