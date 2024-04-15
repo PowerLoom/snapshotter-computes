@@ -18,3 +18,7 @@ class SnapshotBase(BaseModel):
 class BlockDetailsSnapshot(SnapshotBase):
     blockTimestamps: Dict[str, int]
     blockTransactions: Dict[str, List[str]]
+
+
+class EthUsdPriceSnapshot(SnapshotBase):
+    blockEthUsdPrices: Dict[str, float]

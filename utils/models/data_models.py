@@ -14,3 +14,12 @@ class BlockDetails(BaseModel):
     details: Dict[int, detailsData]
 
 
+class BlockPriceData(BaseModel):
+    blockPrice: float
+    timestamp: int
+
+
+class EthPriceDict(BaseModel):
+    blockPrices: Dict[int, BlockPriceData]
+
+
