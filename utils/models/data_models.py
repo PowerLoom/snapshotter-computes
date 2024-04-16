@@ -17,14 +17,14 @@ class TransferData(BaseModel):
     transactionHash: str
 
 
-class BlockMintData(BaseModel):
+class BlockNftData(BaseModel):
     mints: List[MintData]
     transfers: List[TransferData]
     timestamp: int
 
 
-class EpochMintData(BaseModel):
-    mintsByBlock: Dict[int, BlockMintData]
+class EpochNftData(BaseModel):
+    dataByBlock: Dict[int, BlockNftData]
     totalMinted: int
     totalUniqueMinters: int
     timestamp: int

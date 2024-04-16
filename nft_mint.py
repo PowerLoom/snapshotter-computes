@@ -5,7 +5,7 @@ from typing import Union
 
 from redis import asyncio as aioredis
 from snapshotter.modules.computes.utils.core import get_nft_mints
-from snapshotter.modules.computes.utils.models.data_models import EpochMintData
+from snapshotter.modules.computes.utils.models.data_models import EpochNftData
 from snapshotter.modules.computes.utils.models.message_models import EpochBaseSnapshot
 from snapshotter.modules.computes.utils.models.message_models import NftMintSnapshot
 from snapshotter.utils.callback_helpers import GenericProcessorSnapshot
@@ -36,7 +36,7 @@ class NftMintProcessor(GenericProcessorSnapshot):
 
         self._logger.debug(f'nft mint {data_source_contract_address} computation init time {time.time()}')
 
-        mint_data: EpochMintData = await get_nft_mints(
+        mint_data: EpochNftData = await get_nft_mints(
             data_source_contract_address=data_source_contract_address,
             redis_conn=redis_conn,
             rpc_helper=rpc_helper,
@@ -48,7 +48,7 @@ class NftMintProcessor(GenericProcessorSnapshot):
 
         total_minted = mint_data.totalMinted
         total_unique_minters = mint_data.totalUniqueMinters
-        mints_by_block = mint_data.mintsByBlock
+        data_by_block = mint_data.dataByBlock
         max_block_timestamp = mint_data.timestamp
 
         mint_data_snapshot = NftMintSnapshot(
@@ -60,7 +60,7 @@ class NftMintProcessor(GenericProcessorSnapshot):
             timestamp=max_block_timestamp,
             totalMinted=total_minted,
             totalUniqueMinters=total_unique_minters,
-            mintsByBlock=mints_by_block,
+            mintsByBlock=data_by_block,
         )
 
         return mint_data_snapshot

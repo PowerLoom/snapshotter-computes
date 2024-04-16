@@ -4,7 +4,8 @@ from typing import Optional
 
 from pydantic import BaseModel
 
-from .data_models import BlockMintData
+from .data_models import BlockNftData
+
 
 class EpochBaseSnapshot(BaseModel):
     begin: int
@@ -18,7 +19,7 @@ class SnapshotBase(BaseModel):
 
 
 class NftMintSnapshot(SnapshotBase):
-    mintsByBlock: Dict[int, BlockMintData]
+    mintsByBlock: Dict[int, BlockNftData]
     totalMinted: int
     totalUniqueMinters: int
     timestamp: int

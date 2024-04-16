@@ -10,8 +10,8 @@ from web3 import Web3
 from .constants import ERC721_EVENT_SIGS
 from .constants import ERC721_EVENTS_ABI
 from .constants import ZERO_ADDRESS
-from .models.data_models import BlockMintData
-from .models.data_models import EpochMintData
+from .models.data_models import BlockNftData
+from .models.data_models import EpochNftData
 from .models.data_models import MintData
 from .models.data_models import TransferData
 
@@ -77,8 +77,8 @@ async def get_nft_mints(
             mints_by_block[block_number] = []
         mints_by_block[block_number].append(event)
 
-    epoch_mint_data = EpochMintData(
-        mintsByBlock={},
+    epoch_mint_data = EpochNftData(
+        dataByBlock={},
         totalMinted=0,
         totalUniqueMinters=0,
         timestamp=0,
@@ -90,7 +90,7 @@ async def get_nft_mints(
     for block_number, mint_events in mints_by_block.items():
         block_details = block_details_dict.get(block_number, {})
         block_timestamp = block_details.get('timestamp', None)
-        block_mint_data = BlockMintData(
+        block_mint_data = BlockNftData(
             mints=[],
             transfers=[],
             timestamp=block_timestamp,
@@ -119,7 +119,7 @@ async def get_nft_mints(
                 )
                 block_mint_data.transfers.append(transfer_data)
 
-        epoch_mint_data.mintsByBlock[block_number] = block_mint_data
+        epoch_mint_data.dataByBlock[block_number] = block_mint_data
 
     max_block_details = block_details_dict.get(to_block, dict())
     max_block_timestamp = max_block_details.get('timestamp', None)
