@@ -42,4 +42,4 @@ class EthPriceProcessor(GenericProcessorSnapshot):
             block=epoch.begin,
             price=token_price_dict[epoch.begin]
         )
-        return [(f"eth-price-{epoch.begin}", snapshot)]
+        return [("example", snapshot)]
