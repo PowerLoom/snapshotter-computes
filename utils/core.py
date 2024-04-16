@@ -13,6 +13,7 @@ from .constants import ZERO_ADDRESS
 from .models.data_models import BlockMintData
 from .models.data_models import EpochMintData
 from .models.data_models import MintData
+from .models.data_models import TransferData
 
 core_logger = logger.bind(module='PowerLoom|BaseSnapshots|Core')
 
@@ -69,11 +70,8 @@ async def get_nft_mints(
         },
     )
 
-    # new mints are transfer events coming from the zero address
-    mint_events = filter(lambda event: event['args']['from'] == ZERO_ADDRESS, events_log)
-
     mints_by_block = {}
-    for event in mint_events:
+    for event in events_log:
         block_number = event['blockNumber']
         if block_number not in mints_by_block:
             mints_by_block[block_number] = []
@@ -94,18 +92,32 @@ async def get_nft_mints(
         block_timestamp = block_details.get('timestamp', None)
         block_mint_data = BlockMintData(
             mints=[],
+            transfers=[],
             timestamp=block_timestamp,
         )
 
         for mint_event in mint_events:
-            mint_data = MintData(
-                minter=mint_event['args']['to'],
-                tokenId=mint_event['args']['tokenId'],
-                transactionHash=mint_event['transactionHash'].hex(),
-            )
-            block_mint_data.mints.append(mint_data)
-            total_mints += 1
-            minters.add(mint_data.minter)
+
+            # Mint is a transfer event from the zero address
+            if event['args']['from'] == ZERO_ADDRESS:
+                mint_data = MintData(
+                    minterAddress=mint_event['args']['to'],
+                    tokenId=mint_event['args']['tokenId'],
+                    transactionHash=mint_event['transactionHash'].hex(),
+                )
+                block_mint_data.mints.append(mint_data)
+                total_mints += 1
+                minters.add(mint_data.minterAddress)
+
+            # Transfer is from a non-zero address
+            else:
+                transfer_data = TransferData(
+                    fromAddress=mint_event['args']['from'],
+                    toAddress=mint_event['args']['to'],
+                    tokenId=mint_event['args']['tokenId'],
+                    transactionHash=mint_event['transactionHash'].hex(),
+                )
+                block_mint_data.transfers.append(transfer_data)
 
         epoch_mint_data.mintsByBlock[block_number] = block_mint_data
 

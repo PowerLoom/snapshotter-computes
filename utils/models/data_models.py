@@ -5,13 +5,21 @@ from pydantic import BaseModel
 
 
 class MintData(BaseModel):
-    minter: str
+    minterAddress: str
+    tokenId: int
+    transactionHash: str
+
+
+class TransferData(BaseModel):
+    fromAddress: str
+    toAddress: str
     tokenId: int
     transactionHash: str
 
 
 class BlockMintData(BaseModel):
     mints: List[MintData]
+    transfers: List[TransferData]
     timestamp: int
 
 
