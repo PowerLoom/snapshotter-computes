@@ -43,8 +43,8 @@ async def get_collection_metadata(
 
     collection_name, collection_symbol = await rpc_helper.web3_call(
         tasks=[
-            collection_contract_obj.functions.name().call(),
-            collection_contract_obj.functions.symbol().call(),
+            collection_contract_obj.functions.name(),
+            collection_contract_obj.functions.symbol(),
         ],
         redis_conn=redis_conn,
     )
