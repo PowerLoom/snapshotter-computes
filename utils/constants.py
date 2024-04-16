@@ -6,7 +6,7 @@ from web3 import Web3
 
 from ..settings.config import settings as worker_settings
 
-constants_logger = logger.bind(module='PowerLoom|BaseSnapshots|Constants')
+constants_logger = logger.bind(module='PowerLoom|NftDataSnapshots|Constants')
 # Getting current node
 
 rpc_helper = RpcHelper()

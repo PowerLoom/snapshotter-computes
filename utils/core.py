@@ -15,7 +15,7 @@ from .models.data_models import EpochNftData
 from .models.data_models import MintData
 from .models.data_models import TransferData
 
-core_logger = logger.bind(module='PowerLoom|BaseSnapshots|Core')
+core_logger = logger.bind(module='PowerLoom|NftDataSnapshots|Core')
 
 
 async def get_nft_mints(
