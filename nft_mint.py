@@ -50,6 +50,8 @@ class NftMintProcessor(GenericProcessorSnapshot):
         total_unique_minters = mint_data.totalUniqueMinters
         data_by_block = mint_data.dataByBlock
         max_block_timestamp = mint_data.timestamp
+        collection_name = mint_data.name
+        collection_symbol = mint_data.symbol
 
         mint_data_snapshot = NftMintSnapshot(
             contract=data_source_contract_address,
@@ -61,6 +63,8 @@ class NftMintProcessor(GenericProcessorSnapshot):
             totalMinted=total_minted,
             totalUniqueMinters=total_unique_minters,
             mintsByBlock=data_by_block,
+            name=collection_name,
+            symbol=collection_symbol,
         )
 
         return mint_data_snapshot

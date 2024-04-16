@@ -22,4 +22,6 @@ class NftMintSnapshot(SnapshotBase):
     mintsByBlock: Dict[int, BlockNftData]
     totalMinted: int
     totalUniqueMinters: int
+    name: str
+    symbol: str
     timestamp: int

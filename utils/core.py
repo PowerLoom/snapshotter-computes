@@ -10,6 +10,7 @@ from web3 import Web3
 from .constants import ERC721_EVENT_SIGS
 from .constants import ERC721_EVENTS_ABI
 from .constants import ZERO_ADDRESS
+from .helpers import get_collection_metadata
 from .models.data_models import BlockNftData
 from .models.data_models import EpochNftData
 from .models.data_models import MintData
@@ -53,6 +54,12 @@ async def get_nft_mints(
             )
             raise err
 
+    collection_metadata = await get_collection_metadata(
+        contract_address=data_source_contract_address,
+        redis_conn=redis_conn,
+        rpc_helper=rpc_helper,
+    )
+
     # fetch logs for transfers
     event_sig, event_abi = get_event_sig_and_abi(
         ERC721_EVENT_SIGS,
@@ -81,6 +88,8 @@ async def get_nft_mints(
         dataByBlock={},
         totalMinted=0,
         totalUniqueMinters=0,
+        name=collection_metadata['name'],
+        symbol=collection_metadata['symbol'],
         timestamp=0,
     )
 

@@ -27,4 +27,6 @@ class EpochNftData(BaseModel):
     dataByBlock: Dict[int, BlockNftData]
     totalMinted: int
     totalUniqueMinters: int
+    name: str
+    symbol: str
     timestamp: int
