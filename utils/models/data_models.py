@@ -16,5 +16,7 @@ class BlockMintData(BaseModel):
 
 
 class EpochMintData(BaseModel):
-    minted: Dict[int, BlockMintData]
-
+    mintsByBlock: Dict[int, BlockMintData]
+    totalMinted: int
+    totalUniqueMinters: int
+    timestamp: int
