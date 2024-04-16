@@ -1,3 +1,5 @@
 {
-    
+    "contract_abis": {
+        "erc721": "snapshotter/modules/computes/static/abis/ERC721.json"
+    }
 }
