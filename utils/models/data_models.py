@@ -18,23 +18,3 @@ class BlockMintData(BaseModel):
 class EpochMintData(BaseModel):
     minted: Dict[int, BlockMintData]
 
-
-class detailsData(BaseModel):
-    number: int
-    timestamp: int
-    transactions: List[str]
-
-
-class BlockDetails(BaseModel):
-    details: Dict[int, detailsData]
-
-
-class BlockPriceData(BaseModel):
-    blockPrice: float
-    timestamp: int
-
-
-class EthPriceDict(BaseModel):
-    blockPrices: Dict[int, BlockPriceData]
-
-
