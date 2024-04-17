@@ -14,6 +14,7 @@ from .constants import ERC721_EVENTS_ABI
 from .constants import ZERO_ADDRESS
 from .helpers import get_collection_metadata
 from .models.data_models import BlockNftData
+from .models.data_models import EpochERC721Data
 from .models.data_models import EpochNftData
 from .models.data_models import MintData
 from .models.data_models import NftTransferTypes
@@ -87,7 +88,7 @@ async def get_nft_mints(
             mints_by_block[block_number] = []
         mints_by_block[block_number].append(event)
 
-    epoch_mint_data = EpochNftData(
+    epoch_mint_data = EpochERC721Data(
         dataByBlock={},
         totalMinted=0,
         totalUniqueMinters=0,

@@ -5,9 +5,9 @@ from typing import Union
 
 from redis import asyncio as aioredis
 from snapshotter.modules.computes.utils.core import get_nft_mints
-from snapshotter.modules.computes.utils.models.data_models import EpochNftData
+from snapshotter.modules.computes.utils.models.data_models import EpochERC721Data
 from snapshotter.modules.computes.utils.models.message_models import EpochBaseSnapshot
-from snapshotter.modules.computes.utils.models.message_models import NftMintSnapshot
+from snapshotter.modules.computes.utils.models.message_models import ERC721TransfersSnapshot
 from snapshotter.utils.callback_helpers import GenericProcessorSnapshot
 from snapshotter.utils.default_logger import logger
 from snapshotter.utils.models.message_models import PowerloomSnapshotProcessMessage
@@ -36,7 +36,7 @@ class NftMintProcessor(GenericProcessorSnapshot):
 
         self._logger.debug(f'nft mint {data_source_contract_address} computation init time {time.time()}')
 
-        mint_data: EpochNftData = await get_nft_mints(
+        mint_data: EpochERC721Data = await get_nft_mints(
             data_source_contract_address=data_source_contract_address,
             redis_conn=redis_conn,
             rpc_helper=rpc_helper,
@@ -53,7 +53,7 @@ class NftMintProcessor(GenericProcessorSnapshot):
         collection_name = mint_data.name
         collection_symbol = mint_data.symbol
 
-        mint_data_snapshot = NftMintSnapshot(
+        mint_data_snapshot = ERC721TransfersSnapshot(
             contract=data_source_contract_address,
             chainHeightRange=EpochBaseSnapshot(
                 begin=min_chain_height,

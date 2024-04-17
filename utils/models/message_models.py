@@ -18,10 +18,13 @@ class SnapshotBase(BaseModel):
     timestamp: int
 
 
-class NftMintSnapshot(SnapshotBase):
+class NftTransfersSnapshot(SnapshotBase):
     dataByBlock: Dict[int, BlockNftData]
     totalMinted: int
     totalUniqueMinters: int
+    timestamp: int
+
+
+class ERC721TransfersSnapshot(NftTransfersSnapshot):
     name: str
     symbol: str
-    timestamp: int
