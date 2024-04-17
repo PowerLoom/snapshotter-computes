@@ -33,12 +33,18 @@ erc1155_contract_object = current_node['web3_client'].eth.contract(
 # FUNCTION SIGNATURES and OTHER CONSTANTS
 ERC721_EVENT_SIGS = {
     'Transfer': 'Transfer(address,address,uint256)',
-    'TransferSingle': 'TransferSingle(address,address,address,uint256,uint256)',
-    'TransferBatch': 'TransferBatch(address,address,address,uint256[],uint256[])',
 }
 
 ERC721_EVENTS_ABI = {
     'Transfer': erc721_contract_object.events.Transfer._get_event_abi(),
+}
+
+ERC1155_EVENT_SIGS = {
+    'TransferSingle': 'TransferSingle(address,address,address,uint256,uint256)',
+    'TransferBatch': 'TransferBatch(address,address,address,uint256[],uint256[])',
+}
+
+ERC1155_EVENTS_ABI = {
     'TransferSingle': erc1155_contract_object.events.TransferSingle._get_event_abi(),
     'TransferBatch': erc1155_contract_object.events.TransferBatch._get_event_abi(),
 }
