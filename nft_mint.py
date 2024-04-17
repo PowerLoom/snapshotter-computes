@@ -62,7 +62,7 @@ class NftMintProcessor(GenericProcessorSnapshot):
             timestamp=max_block_timestamp,
             totalMinted=total_minted,
             totalUniqueMinters=total_unique_minters,
-            mintsByBlock=data_by_block,
+            dataByBlock=data_by_block,
             name=collection_name,
             symbol=collection_symbol,
         )

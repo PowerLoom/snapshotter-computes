@@ -19,7 +19,7 @@ class SnapshotBase(BaseModel):
 
 
 class NftMintSnapshot(SnapshotBase):
-    mintsByBlock: Dict[int, BlockNftData]
+    dataByBlock: Dict[int, BlockNftData]
     totalMinted: int
     totalUniqueMinters: int
     name: str
