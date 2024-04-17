@@ -8,7 +8,7 @@ from snapshotter.utils.redis.redis_keys import source_chain_epoch_size_key
 from snapshotter.utils.rpc import RpcHelper
 
 
-async def test_nft_mint_processor():
+async def test_erc1155_processor():
     from_block = 19677311
     to_block = from_block + 9
 
@@ -32,19 +32,19 @@ async def test_nft_mint_processor():
         to_block - from_block,
     )
 
-    transfer_data_snapshot = await processor.compute(
+    snapshot = await processor.compute(
         epoch=snapshot_process_message,
         redis_conn=redis_conn,
         rpc_helper=rpc_helper,
     )
 
-    assert isinstance(transfer_data_snapshot, NftTransfersSnapshot)
+    assert isinstance(snapshot, NftTransfersSnapshot)
 
     from pprint import pprint
-    pprint(transfer_data_snapshot.dict())
+    pprint(snapshot.dict())
 
     print('PASSED')
 
 if __name__ == '__main__':
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(test_nft_mint_processor())
+    loop.run_until_complete(test_erc1155_processor())
