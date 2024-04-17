@@ -1,7 +1,14 @@
+from enum import Enum
 from typing import Dict
 from typing import List
 
 from pydantic import BaseModel
+
+
+class NftTransferTypes(Enum):
+    TRANSFER = 'Transfer'
+    TRANSFER_SINGLE = 'TransferSingle'
+    TRANSFER_BATCH = 'TransferBatch'
 
 
 class MintData(BaseModel):
