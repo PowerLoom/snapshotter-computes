@@ -51,7 +51,7 @@ async def get_pair(
     result = await rpc_helper.web3_call(
         tasks=tasks,
         contract_addr=factory_contract_obj.address,
-        contract_abi=factory_contract_obj.abi,
+        abi=factory_contract_obj.abi,
     )
     pair = result[0]
     # cache the pair address
