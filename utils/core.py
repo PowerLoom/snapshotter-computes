@@ -36,7 +36,7 @@ async def get_pair_reserves(
     core_logger.debug(
         f'Starting pair total reserves query for: {pair_address}',
     )
-    pair_address = Web3.toChecksumAddress(pair_address)
+    pair_address = Web3.to_checksum_address(pair_address)
 
     if fetch_timestamp:
         try:
@@ -234,7 +234,7 @@ def extract_trade_volume_log(
     trade_fee_usd = 0
 
     block_details = block_details_dict.get(int(log.get('blockNumber', 0)), {})
-    log = json.loads(Web3.toJSON(log))
+    log = json.loads(Web3.to_json(log))
     log['token0_amount'] = token0_amount
     log['token1_amount'] = token1_amount
     log['timestamp'] = block_details.get('timestamp', '')
@@ -306,7 +306,7 @@ async def get_pair_trade_volume(
     fetch_timestamp=True,
 ):
 
-    data_source_contract_address = Web3.toChecksumAddress(
+    data_source_contract_address = Web3.to_checksum_address(
         data_source_contract_address,
     )
     block_details_dict = dict()

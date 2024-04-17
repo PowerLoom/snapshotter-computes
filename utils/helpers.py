@@ -37,16 +37,16 @@ async def get_pair(
     # check if pair cache exists
     pair_address_cache = await redis_conn.hget(
         uniswap_tokens_pair_map,
-        f'{Web3.toChecksumAddress(token0)}-{Web3.toChecksumAddress(token1)}',
+        f'{Web3.to_checksum_address(token0)}-{Web3.to_checksum_address(token1)}',
     )
     if pair_address_cache:
         pair_address_cache = pair_address_cache.decode('utf-8')
-        return Web3.toChecksumAddress(pair_address_cache)
+        return Web3.to_checksum_address(pair_address_cache)
 
     tasks = [
         factory_contract_obj.functions.getPair(
-            Web3.toChecksumAddress(token0),
-            Web3.toChecksumAddress(token1),
+            Web3.to_checksum_address(token0),
+            Web3.to_checksum_address(token1),
         ),
     ]
 
@@ -56,7 +56,7 @@ async def get_pair(
     await redis_conn.hset(
         name=uniswap_tokens_pair_map,
         mapping={
-            f'{Web3.toChecksumAddress(token0)}-{Web3.toChecksumAddress(token1)}': Web3.toChecksumAddress(
+            f'{Web3.to_checksum_address(token0)}-{Web3.to_checksum_address(token1)}': Web3.to_checksum_address(
                 pair,
             ),
         },
@@ -75,7 +75,7 @@ async def get_pair_metadata(
     also returns pair symbol by concatenating {token0Symbol}-{token1Symbol}
     """
     try:
-        pair_address = Web3.toChecksumAddress(pair_address)
+        pair_address = Web3.to_checksum_address(pair_address)
 
         # check if cache exist
         (
@@ -94,15 +94,15 @@ async def get_pair_metadata(
         token0Addr = None
         token1Addr = None
         if pair_token_addresses_cache:
-            token0Addr = Web3.toChecksumAddress(
+            token0Addr = Web3.to_checksum_address(
                 pair_token_addresses_cache[b'token0Addr'].decode('utf-8'),
             )
-            token1Addr = Web3.toChecksumAddress(
+            token1Addr = Web3.to_checksum_address(
                 pair_token_addresses_cache[b'token1Addr'].decode('utf-8'),
             )
         else:
             pair_contract_obj = current_node['web3_client'].eth.contract(
-                address=Web3.toChecksumAddress(pair_address),
+                address=Web3.to_checksum_address(pair_address),
                 abi=pair_contract_abi,
             )
             token0Addr, token1Addr = await rpc_helper.web3_call(
@@ -125,12 +125,12 @@ async def get_pair_metadata(
 
         # token0 contract
         token0 = current_node['web3_client'].eth.contract(
-            address=Web3.toChecksumAddress(token0Addr),
+            address=Web3.to_checksum_address(token0Addr),
             abi=erc20_abi,
         )
         # token1 contract
         token1 = current_node['web3_client'].eth.contract(
-            address=Web3.toChecksumAddress(token1Addr),
+            address=Web3.to_checksum_address(token1Addr),
             abi=erc20_abi,
         )
 
@@ -156,9 +156,9 @@ async def get_pair_metadata(
             # special case to handle maker token
             maker_token0 = None
             maker_token1 = None
-            if Web3.toChecksumAddress(
+            if Web3.to_checksum_address(
                 worker_settings.contract_addresses.MAKER,
-            ) == Web3.toChecksumAddress(token0Addr):
+            ) == Web3.to_checksum_address(token0Addr):
                 token0_name = get_maker_pair_data('name')
                 token0_symbol = get_maker_pair_data('symbol')
                 maker_token0 = True
@@ -167,9 +167,9 @@ async def get_pair_metadata(
                 tasks.append(token0.functions.symbol())
             tasks.append(token0.functions.decimals())
 
-            if Web3.toChecksumAddress(
+            if Web3.to_checksum_address(
                 worker_settings.contract_addresses.MAKER,
-            ) == Web3.toChecksumAddress(token1Addr):
+            ) == Web3.to_checksum_address(token1Addr):
                 token1_name = get_maker_pair_data('name')
                 token1_symbol = get_maker_pair_data('symbol')
                 maker_token1 = True
