@@ -51,7 +51,7 @@ class ERC1155TransferProcessor(GenericProcessorSnapshot):
         data_by_block = transfer_data.dataByBlock
         max_block_timestamp = transfer_data.timestamp
 
-        mint_data_snapshot = NftTransfersSnapshot(
+        transfer_data_snapshot = NftTransfersSnapshot(
             contract=data_source_contract_address,
             chainHeightRange=EpochBaseSnapshot(
                 begin=min_chain_height,
@@ -63,4 +63,4 @@ class ERC1155TransferProcessor(GenericProcessorSnapshot):
             dataByBlock=data_by_block,
         )
 
-        return mint_data_snapshot
+        return transfer_data_snapshot

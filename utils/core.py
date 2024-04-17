@@ -23,7 +23,7 @@ from .models.data_models import TransferData
 core_logger = logger.bind(module='PowerLoom|NftDataSnapshots|Core')
 
 
-async def get_nft_mints(
+async def get_erc721_transfers(
     data_source_contract_address,
     redis_conn: aioredis.Redis,
     rpc_helper: RpcHelper,
@@ -32,7 +32,7 @@ async def get_nft_mints(
     fetch_timestamp=True,
 ):
     """
-    Fetches new mints for the provided NFT contract.
+    Fetches new transfers and mints for the provided ERC721 contract.
     """
     data_source_contract_address = Web3.to_checksum_address(
         data_source_contract_address,
@@ -81,14 +81,14 @@ async def get_nft_mints(
         },
     )
 
-    mints_by_block = {}
+    transfers_by_block = {}
     for event in events_log:
         block_number = event['blockNumber']
-        if block_number not in mints_by_block:
-            mints_by_block[block_number] = []
-        mints_by_block[block_number].append(event)
+        if block_number not in transfers_by_block:
+            transfers_by_block[block_number] = []
+        transfers_by_block[block_number].append(event)
 
-    epoch_mint_data = EpochERC721Data(
+    epoch_data = EpochERC721Data(
         dataByBlock={},
         totalMinted=0,
         totalUniqueMinters=0,
@@ -100,48 +100,48 @@ async def get_nft_mints(
     # iterate over the transfer events and create the mint data
     total_mints = 0
     minters = set()
-    for block_number, mint_events in mints_by_block.items():
+    for block_number, transfer_events in transfers_by_block.items():
         block_details = block_details_dict.get(block_number, {})
         block_timestamp = block_details.get('timestamp', None)
-        block_mint_data = BlockNftData(
+        block_data = BlockNftData(
             mints=[],
             transfers=[],
             timestamp=block_timestamp,
         )
 
-        for mint_event in mint_events:
+        for event in transfer_events:
 
             # Mint is a transfer event from the zero address
             if event['args']['from'] == ZERO_ADDRESS:
                 mint_data = MintData(
-                    minterAddress=mint_event['args']['to'],
-                    tokenId=mint_event['args']['tokenId'],
-                    transactionHash=mint_event['transactionHash'].hex(),
+                    minterAddress=event['args']['to'],
+                    tokenId=event['args']['tokenId'],
+                    transactionHash=event['transactionHash'].hex(),
                 )
-                block_mint_data.mints.append(mint_data)
+                block_data.mints.append(mint_data)
                 total_mints += 1
                 minters.add(mint_data.minterAddress)
 
             # Transfer is from a non-zero address
             else:
                 transfer_data = TransferData(
-                    fromAddress=mint_event['args']['from'],
-                    toAddress=mint_event['args']['to'],
-                    tokenId=mint_event['args']['tokenId'],
-                    transactionHash=mint_event['transactionHash'].hex(),
+                    fromAddress=event['args']['from'],
+                    toAddress=event['args']['to'],
+                    tokenId=event['args']['tokenId'],
+                    transactionHash=event['transactionHash'].hex(),
                 )
-                block_mint_data.transfers.append(transfer_data)
+                block_data.transfers.append(transfer_data)
 
-        epoch_mint_data.dataByBlock[block_number] = block_mint_data
+        epoch_data.dataByBlock[block_number] = block_data
 
     max_block_details = block_details_dict.get(to_block, dict())
     max_block_timestamp = max_block_details.get('timestamp', None)
 
-    epoch_mint_data.totalMinted = total_mints
-    epoch_mint_data.totalUniqueMinters = len(minters)
-    epoch_mint_data.timestamp = max_block_timestamp
+    epoch_data.totalMinted = total_mints
+    epoch_data.totalUniqueMinters = len(minters)
+    epoch_data.timestamp = max_block_timestamp
 
-    return epoch_mint_data
+    return epoch_data
 
 
 async def get_erc1155_transfers(
@@ -153,7 +153,7 @@ async def get_erc1155_transfers(
     fetch_timestamp=True,
 ):
     """
-    Fetches new mints for the provided NFT contract.
+    Fetches new transfers and mints for the provided ERC1155 contract.
     """
     data_source_contract_address = Web3.to_checksum_address(
         data_source_contract_address,
@@ -196,14 +196,14 @@ async def get_erc1155_transfers(
         },
     )
 
-    mints_by_block = {}
+    transfers_by_block = {}
     for event in events_log:
         block_number = event['blockNumber']
-        if block_number not in mints_by_block:
-            mints_by_block[block_number] = []
-        mints_by_block[block_number].append(event)
+        if block_number not in transfers_by_block:
+            transfers_by_block[block_number] = []
+        transfers_by_block[block_number].append(event)
 
-    epoch_mint_data = EpochNftData(
+    epoch_data = EpochNftData(
         dataByBlock={},
         totalMinted=0,
         totalUniqueMinters=0,
@@ -213,18 +213,18 @@ async def get_erc1155_transfers(
     # iterate over the transfer events and create the mint data
     total_mints = 0
     minters = set()
-    for block_number, mint_events in mints_by_block.items():
+    for block_number, transfer_events in transfers_by_block.items():
         block_details = block_details_dict.get(block_number, {})
         block_timestamp = block_details.get('timestamp', None)
-        block_mint_data = BlockNftData(
+        block_data = BlockNftData(
             mints=[],
             transfers=[],
             timestamp=block_timestamp,
         )
 
-        for mint_event in mint_events:
+        for event in transfer_events:
 
-            if mint_event['event'] == NftTransferTypes.TRANSFER_SINGLE.value:
+            if event['event'] == NftTransferTypes.TRANSFER_SINGLE.value:
                 # For ERC1155, a value greater than 1 indicates that the transferred token is not an NFT
                 if event['args']['value'] != 1:
                     continue
@@ -232,55 +232,55 @@ async def get_erc1155_transfers(
                 # A mint for ERC1155 is a transfer event from the zero address
                 if event['args']['from'] == ZERO_ADDRESS:
                     mint_data = MintData(
-                        minterAddress=mint_event['args']['to'],
-                        tokenId=mint_event['args']['id'],
-                        transactionHash=mint_event['transactionHash'].hex(),
+                        minterAddress=event['args']['to'],
+                        tokenId=event['args']['id'],
+                        transactionHash=event['transactionHash'].hex(),
                     )
-                    block_mint_data.mints.append(mint_data)
+                    block_data.mints.append(mint_data)
                     total_mints += 1
                     minters.add(mint_data.minterAddress)
                 else:
                     transfer_data = TransferData(
-                        fromAddress=mint_event['args']['from'],
-                        toAddress=mint_event['args']['to'],
-                        tokenId=mint_event['args']['id'],
-                        transactionHash=mint_event['transactionHash'].hex(),
+                        fromAddress=event['args']['from'],
+                        toAddress=event['args']['to'],
+                        tokenId=event['args']['id'],
+                        transactionHash=event['transactionHash'].hex(),
                     )
-                    block_mint_data.transfers.append(transfer_data)
+                    block_data.transfers.append(transfer_data)
 
             # Event is a TransferBatch event
             else:
-                token_ids = mint_event['args']['ids']
-                token_values = mint_event['args']['values']
+                token_ids = event['args']['ids']
+                token_values = event['args']['values']
 
                 for token_id, value in zip(token_ids, token_values):
                     if value != 1:
                         continue
-                    if mint_event['args']['from'] == ZERO_ADDRESS:
+                    if event['args']['from'] == ZERO_ADDRESS:
                         mint_data = MintData(
-                            minterAddress=mint_event['args']['to'],
+                            minterAddress=event['args']['to'],
                             tokenId=token_id,
-                            transactionHash=mint_event['transactionHash'].hex(),
+                            transactionHash=event['transactionHash'].hex(),
                         )
-                        block_mint_data.mints.append(mint_data)
+                        block_data.mints.append(mint_data)
                         total_mints += 1
                         minters.add(mint_data.minterAddress)
                     else:
                         transfer_data = TransferData(
-                            fromAddress=mint_event['args']['from'],
-                            toAddress=mint_event['args']['to'],
+                            fromAddress=event['args']['from'],
+                            toAddress=event['args']['to'],
                             tokenId=token_id,
-                            transactionHash=mint_event['transactionHash'].hex(),
+                            transactionHash=event['transactionHash'].hex(),
                         )
-                        block_mint_data.transfers.append(transfer_data)
+                        block_data.transfers.append(transfer_data)
 
-        epoch_mint_data.dataByBlock[block_number] = block_mint_data
+        epoch_data.dataByBlock[block_number] = block_data
 
     max_block_details = block_details_dict.get(to_block, dict())
     max_block_timestamp = max_block_details.get('timestamp', None)
 
-    epoch_mint_data.totalMinted = total_mints
-    epoch_mint_data.totalUniqueMinters = len(minters)
-    epoch_mint_data.timestamp = max_block_timestamp
+    epoch_data.totalMinted = total_mints
+    epoch_data.totalUniqueMinters = len(minters)
+    epoch_data.timestamp = max_block_timestamp
 
-    return epoch_mint_data
+    return epoch_data
