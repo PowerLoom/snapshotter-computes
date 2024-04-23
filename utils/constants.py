@@ -21,6 +21,7 @@ constants_logger = logger.bind(module='PowerLoom|Uniswap|Constants')
 # Getting current node
 
 rpc_helper = RpcHelper()
+rpc_helper.sync_init()
 current_node = rpc_helper.get_current_node()
 
 # LOAD ABIs
