@@ -103,9 +103,9 @@ async def get_lido_staking_yield(
             last_apr_data.stakingApr = block_apr
 
         apr_data_dict[block_num] = {
-            'reportTimestamp': last_apr_data.reportTimestamp,
+            'report_timestamp': last_apr_data.reportTimestamp,
             'timestamp': block_timestamp,
-            'apr': last_apr_data.stakingApr,
+            'staking_apr': last_apr_data.stakingApr,
         }
 
     # cache the last apr data for the next epoch
