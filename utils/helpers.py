@@ -11,9 +11,23 @@ from .constants import current_node
 from .constants import lido_contract_object
 from .constants import LIDO_EVENTS_ABI
 from .constants import LIDO_EVENTS_SIG
-from .models.data_models import EthSharesData
+from .constants import SECONDS_IN_YEAR
+from .models.data_models import LidoAprData
 
 helper_logger = logger.bind(module='PowerLoom|StakingYieldSnapshots|Helpers')
+
+
+def calculate_staking_apr(
+    shares_data: LidoAprData,
+):
+    pre_share_rate = shares_data.preTotalEther * 1e27 / shares_data.preTotalShares
+    post_share_rate = shares_data.postTotalEther * 1e27 / shares_data.postTotalShares
+
+    apr = SECONDS_IN_YEAR * (
+        (post_share_rate - pre_share_rate) / pre_share_rate
+    ) / shares_data.timeElapsed
+
+    return apr
 
 
 async def get_last_token_rebase(
@@ -23,18 +37,6 @@ async def get_last_token_rebase(
 ):
     try:
 
-        # cached_shares_data = await redis_conn.hget(
-        #     lido_contract_cached_block_height_shares,
-        #     str(to_block),
-        # )
-
-        # if cached_shares_data:
-        #     print('exists')
-        #     cached_shares_dict = json.loads(cached_shares_data)
-        #     return EthSharesData(
-        #         **cached_shares_dict
-        #     )
-        # print('does not exist')
         lido_address = lido_contract_object.address
 
         event_sig, event_abi = get_event_sig_and_abi(
@@ -70,22 +72,19 @@ async def get_last_token_rebase(
 
         last_event = last_rebase_events[-1]
 
-        last_timestamp = current_node['web3_client'].eth.getBlock(last_event['blockNumber']).timestamp
-        print(last_timestamp)
-        last_event = last_event['args']
-
-        shares_data = EthSharesData(
-            lastTimestamp=last_timestamp,
-            preTotalShares=last_event['preTotalShares'],
-            preTotalEther=last_event['preTotalEther'],
-            postTotalShares=last_event['postTotalShares'],
-            postTotalEther=last_event['postTotalEther'],
+        shares_data = LidoAprData(
+            timeElapsed=last_event['args']['timeElapsed'],
+            preTotalShares=last_event['args']['preTotalShares'],
+            preTotalEther=last_event['args']['preTotalEther'],
+            postTotalShares=last_event['args']['postTotalShares'],
+            postTotalEther=last_event['args']['postTotalEther'],
         )
 
-        # await redis_conn.hset(
-        #     name=lido_contract_cached_block_height_shares,
-        #     mapping={str(to_block): Web3.to_json(shares_data)},
-        # )
+        last_apr = calculate_staking_apr(
+            shares_data=shares_data,
+        )
+
+        shares_data.stakingApr = last_apr
 
         return shares_data
 
