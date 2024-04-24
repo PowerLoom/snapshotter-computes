@@ -1,6 +1,7 @@
 import asyncio
 
-from snapshotter.modules.computes.utils.core import get_lido_staking_yield
+from snapshotter.modules.computes.lido_staking_yield import LidoStakingYieldProcessor
+from snapshotter.modules.computes.utils.models.message_models import LidoStakingYieldSnapshot
 from snapshotter.utils.models.message_models import PowerloomSnapshotProcessMessage
 from snapshotter.utils.redis.redis_conn import RedisPoolCache
 from snapshotter.utils.redis.redis_keys import source_chain_epoch_size_key
@@ -8,7 +9,7 @@ from snapshotter.utils.rpc import RpcHelper
 
 
 async def test_lido_staking_yield():
-    from_block = 19685711
+    from_block = 19718060  # epoch with TokenRebase event
     to_block = from_block + 9
 
     snapshot_process_message = PowerloomSnapshotProcessMessage(
@@ -29,12 +30,15 @@ async def test_lido_staking_yield():
         to_block - from_block,
     )
 
-    await get_lido_staking_yield(
+    lido_staking_yield_processor = LidoStakingYieldProcessor()
+
+    snapshot = await lido_staking_yield_processor.compute(
+        epoch=snapshot_process_message,
         redis_conn=redis_conn,
         rpc_helper=rpc_helper,
-        from_block=from_block,
-        to_block=to_block,
     )
+
+    assert(isinstance(snapshot, LidoStakingYieldSnapshot))
 
     print('PASSED')
 
