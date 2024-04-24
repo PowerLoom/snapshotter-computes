@@ -4,7 +4,8 @@ from typing import List
 from pydantic import BaseModel
 
 
-class LidoAprData(BaseModel):
+class LidoTokenRebaseData(BaseModel):
+    reportTimestamp: int
     timeElapsed: int
     preTotalShares: int
     preTotalEther: int

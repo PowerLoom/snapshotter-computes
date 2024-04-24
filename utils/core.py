@@ -15,7 +15,7 @@ from .constants import LIDO_EVENTS_ABI
 from .constants import LIDO_EVENTS_SIG
 from .helpers import calculate_staking_apr
 from .helpers import get_last_token_rebase
-from .models.data_models import LidoAprData
+from .models.data_models import LidoTokenRebaseData
 
 core_logger = logger.bind(module='PowerLoom|StakingYieldSnapshots|Core')
 
@@ -66,7 +66,7 @@ async def get_lido_staking_yield(
 
     block_rebase_events = {block_num: {} for block_num in range(from_block, to_block + 1)}
     for event in epoch_rebase_events:
-        block_rebase_events[event['blockNumber']] = LidoAprData(
+        block_rebase_events[event['blockNumber']] = LidoTokenRebaseData(
             **event['args'],
         )
 
@@ -78,7 +78,7 @@ async def get_lido_staking_yield(
 
     if prev_apr_data_cache:
         cached_apr_dict = json.loads(prev_apr_data_cache)
-        last_apr_data = LidoAprData(
+        last_apr_data = LidoTokenRebaseData(
             **cached_apr_dict,
         )
     else:
