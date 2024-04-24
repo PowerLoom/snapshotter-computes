@@ -1,31 +1,26 @@
-import json
-
 from redis import asyncio as aioredis
 from snapshotter.utils.default_logger import logger
 from snapshotter.utils.rpc import get_event_sig_and_abi
 from snapshotter.utils.rpc import RpcHelper
-from web3 import Web3
 
-from ..redis_keys import lido_contract_cached_block_height_shares
-from .constants import current_node
 from .constants import lido_contract_object
 from .constants import LIDO_EVENTS_ABI
 from .constants import LIDO_EVENTS_SIG
 from .constants import SECONDS_IN_YEAR
-from .models.data_models import LidoAprData
+from .models.data_models import LidoTokenRebaseData
 
 helper_logger = logger.bind(module='PowerLoom|StakingYieldSnapshots|Helpers')
 
 
 def calculate_staking_apr(
-    shares_data: LidoAprData,
+    rebase_data: LidoTokenRebaseData,
 ):
-    pre_share_rate = shares_data.preTotalEther * 1e27 / shares_data.preTotalShares
-    post_share_rate = shares_data.postTotalEther * 1e27 / shares_data.postTotalShares
+    pre_share_rate = rebase_data.preTotalEther * 1e27 / rebase_data.preTotalShares
+    post_share_rate = rebase_data.postTotalEther * 1e27 / rebase_data.postTotalShares
 
     apr = SECONDS_IN_YEAR * (
         (post_share_rate - pre_share_rate) / pre_share_rate
-    ) / shares_data.timeElapsed
+    ) / rebase_data.timeElapsed
 
     return apr
 
@@ -70,23 +65,20 @@ async def get_last_token_rebase(
                 start_block -= step
                 end_block -= step
 
+        # There should only be one event, but we grab the last one to be sure
         last_event = last_rebase_events[-1]
 
-        shares_data = LidoAprData(
-            timeElapsed=last_event['args']['timeElapsed'],
-            preTotalShares=last_event['args']['preTotalShares'],
-            preTotalEther=last_event['args']['preTotalEther'],
-            postTotalShares=last_event['args']['postTotalShares'],
-            postTotalEther=last_event['args']['postTotalEther'],
+        apr_data = LidoTokenRebaseData(
+            **last_event['args'],
         )
 
         last_apr = calculate_staking_apr(
-            shares_data=shares_data,
+            rebase_data=apr_data,
         )
 
-        shares_data.stakingApr = last_apr
+        apr_data.stakingApr = last_apr
 
-        return shares_data
+        return apr_data
 
     except Exception as e:
         helper_logger.error(f'Error in get_last_token_rebase: {e}')
