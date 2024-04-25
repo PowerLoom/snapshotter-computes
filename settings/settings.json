@@ -1,0 +1,5 @@
+{
+    "contract_abis": {
+        "EACAggregatorProxy": "snapshotter/modules/computes/static/abi/EACAggregatorProxy.json"
+    }
+}
