@@ -8,6 +8,7 @@ constants_logger = logger.bind(module='PowerLoom|StakingYieldSnapshots|Constants
 # Getting current node
 
 rpc_helper = RpcHelper()
+rpc_helper.sync_init()
 current_node = rpc_helper.get_current_node()
 
 lido_contract_abi = read_json_file(
