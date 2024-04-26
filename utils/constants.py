@@ -15,8 +15,3 @@ aggregator_contract_abi = read_json_file(
     worker_settings.contract_abis.EACAggregatorProxy,
     constants_logger,
 )
-
-aggregator_contract_object = current_node['web3_client'].eth.contract(
-    abi=aggregator_contract_abi,
-    address=worker_settings.contract_addresses.lido,
-)
