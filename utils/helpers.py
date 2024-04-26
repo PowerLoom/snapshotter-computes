@@ -1,3 +1,5 @@
+import math
+
 from redis import asyncio as aioredis
 from snapshotter.utils.default_logger import logger
 from snapshotter.utils.rpc import RpcHelper
@@ -65,3 +67,18 @@ async def get_oracle_metadata(
         'decimals': oracle_decimals,
         'description': oracle_description,
     }
+
+
+def truncate(number, decimals=5):
+    """
+    Returns a value truncated to a specific number of decimal places.
+    """
+    if not isinstance(decimals, int):
+        raise TypeError('decimal places must be an integer.')
+    elif decimals < 0:
+        raise ValueError('decimal places has to be 0 or more.')
+    elif decimals == 0:
+        return math.trunc(number)
+
+    factor = 10.0 ** decimals
+    return math.trunc(number * factor) / factor

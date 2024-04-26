@@ -23,3 +23,10 @@ class ChainlinkOracleAnswersSnapshot(SnapshotBase):
     roundUpdateTimes: Dict[str, int]
     answeredInRounds: Dict[str, int]
     blockTimestamps: Dict[str, int]
+
+
+class ChainlinkOracleAggregateSnapshot(AggregateBase):
+    averageAnswer: float = 0.0
+    sampleSize: int = 0
+    timestamp: int = 0
+    complete: bool = True

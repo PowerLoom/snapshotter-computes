@@ -15,3 +15,5 @@ aggregator_contract_abi = read_json_file(
     worker_settings.contract_abis.EACAggregatorProxy,
     constants_logger,
 )
+
+SECONDS_IN_DAY = 86400
