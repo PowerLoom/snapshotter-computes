@@ -30,3 +30,17 @@ class ChainlinkOracleAggregateSnapshot(AggregateBase):
     sampleSize: int = 0
     timestamp: int = 0
     complete: bool = True
+
+
+class ChainlinkOracleData(BaseModel):
+    address: str
+    description: str
+    decimals: int
+    answer: float = 0.0
+    answer24hAvg: float = 0.0
+    avgSampleSize: int = 0
+
+
+class ChainlinkAllOraclesSnapshot(AggregateBase):
+    tokens: List[ChainlinkOracleData] = []
+    complete: bool = True
