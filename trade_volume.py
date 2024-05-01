@@ -70,13 +70,13 @@ class TradeVolumeProcessor(GenericProcessor):
 
         return trade_volume_snapshot
 
-    def _gen_pair_idx_to_compute(self, msg_obj: SnapshotProcessMessage):
+    def _gen_pair_idx_to_compute(self, msg_obj: SnapshotProcessMessage, slot_id: int):
         monitored_pairs = module_settings.initial_pairs
         current_epoch = msg_obj.epochId
         snapshotter_hash = hash(int(settings.instance_id.lower(), 16))
         current_day = msg_obj.day
 
-        return (current_epoch + snapshotter_hash + settings.slot_id + current_day) % len(monitored_pairs)
+        return (current_epoch + snapshotter_hash + slot_id + current_day) % len(monitored_pairs)
 
     async def compute(
         self,
@@ -86,6 +86,7 @@ class TradeVolumeProcessor(GenericProcessor):
         ipfs_reader: AsyncIPFSClient,
         protocol_state_contract,
         eth_price_dict: dict,
+        slot_id: int,
     ):
 
         min_chain_height = msg_obj.begin
@@ -95,7 +96,7 @@ class TradeVolumeProcessor(GenericProcessor):
 
         self._logger.debug(f'trade volume, computation init time {time.time()}')
 
-        pair_idx = self._gen_pair_idx_to_compute(msg_obj)
+        pair_idx = self._gen_pair_idx_to_compute(msg_obj, slot_id)
         data_source_contract_address = monitored_pairs[pair_idx]
 
         snapshot = await self._compute_single(
