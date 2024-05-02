@@ -9,6 +9,7 @@ class UniswapContractAbis(BaseModel):
 
 
 class ContractAddresses(BaseModel):
+    uniswap_v3_factory: str = Field(..., example='0x33128a8fC17869897dcE68Ed026d694621f6FDfD')
     MAKER: str = Field(..., example='0x9f8F72aA9304c8B593d555F12eF6589cC3A579A2')
     USDbC: str = Field(..., example='0xc2132d05d31c914a87c6611c10748aeb04b58e8f')
     DAI: str = Field(..., example='0x8f3cf7ad23cd3cadbd9735aff958023239c6a063')
