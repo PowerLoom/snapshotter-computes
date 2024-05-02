@@ -381,8 +381,30 @@ async def get_token_pair_address_with_fees(
         ),
     ]
     pair_address_list = await asyncio.gather(*tasks)
-    pair_address_list = sorted([pair for pair in pair_address_list if pair != ZER0_ADDRESS])
-    best_pair = pair_address_list[0] if len(pair_address_list) > 0 else ZER0_ADDRESS
+    pair_address_list = [pair for pair in pair_address_list if pair != ZER0_ADDRESS]
+
+    if len(pair_address_list) > 0:
+        pair_contracts = [
+            current_node['web3_client'].eth.contract(
+                address=Web3.to_checksum_address(pair),
+                abi=pair_contract_abi,
+            ) for pair in pair_address_list
+        ]
+
+        tasks = [
+            pair_contract.functions.liquidity() for pair_contract in pair_contracts
+        ]
+
+        liquidity_list = await rpc_helper.web3_call(
+            tasks=tasks,
+            redis_conn=redis_conn,
+        )
+
+        pair_liquidity_dict = dict(zip(pair_address_list, liquidity_list))
+        best_pair = max(pair_liquidity_dict, key=pair_liquidity_dict.get)
+
+    else:
+        best_pair = ZER0_ADDRESS
 
     # cache the pair address
     await redis_conn.hset(
