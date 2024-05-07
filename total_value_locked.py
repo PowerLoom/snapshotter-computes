@@ -203,7 +203,7 @@ async def get_tick_info(
         fee = int(fee)
 
         # if fee is 100
-        step = (MAX_TICK - MIN_TICK) // 8
+        step = (MAX_TICK - MIN_TICK) // 16
 
         # we can cut down on rpc requests by increasing step size for higher fees
         if fee == 500:
