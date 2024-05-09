@@ -448,8 +448,8 @@ async def get_token_stable_pair_data(
         data = {
             'token0': token0,
             'token1': token1,
-            'token0_decimals': token0_decimals,
-            'token1_decimals': token1_decimals,
+            'token0_decimals': int(token0_decimals),
+            'token1_decimals': int(token1_decimals),
             'pair': pair,
         }
 
@@ -495,8 +495,8 @@ async def get_token_stable_pair_data(
     return {
         'token0': token0,
         'token1': token1,
-        'token0_decimals': token0_decimals,
-        'token1_decimals': token1_decimals,
+        'token0_decimals': int(token0_decimals),
+        'token1_decimals': int(token1_decimals),
         'pair': token_stable_pair,
     }
 
