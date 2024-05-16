@@ -189,7 +189,7 @@ async def get_pair_metadata(
                     contract_addr=token0.address,
                     abi=token0.abi,
                 )
-                token1_decimals = await rpc_helper.web3_call(
+                [token1_decimals] = await rpc_helper.web3_call(
                     token1_tasks,
                     contract_addr=token1.address,
                     abi=token1.abi,
@@ -200,7 +200,7 @@ async def get_pair_metadata(
                     contract_addr=token1.address,
                     abi=token1.abi,
                 )
-                token0_decimals = await rpc_helper.web3_call(
+                [token0_decimals] = await rpc_helper.web3_call(
                     token0_tasks,
                     contract_addr=token0.address,
                     abi=token0.abi,
