@@ -33,14 +33,6 @@ erc20_abi = read_json_file(
     worker_settings.uniswap_contract_abis.erc20,
     constants_logger,
 )
-router_contract_abi = read_json_file(
-    worker_settings.uniswap_contract_abis.router,
-    constants_logger,
-)
-uniswap_trade_events_abi = read_json_file(
-    worker_settings.uniswap_contract_abis.trade_events,
-    constants_logger,
-)
 factory_contract_abi = read_json_file(
     worker_settings.uniswap_contract_abis.factory,
     constants_logger,
@@ -59,13 +51,7 @@ helper_contract = current_node['web3_client'].eth.contract(
     ), abi=helper_contract_abi,
 )
 
-# Init Uniswap V2 Core contract Objects
-router_contract_obj = current_node['web3_client'].eth.contract(
-    address=Web3.to_checksum_address(
-        worker_settings.contract_addresses.uniswap_v3_router,
-    ),
-    abi=router_contract_abi,
-)
+# Init Uniswap V3 Core contract Objects
 factory_contract_obj = current_node['web3_client'].eth.contract(
     address=Web3.to_checksum_address(
         worker_settings.contract_addresses.uniswap_v3_factory,
@@ -77,18 +63,6 @@ pool_contract_obj = current_node['web3_client'].eth.contract(
         '0x' + '1' * 40,  # just a placeholder address, we need to get event ABIs
     ),
     abi=pair_contract_abi,
-)
-
-# 1 inch quoter
-quoter_1inch_contract_abi = read_json_file(
-    'snapshotter/modules/computes/static/abis/OneInchQuoter.json',
-)
-
-quoter_1inch_contract_obj = current_node['web3_client'].eth.contract(
-    address=Web3.to_checksum_address(
-        worker_settings.contract_addresses.QUOTER_1INCH,
-    ),
-    abi=quoter_1inch_contract_abi,
 )
 
 # FUNCTION SIGNATURES and OTHER CONSTANTS
@@ -105,7 +79,7 @@ UNISWAP_EVENTS_ABI = {
 }
 
 TOKENS_DECIMALS = {
-    worker_settings.contract_addresses.USDT: 6,
+    worker_settings.contract_addresses.USDbC: 6,
     worker_settings.contract_addresses.DAI: 18,
     worker_settings.contract_addresses.USDC: 6,
     worker_settings.contract_addresses.WETH: 18,
@@ -113,7 +87,7 @@ TOKENS_DECIMALS = {
 
 STABLE_TOKENS_LIST = [
     worker_settings.contract_addresses.USDC,
-    worker_settings.contract_addresses.USDT,
+    worker_settings.contract_addresses.USDbC,
     worker_settings.contract_addresses.DAI,
 ]
 
