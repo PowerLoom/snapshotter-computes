@@ -19,9 +19,16 @@ from snapshotter.utils.rpc import RpcHelper
 
 
 class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
+    """
+    A processor class for aggregating Uniswap trade volume data over a 24-hour period.
+    """
+
     transformation_lambdas = None
 
     def __init__(self) -> None:
+        """
+        Initialize the AggregateTradeVolumeProcessor.
+        """
         self.transformation_lambdas = []
         self._logger = logger.bind(module='AggregateTradeVolumeProcessor24h')
 
@@ -30,7 +37,16 @@ class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
         previous_aggregate_snapshot: UniswapTradesAggregateSnapshot,
         current_snapshot: UniswapTradesSnapshot,
     ):
+        """
+        Add the current snapshot data to the previous aggregate snapshot.
 
+        Args:
+            previous_aggregate_snapshot (UniswapTradesAggregateSnapshot): The previous aggregate snapshot.
+            current_snapshot (UniswapTradesSnapshot): The current snapshot to be added.
+
+        Returns:
+            UniswapTradesAggregateSnapshot: The updated aggregate snapshot.
+        """
         previous_aggregate_snapshot.totalTrade += current_snapshot.totalTrade
         previous_aggregate_snapshot.totalFee += current_snapshot.totalFee
         previous_aggregate_snapshot.token0TradeVolume += current_snapshot.token0TradeVolume
@@ -45,7 +61,16 @@ class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
         previous_aggregate_snapshot: UniswapTradesAggregateSnapshot,
         current_snapshot: UniswapTradesSnapshot,
     ):
+        """
+        Remove the current snapshot data from the previous aggregate snapshot.
 
+        Args:
+            previous_aggregate_snapshot (UniswapTradesAggregateSnapshot): The previous aggregate snapshot.
+            current_snapshot (UniswapTradesSnapshot): The current snapshot to be removed.
+
+        Returns:
+            UniswapTradesAggregateSnapshot: The updated aggregate snapshot.
+        """
         previous_aggregate_snapshot.totalTrade -= current_snapshot.totalTrade
         previous_aggregate_snapshot.totalFee -= current_snapshot.totalFee
         previous_aggregate_snapshot.token0TradeVolume -= current_snapshot.token0TradeVolume
@@ -56,6 +81,15 @@ class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
         return previous_aggregate_snapshot
 
     def _truncate_snapshot(self, snapshot: UniswapTradesAggregateSnapshot):
+        """
+        Truncate the values in the aggregate snapshot to a specified precision.
+
+        Args:
+            snapshot (UniswapTradesAggregateSnapshot): The snapshot to be truncated.
+
+        Returns:
+            UniswapTradesAggregateSnapshot: The truncated snapshot.
+        """
         snapshot.totalTrade = truncate(snapshot.totalTrade)
         snapshot.totalFee = truncate(snapshot.totalFee)
         snapshot.token0TradeVolume = truncate(snapshot.token0TradeVolume)
@@ -74,6 +108,22 @@ class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
         protocol_state_contract,
         project_id: str,
     ):
+        """
+        Calculate the aggregate snapshot from scratch.
+
+        Args:
+            msg_obj (PowerloomSnapshotSubmittedMessage): The submitted snapshot message.
+            redis (aioredis.Redis): Redis client for caching.
+            rpc_helper (RpcHelper): RPC helper for blockchain interactions.
+            anchor_rpc_helper (RpcHelper): Anchor RPC helper for blockchain interactions.
+            ipfs_reader (AsyncIPFSClient): IPFS client for reading data.
+            protocol_state_contract: The protocol state contract.
+            project_id (str): The ID of the project.
+
+        Returns:
+            UniswapTradesAggregateSnapshot: The calculated aggregate snapshot.
+        """
+        # Check if calculation from scratch is already in progress
         calculate_from_scratch_in_progress = await redis.get(f'calculate_from_scratch:{project_id}')
         if calculate_from_scratch_in_progress:
             self._logger.info('calculate_from_scratch already in progress, skipping')
@@ -85,33 +135,40 @@ class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
             value='true',
             ex=300,
         )
-        # source project tail epoch
+
+        # Get the tail epoch ID
         tail_epoch_id, extrapolated_flag = await get_tail_epoch_id(
             redis, protocol_state_contract, anchor_rpc_helper, msg_obj.epochId, 86400, msg_obj.projectId,
         )
 
-        # for the first epoch, using submitted cid
+        # Get the current epoch's underlying data
         current_epoch_underlying_data = await get_submission_data(
             redis, msg_obj.snapshotCid, ipfs_reader, project_id,
         )
 
+        # Get snapshots data for the range of epochs
         snapshots_data = await get_project_epoch_snapshot_bulk(
             redis, protocol_state_contract, anchor_rpc_helper, ipfs_reader,
             tail_epoch_id, msg_obj.epochId - 1, msg_obj.projectId,
         )
 
+        # Initialize the aggregate snapshot
         aggregate_snapshot = UniswapTradesAggregateSnapshot.parse_obj({'epochId': msg_obj.epochId})
         if extrapolated_flag:
             aggregate_snapshot.complete = False
+        
+        # Add current epoch data if available
         if current_epoch_underlying_data:
             current_snapshot = UniswapTradesSnapshot.parse_obj(current_epoch_underlying_data)
             aggregate_snapshot = self._add_aggregate_snapshot(aggregate_snapshot, current_snapshot)
 
+        # Add data from previous epochs
         for snapshot_data in snapshots_data:
             if snapshot_data:
                 snapshot = UniswapTradesSnapshot.parse_obj(snapshot_data)
                 aggregate_snapshot = self._add_aggregate_snapshot(aggregate_snapshot, snapshot)
 
+        # Clear the calculation flag
         await redis.delete(f'calculate_from_scratch:{project_id}')
 
         return self._truncate_snapshot(aggregate_snapshot)
@@ -127,14 +184,29 @@ class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
         project_id: str,
 
     ):
+        """
+        Compute the aggregate trade volume snapshot.
+
+        Args:
+            msg_obj (PowerloomSnapshotSubmittedMessage): The submitted snapshot message.
+            redis (aioredis.Redis): Redis client for caching.
+            rpc_helper (RpcHelper): RPC helper for blockchain interactions.
+            anchor_rpc_helper (RpcHelper): Anchor RPC helper for blockchain interactions.
+            ipfs_reader (AsyncIPFSClient): IPFS client for reading data.
+            protocol_state_contract: The protocol state contract.
+            project_id (str): The ID of the project.
+
+        Returns:
+            UniswapTradesAggregateSnapshot: The computed aggregate snapshot.
+        """
         self._logger.info(f'Building trade volume aggregate snapshot for {msg_obj}')
 
-        # aggregate project first epoch
+        # Get the first epoch for the project
         project_first_epoch = await get_project_first_epoch(
             redis, protocol_state_contract, anchor_rpc_helper, project_id,
         )
 
-        # If no past snapshots exist, then aggregate will be current snapshot
+        # If no past snapshots exist, calculate from scratch
         if project_first_epoch == 0:
             return await self._calculate_from_scratch(
                 msg_obj, redis, rpc_helper, anchor_rpc_helper, ipfs_reader, protocol_state_contract, project_id,
@@ -143,7 +215,7 @@ class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
         else:
             self._logger.info('project_first_epoch is not 0, building aggregate from previous aggregate')
 
-            # get key with highest score
+            # Get the last finalized data for the project
             project_last_finalized = await redis.zrevrangebyscore(
                 project_finalized_data_zset(project_id),
                 max='+inf',
@@ -163,21 +235,21 @@ class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
                     msg_obj, redis, rpc_helper, anchor_rpc_helper, ipfs_reader, protocol_state_contract, project_id,
                 )
 
+            # Get the tail epoch ID
             tail_epoch_id, extrapolated_flag = await get_tail_epoch_id(
                 redis, protocol_state_contract, anchor_rpc_helper, msg_obj.epochId, 86400, msg_obj.projectId,
             )
 
-            if extrapolated_flag:
-                aggregate_complete_flag = False
-            else:
-                aggregate_complete_flag = True
+            aggregate_complete_flag = not extrapolated_flag
 
+            # If the last finalized epoch is too old, calculate from scratch
             if project_last_finalized_epoch <= tail_epoch_id:
                 self._logger.error('last finalized epoch is too old, building aggregate from scratch')
                 return await self._calculate_from_scratch(
                     msg_obj, redis, rpc_helper, anchor_rpc_helper, ipfs_reader, protocol_state_contract, project_id,
                 )
 
+            # Get the last finalized data
             project_last_finalized_data = await get_submission_data(
                 redis, project_last_finalized_cid, ipfs_reader, project_id,
             )
@@ -188,10 +260,11 @@ class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
                     msg_obj, redis, rpc_helper, anchor_rpc_helper, ipfs_reader, protocol_state_contract, project_id,
                 )
 
+            # Initialize the aggregate snapshot with the last finalized data
             aggregate_snapshot = UniswapTradesAggregateSnapshot.parse_obj(project_last_finalized_data)
-            # updating epochId to current epoch
             aggregate_snapshot.epochId = msg_obj.epochId
 
+            # Get the last finalized epoch for the base project
             base_project_last_finalized = await redis.zrevrangebyscore(
                 project_finalized_data_zset(msg_obj.projectId),
                 max='+inf',
@@ -201,14 +274,10 @@ class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
                 num=1,
             )
 
-            if base_project_last_finalized:
-                _, base_project_last_finalized_epoch_ = base_project_last_finalized[0]
-                base_project_last_finalized_epoch = int(base_project_last_finalized_epoch_)
-            else:
-                base_project_last_finalized_epoch = 0
+            base_project_last_finalized_epoch = int(base_project_last_finalized[0][1]) if base_project_last_finalized else 0
 
+            # Fetch and process base finalized snapshots if they exist
             if base_project_last_finalized_epoch and project_last_finalized_epoch < base_project_last_finalized_epoch:
-                # fetch base finalized snapshots if they exist and are within 5 epochs of current epoch
                 base_finalized_snapshot_range = (
                     project_last_finalized_epoch + 1,
                     base_project_last_finalized_epoch,
@@ -222,6 +291,7 @@ class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
                 base_finalized_snapshots = []
                 base_finalized_snapshot_range = (0, project_last_finalized_epoch)
 
+            # Fetch unfinalized snapshots
             base_unfinalized_tasks = []
             for epoch_id in range(base_finalized_snapshot_range[1] + 1, msg_obj.epochId + 1):
                 base_unfinalized_tasks.append(
@@ -232,7 +302,6 @@ class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
 
             base_unfinalized_snapshots = []
             for snapshot_data in base_unfinalized_snapshots_raw:
-                # check if not exception and not None
                 if not isinstance(snapshot_data, Exception) and snapshot_data:
                     base_unfinalized_snapshots.append(
                         json.loads(snapshot_data),
@@ -245,14 +314,16 @@ class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
                         msg_obj, redis, rpc_helper, anchor_rpc_helper, ipfs_reader, protocol_state_contract, project_id,
                     )
 
+            # Combine finalized and unfinalized snapshots
             base_snapshots = base_finalized_snapshots + base_unfinalized_snapshots
 
+            # Add snapshots to the aggregate
             for snapshot_data in base_snapshots:
                 if snapshot_data:
                     snapshot = UniswapTradesSnapshot.parse_obj(snapshot_data)
                     aggregate_snapshot = self._add_aggregate_snapshot(aggregate_snapshot, snapshot)
 
-            # Remove from tail if needed
+            # Remove tail epochs if needed
             tail_epochs_to_remove = []
             for epoch_id in range(project_last_finalized_epoch, msg_obj.epochId):
                 tail_epoch_id, extrapolated_flag = await get_tail_epoch_id(
@@ -260,6 +331,7 @@ class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
                 )
                 if not extrapolated_flag:
                     tail_epochs_to_remove.append(tail_epoch_id)
+            
             if tail_epochs_to_remove:
                 tail_epoch_snapshots = await get_project_epoch_snapshot_bulk(
                     redis, protocol_state_contract, anchor_rpc_helper, ipfs_reader,
@@ -271,9 +343,7 @@ class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
                         snapshot = UniswapTradesSnapshot.parse_obj(snapshot_data)
                         aggregate_snapshot = self._remove_aggregate_snapshot(aggregate_snapshot, snapshot)
 
-            if aggregate_complete_flag:
-                aggregate_snapshot.complete = True
-            else:
-                aggregate_snapshot.complete = False
+            # Set the completeness flag
+            aggregate_snapshot.complete = aggregate_complete_flag
 
             return self._truncate_snapshot(aggregate_snapshot)

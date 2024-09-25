@@ -13,9 +13,16 @@ from snapshotter.utils.rpc import RpcHelper
 
 
 class AggreagateTopPairsProcessor(GenericProcessorAggregate):
+    """
+    Processor class for aggregating top Uniswap pairs data over a 7-day period.
+    """
+
     transformation_lambdas = None
 
     def __init__(self) -> None:
+        """
+        Initialize the AggreagateTopPairsProcessor.
+        """
         self.transformation_lambdas = []
         self._logger = logger.bind(module='AggregateTopPairsProcessor')
 
@@ -28,8 +35,22 @@ class AggreagateTopPairsProcessor(GenericProcessorAggregate):
         ipfs_reader: AsyncIPFSClient,
         protocol_state_contract,
         project_id: str,
-
     ):
+        """
+        Compute the top Uniswap pairs based on 7-day trading volume.
+
+        Args:
+            msg_obj (PowerloomCalculateAggregateMessage): Message object containing computation details.
+            redis (aioredis.Redis): Redis connection for caching.
+            rpc_helper (RpcHelper): RPC helper for blockchain interactions.
+            anchor_rpc_helper (RpcHelper): Anchor RPC helper.
+            ipfs_reader (AsyncIPFSClient): IPFS client for reading data.
+            protocol_state_contract: Protocol state contract.
+            project_id (str): Project identifier.
+
+        Returns:
+            UniswapTopPairs7dSnapshot: Snapshot of top Uniswap pairs over 7 days.
+        """
         self._logger.info(f'Calculating 7d top pairs trade volume data for {msg_obj}')
 
         epoch_id = msg_obj.epochId
@@ -37,6 +58,7 @@ class AggreagateTopPairsProcessor(GenericProcessorAggregate):
         snapshot_mapping = {}
         all_pair_metadata = {}
 
+        # Fetch snapshot data for all messages
         snapshot_data = await get_submission_data_bulk(
             redis, [msg.snapshotCid for msg in msg_obj.messages], ipfs_reader, [
                 msg.projectId for msg in msg_obj.messages
@@ -51,6 +73,7 @@ class AggreagateTopPairsProcessor(GenericProcessorAggregate):
             complete_flags.append(snapshot.complete)
             snapshot_mapping[msg.projectId] = snapshot
 
+            # Fetch pair metadata if not already cached
             contract_address = msg.projectId.split(':')[-2]
             if contract_address not in all_pair_metadata:
                 pair_metadata = await get_pair_metadata(
@@ -58,10 +81,9 @@ class AggreagateTopPairsProcessor(GenericProcessorAggregate):
                     redis_conn=redis,
                     rpc_helper=rpc_helper,
                 )
-
                 all_pair_metadata[contract_address] = pair_metadata
 
-        # iterate over all snapshots and generate pair data
+        # Aggregate pair data
         pair_data = {}
         for snapshot_project_id in snapshot_mapping.keys():
             snapshot = snapshot_mapping[snapshot_project_id]
@@ -79,17 +101,20 @@ class AggreagateTopPairsProcessor(GenericProcessorAggregate):
             pair_data[contract]['volume7d'] += snapshot.totalTrade
             pair_data[contract]['fee7d'] += snapshot.totalFee
 
+        # Create and sort top pairs list
         top_pairs = []
         for pair in pair_data.values():
             top_pairs.append(UniswapTopPair7dSnapshot.parse_obj(pair))
 
         top_pairs = sorted(top_pairs, key=lambda x: x.volume7d, reverse=True)
 
+        # Create final snapshot
         top_pairs_snapshot = UniswapTopPairs7dSnapshot(
             epochId=epoch_id,
             pairs=top_pairs,
         )
 
+        # Set complete flag based on all individual snapshots
         if not all(complete_flags):
             top_pairs_snapshot.complete = False
 

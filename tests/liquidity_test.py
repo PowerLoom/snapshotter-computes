@@ -15,7 +15,21 @@ async def fetch_liquidityUSD_rpc(
     block_num,
     redis_conn: aioredis.Redis = None,
 ):
+    """
+    Fetch liquidity in USD for a given pair address using RPC.
+
+    Args:
+        pair_address (str): The address of the trading pair.
+        block_num (int): The block number to fetch data for.
+        redis_conn (aioredis.Redis, optional): Redis connection. Defaults to None.
+
+    Returns:
+        float: The total liquidity in USD for the pair.
+    """
+    # Load rate limiting scripts
     rate_limiting_lua_scripts = await load_rate_limiter_scripts(redis_conn)
+    
+    # Fetch pair reserves data
     data = await get_pair_reserves(
         loop,
         rate_limiting_lua_scripts,
@@ -24,7 +38,11 @@ async def fetch_liquidityUSD_rpc(
         block_num,
         redis_conn=redis_conn,
     )
+    
+    # Extract reserves for the specific block
     block_pair_total_reserves = data.get(block_num)
+    
+    # Calculate and return total liquidity in USD
     return (
         block_pair_total_reserves['token0USD'] +
         block_pair_total_reserves['token1USD']
@@ -32,6 +50,16 @@ async def fetch_liquidityUSD_rpc(
 
 
 def fetch_liquidityUSD_graph(pair_address, block_num):
+    """
+    Fetch liquidity in USD for a given pair address using The Graph API.
+
+    Args:
+        pair_address (str): The address of the trading pair.
+        block_num (int): The block number to fetch data for.
+
+    Returns:
+        float: The total liquidity in USD for the pair, or 0 if there's an error.
+    """
     uniswap_url = 'https://api.thegraph.com/subgraphs/name/uniswap/uniswap-v2'
     uniswap_payload = (
         '{"query":"{\\n pair(id: \\"' +
@@ -45,12 +73,15 @@ def fetch_liquidityUSD_graph(pair_address, block_num):
     )
     print(uniswap_payload)
     headers = {'Content-Type': 'application/plain'}
+    
+    # Send POST request to The Graph API
     response = httpx.post(
         url=uniswap_url,
         headers=headers,
         data=uniswap_payload,
         timeout=30,
     )
+    
     if response.status_code == 200:
         data = json.loads(response.text)
         print('Response', data)
@@ -62,24 +93,34 @@ def fetch_liquidityUSD_graph(pair_address, block_num):
 
 
 async def compare_liquidity():
+    """
+    Compare liquidity data fetched from RPC and The Graph API for a list of contracts.
+    """
     total_liquidity_usd_graph = 0
     total_liquidity_usd_rpc = 0
     block_num = 16046250
 
     contracts = list()
     contracts.append('0xae461ca67b15dc8dc81ce7615e0320da1a9ab8d5')
+    
     for contract in contracts:
+        # Fetch liquidity data from both sources
         liquidity_usd_graph = fetch_liquidityUSD_graph(contract, block_num)
         liquidity_usd_rpc = await fetch_liquidityUSD_rpc(contract, block_num)
+        
+        # Print comparison results for each contract
         print(
             f'Contract {contract}, liquidityUSD_graph is'
             f' {liquidity_usd_graph} , liquidityUSD_rpc {liquidity_usd_rpc},'
             ' liquidityUSD difference'
             f' {(liquidity_usd_rpc - liquidity_usd_graph)}',
         )
+        
+        # Accumulate total liquidity
         total_liquidity_usd_graph += liquidity_usd_graph
         total_liquidity_usd_rpc += liquidity_usd_rpc
 
+    # Print overall comparison results
     print(
         f'{len(contracts)} contracts compared, liquidityUSD_rpc_total is'
         f' {total_liquidity_usd_rpc}, liquidityUSD_graph_total is'

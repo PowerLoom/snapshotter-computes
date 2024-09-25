@@ -15,9 +15,16 @@ from snapshotter.utils.rpc import RpcHelper
 
 
 class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
+    """
+    A processor class for aggregating Uniswap trade volume data over a 7-day period.
+    """
+
     transformation_lambdas = None
 
     def __init__(self) -> None:
+        """
+        Initialize the AggregateTradeVolumeProcessor.
+        """
         self.transformation_lambdas = []
         self._logger = logger.bind(module='AggregateTradeVolumeProcessor7d')
 
@@ -25,8 +32,17 @@ class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
         self,
         previous_aggregate_snapshot: UniswapTradesAggregateSnapshot,
         current_snapshot: UniswapTradesAggregateSnapshot,
-    ):
+    ) -> UniswapTradesAggregateSnapshot:
+        """
+        Add the current snapshot data to the previous aggregate snapshot.
 
+        Args:
+            previous_aggregate_snapshot (UniswapTradesAggregateSnapshot): The existing aggregate snapshot.
+            current_snapshot (UniswapTradesAggregateSnapshot): The new snapshot to be added.
+
+        Returns:
+            UniswapTradesAggregateSnapshot: The updated aggregate snapshot.
+        """
         previous_aggregate_snapshot.totalTrade += current_snapshot.totalTrade
         previous_aggregate_snapshot.totalFee += current_snapshot.totalFee
         previous_aggregate_snapshot.token0TradeVolume += current_snapshot.token0TradeVolume
@@ -40,8 +56,17 @@ class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
         self,
         previous_aggregate_snapshot: UniswapTradesAggregateSnapshot,
         current_snapshot: UniswapTradesAggregateSnapshot,
-    ):
+    ) -> UniswapTradesAggregateSnapshot:
+        """
+        Remove the current snapshot data from the previous aggregate snapshot.
 
+        Args:
+            previous_aggregate_snapshot (UniswapTradesAggregateSnapshot): The existing aggregate snapshot.
+            current_snapshot (UniswapTradesAggregateSnapshot): The snapshot to be removed.
+
+        Returns:
+            UniswapTradesAggregateSnapshot: The updated aggregate snapshot.
+        """
         previous_aggregate_snapshot.totalTrade -= current_snapshot.totalTrade
         previous_aggregate_snapshot.totalFee -= current_snapshot.totalFee
         previous_aggregate_snapshot.token0TradeVolume -= current_snapshot.token0TradeVolume
@@ -51,7 +76,16 @@ class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
 
         return previous_aggregate_snapshot
 
-    def _truncate_snapshot(self, snapshot: UniswapTradesAggregateSnapshot):
+    def _truncate_snapshot(self, snapshot: UniswapTradesAggregateSnapshot) -> UniswapTradesAggregateSnapshot:
+        """
+        Truncate the numeric values in the snapshot to a fixed number of decimal places.
+
+        Args:
+            snapshot (UniswapTradesAggregateSnapshot): The snapshot to be truncated.
+
+        Returns:
+            UniswapTradesAggregateSnapshot: The truncated snapshot.
+        """
         snapshot.totalTrade = truncate(snapshot.totalTrade)
         snapshot.totalFee = truncate(snapshot.totalFee)
         snapshot.token0TradeVolume = truncate(snapshot.token0TradeVolume)
@@ -69,8 +103,22 @@ class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
         ipfs_reader: AsyncIPFSClient,
         protocol_state_contract,
         project_id: str,
+    ) -> UniswapTradesAggregateSnapshot:
+        """
+        Compute the 7-day aggregate trade volume snapshot.
 
-    ):
+        Args:
+            msg_obj (PowerloomSnapshotSubmittedMessage): The message object containing snapshot information.
+            redis (aioredis.Redis): Redis client for caching.
+            rpc_helper (RpcHelper): RPC helper for blockchain interactions.
+            anchor_rpc_helper (RpcHelper): Anchor RPC helper for blockchain interactions.
+            ipfs_reader (AsyncIPFSClient): IPFS client for reading snapshot data.
+            protocol_state_contract: The protocol state contract.
+            project_id (str): The ID of the project.
+
+        Returns:
+            UniswapTradesAggregateSnapshot: The computed 7-day aggregate snapshot.
+        """
         self._logger.info(f'Building 7 day trade volume aggregate snapshot against {msg_obj}')
 
         contract = project_id.split(':')[-2]
@@ -78,7 +126,8 @@ class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
         aggregate_snapshot = UniswapTradesAggregateSnapshot(
             epochId=msg_obj.epochId,
         )
-        # 24h snapshots fetches
+        
+        # Fetch 24h snapshots
         snapshot_tasks = list()
         self._logger.debug('fetching 24hour aggregates spaced out by 1 day over 7 days...')
         count = 1
@@ -96,7 +145,7 @@ class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
 
         seek_stop_flag = False
         head_epoch = msg_obj.epochId
-        # 2. if not extrapolated, attempt to seek further back
+        # If not extrapolated, attempt to seek further back
         while not seek_stop_flag and count < 7:
             tail_epoch_id, seek_stop_flag = await get_tail_epoch_id(
                 redis, protocol_state_contract, anchor_rpc_helper, head_epoch, 86400, msg_obj.projectId,
@@ -116,6 +165,7 @@ class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
             '24h aggregated trade volume snapshots for project ID {}: {}',
             len(all_snapshots), msg_obj.projectId, all_snapshots,
         )
+        
         complete_flags = []
         for single_24h_snapshot in all_snapshots:
             if not isinstance(single_24h_snapshot, BaseException):
@@ -127,8 +177,7 @@ class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
                 else:
                     aggregate_snapshot = self._add_aggregate_snapshot(aggregate_snapshot, snapshot)
 
-        if not all(complete_flags) or count < 7:
-            aggregate_snapshot.complete = False
-        else:
-            aggregate_snapshot.complete = True
+        # Set the completeness flag based on all snapshots being complete and having 7 days of data
+        aggregate_snapshot.complete = all(complete_flags) and count == 7
+
         return self._truncate_snapshot(aggregate_snapshot)

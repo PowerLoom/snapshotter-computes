@@ -1,5 +1,4 @@
 import asyncio
-import token
 
 from redis import asyncio as aioredis
 from web3 import Web3
@@ -19,10 +18,19 @@ helper_logger = logger.bind(module='PowerLoom|Uniswap|Helpers')
 
 
 def get_maker_pair_data(prop):
+    """
+    Get Maker token data based on the given property.
+
+    Args:
+        prop (str): The property to retrieve ('name', 'symbol', or any other).
+
+    Returns:
+        str: The corresponding Maker token data.
+    """
     prop = prop.lower()
-    if prop.lower() == 'name':
+    if prop == 'name':
         return 'Maker'
-    elif prop.lower() == 'symbol':
+    elif prop == 'symbol':
         return 'MKR'
     else:
         return 'Maker'
@@ -35,7 +43,20 @@ async def get_pair(
     redis_conn: aioredis.Redis,
     rpc_helper: RpcHelper,
 ):
-    # check if pair cache exists
+    """
+    Get the pair address for two tokens from the Uniswap factory contract.
+
+    Args:
+        factory_contract_obj: The Uniswap factory contract object.
+        token0 (str): The address of the first token.
+        token1 (str): The address of the second token.
+        redis_conn (aioredis.Redis): Redis connection object.
+        rpc_helper (RpcHelper): RPC helper object for making Web3 calls.
+
+    Returns:
+        str: The pair address.
+    """
+    # Check if pair cache exists
     pair_address_cache = await redis_conn.hget(
         uniswap_tokens_pair_map,
         f'{Web3.to_checksum_address(token0)}-{Web3.to_checksum_address(token1)}',
@@ -44,6 +65,7 @@ async def get_pair(
         pair_address_cache = pair_address_cache.decode('utf-8')
         return Web3.to_checksum_address(pair_address_cache)
 
+    # If not in cache, fetch from the contract
     tasks = [
         ('getPair', [Web3.to_checksum_address(token0), Web3.to_checksum_address(token1)])
     ]
@@ -54,7 +76,8 @@ async def get_pair(
         abi=factory_contract_obj.abi,
     )
     pair = result[0]
-    # cache the pair address
+
+    # Cache the pair address
     await redis_conn.hset(
         name=uniswap_tokens_pair_map,
         mapping={
@@ -73,13 +96,27 @@ async def get_pair_metadata(
     rpc_helper: RpcHelper,
 ):
     """
-    returns information on the tokens contained within a pair contract - name, symbol, decimals of token0 and token1
-    also returns pair symbol by concatenating {token0Symbol}-{token1Symbol}
+    Get metadata for a Uniswap pair.
+
+    This function retrieves information on the tokens contained within a pair contract,
+    including name, symbol, and decimals of token0 and token1. It also returns the pair
+    symbol by concatenating {token0Symbol}-{token1Symbol}.
+
+    Args:
+        pair_address (str): The address of the pair contract.
+        redis_conn (aioredis.Redis): Redis connection object.
+        rpc_helper (RpcHelper): RPC helper object for making Web3 calls.
+
+    Returns:
+        dict: A dictionary containing metadata for token0, token1, and the pair.
+
+    Raises:
+        Exception: If there's an error fetching the metadata.
     """
     try:
         pair_address = Web3.to_checksum_address(pair_address)
 
-        # check if cache exist
+        # Check if cache exists
         (
             pair_token_addresses_cache,
             pair_tokens_data_cache,
@@ -92,7 +129,7 @@ async def get_pair_metadata(
             ),
         )
 
-        # parse addresses cache or call eth rpc
+        # Parse addresses cache or call eth rpc
         token0Addr = None
         token1Addr = None
         if pair_token_addresses_cache:
@@ -103,6 +140,7 @@ async def get_pair_metadata(
                 pair_token_addresses_cache[b'token1Addr'].decode('utf-8'),
             )
         else:
+            # Fetch token addresses from the pair contract
             pair_contract_obj = current_node['web3_client'].eth.contract(
                 address=Web3.to_checksum_address(pair_address),
                 abi=pair_contract_abi,
@@ -116,6 +154,7 @@ async def get_pair_metadata(
                 abi=pair_contract_obj.abi,
             )
 
+            # Cache the token addresses
             await redis_conn.hset(
                 name=uniswap_pair_contract_tokens_addresses.format(
                     pair_address,
@@ -126,63 +165,49 @@ async def get_pair_metadata(
                 },
             )
 
-        # token0 contract
+        # Create token contract objects
         token0 = current_node['web3_client'].eth.contract(
             address=Web3.to_checksum_address(token0Addr),
             abi=erc20_abi,
         )
-        # token1 contract
         token1 = current_node['web3_client'].eth.contract(
             address=Web3.to_checksum_address(token1Addr),
             abi=erc20_abi,
         )
 
-        # parse token data cache or call eth rpc
+        # Parse token data cache or call eth rpc
         if pair_tokens_data_cache:
-            token0_decimals = pair_tokens_data_cache[b'token0_decimals'].decode(
-                'utf-8',
-            )
-            token1_decimals = pair_tokens_data_cache[b'token1_decimals'].decode(
-                'utf-8',
-            )
-            token0_symbol = pair_tokens_data_cache[b'token0_symbol'].decode(
-                'utf-8',
-            )
-            token1_symbol = pair_tokens_data_cache[b'token1_symbol'].decode(
-                'utf-8',
-            )
+            token0_decimals = pair_tokens_data_cache[b'token0_decimals'].decode('utf-8')
+            token1_decimals = pair_tokens_data_cache[b'token1_decimals'].decode('utf-8')
+            token0_symbol = pair_tokens_data_cache[b'token0_symbol'].decode('utf-8')
+            token1_symbol = pair_tokens_data_cache[b'token1_symbol'].decode('utf-8')
             token0_name = pair_tokens_data_cache[b'token0_name'].decode('utf-8')
             token1_name = pair_tokens_data_cache[b'token1_name'].decode('utf-8')
         else:
-            tasks = list()
-            token0_tasks = list()
-            token1_tasks = list()
+            # Prepare tasks for fetching token data
+            token0_tasks = []
+            token1_tasks = []
 
-            # special case to handle maker token
+            # Special case to handle Maker token
             maker_token0 = None
             maker_token1 = None
-            if Web3.to_checksum_address(
-                worker_settings.contract_addresses.MAKER,
-            ) == Web3.to_checksum_address(token0Addr):
+            if Web3.to_checksum_address(worker_settings.contract_addresses.MAKER) == Web3.to_checksum_address(token0Addr):
                 token0_name = get_maker_pair_data('name')
                 token0_symbol = get_maker_pair_data('symbol')
                 maker_token0 = True
             else:
-                token0_tasks.append(('name', []))
-                token0_tasks.append(('symbol', []))
+                token0_tasks.extend([('name', []), ('symbol', [])])
             token0_tasks.append(('decimals', []))
 
-            if Web3.to_checksum_address(
-                worker_settings.contract_addresses.MAKER,
-            ) == Web3.to_checksum_address(token1Addr):
+            if Web3.to_checksum_address(worker_settings.contract_addresses.MAKER) == Web3.to_checksum_address(token1Addr):
                 token1_name = get_maker_pair_data('name')
                 token1_symbol = get_maker_pair_data('symbol')
                 maker_token1 = True
             else:
-                token1_tasks.append(('name', []))
-                token1_tasks.append(('symbol', []))
+                token1_tasks.extend([('name', []), ('symbol', [])])
             token1_tasks.append(('decimals', []))
 
+            # Fetch token data
             if maker_token1:
                 token0_name, token0_symbol, token0_decimals = await rpc_helper.web3_call(
                     token0_tasks,
@@ -217,6 +242,7 @@ async def get_pair_metadata(
                     abi=token1.abi,
                 )
 
+            # Cache the token data
             await redis_conn.hset(
                 name=uniswap_pair_contract_tokens_data.format(pair_address),
                 mapping={
@@ -230,6 +256,7 @@ async def get_pair_metadata(
                 },
             )
 
+        # Return the metadata
         return {
             'token0': {
                 'address': token0Addr,
@@ -248,19 +275,27 @@ async def get_pair_metadata(
             },
         }
     except Exception as err:
-        # this will be retried in next cycle
+        # Log the error and raise it for retry in the next cycle
         helper_logger.opt(exception=True).error(
-            (
-                f'RPC error while fetcing metadata for pair {pair_address},'
-                f' error_msg:{err}'
-            ),
+            f'RPC error while fetching metadata for pair {pair_address}, error_msg:{err}'
         )
         raise err
 
 
 def truncate(number, decimals=5):
     """
-    Returns a value truncated to a specific number of decimal places.
+    Truncate a number to a specific number of decimal places.
+
+    Args:
+        number (float): The number to truncate.
+        decimals (int, optional): The number of decimal places to keep. Defaults to 5.
+
+    Returns:
+        float: The truncated number.
+
+    Raises:
+        TypeError: If decimals is not an integer.
+        ValueError: If decimals is negative.
     """
     if not isinstance(decimals, int):
         raise TypeError("decimal places must be an integer.")

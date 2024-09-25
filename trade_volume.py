@@ -12,9 +12,20 @@ from snapshotter.utils.rpc import RpcHelper
 
 
 class TradeVolumeProcessor(GenericProcessorSnapshot):
+    """
+    A processor class for computing and transforming trade volume data.
+
+    This class extends GenericProcessorSnapshot and implements methods to compute
+    trade volume for a given epoch and transform the processed data into a
+    structured snapshot.
+    """
+
     transformation_lambdas = None
 
     def __init__(self) -> None:
+        """
+        Initialize the TradeVolumeProcessor with transformation lambdas and a logger.
+        """
         self.transformation_lambdas = [
             self.transform_processed_epoch_to_trade_volume,
         ]
@@ -26,10 +37,19 @@ class TradeVolumeProcessor(GenericProcessorSnapshot):
         redis_conn: aioredis.Redis,
         rpc_helper: RpcHelper,
     ):
+        """
+        Compute trade volume for the given epoch.
 
+        Args:
+            epoch (PowerloomSnapshotProcessMessage): The epoch data for which to compute trade volume.
+            redis_conn (aioredis.Redis): Redis connection for caching and data retrieval.
+            rpc_helper (RpcHelper): Helper object for making RPC calls.
+
+        Returns:
+            dict: The computed trade volume data.
+        """
         min_chain_height = epoch.begin
         max_chain_height = epoch.end
-
         data_source_contract_address = epoch.data_source
 
         self._logger.debug(f'trade volume {data_source_contract_address}, computation init time {time.time()}')
@@ -50,30 +70,35 @@ class TradeVolumeProcessor(GenericProcessorSnapshot):
         epoch_begin,
         epoch_end,
     ):
+        """
+        Transform the processed epoch data into a structured trade volume snapshot.
+
+        Args:
+            snapshot (dict): The processed epoch data.
+            data_source_contract_address (str): The address of the data source contract.
+            epoch_begin (int): The beginning of the epoch.
+            epoch_end (int): The end of the epoch.
+
+        Returns:
+            UniswapTradesSnapshot: A structured snapshot of the trade volume data.
+        """
         self._logger.debug(
             'Trade volume processed snapshot: {}', snapshot,
         )
 
-        # Set effective trade volume at top level
-        total_trades_in_usd = snapshot['Trades'][
-            'totalTradesUSD'
-        ]
+        # Extract trade volume data from the snapshot
+        total_trades_in_usd = snapshot['Trades']['totalTradesUSD']
         total_fee_in_usd = snapshot['Trades']['totalFeeUSD']
-        total_token0_vol = snapshot['Trades'][
-            'token0TradeVolume'
-        ]
-        total_token1_vol = snapshot['Trades'][
-            'token1TradeVolume'
-        ]
-        total_token0_vol_usd = snapshot['Trades'][
-            'token0TradeVolumeUSD'
-        ]
-        total_token1_vol_usd = snapshot['Trades'][
-            'token1TradeVolumeUSD'
-        ]
+        total_token0_vol = snapshot['Trades']['token0TradeVolume']
+        total_token1_vol = snapshot['Trades']['token1TradeVolume']
+        total_token0_vol_usd = snapshot['Trades']['token0TradeVolumeUSD']
+        total_token1_vol_usd = snapshot['Trades']['token1TradeVolumeUSD']
 
+        # Get the max block timestamp and remove it from the snapshot
         max_block_timestamp = snapshot.get('timestamp')
         snapshot.pop('timestamp', None)
+
+        # Create and return a structured UniswapTradesSnapshot
         trade_volume_snapshot = UniswapTradesSnapshot(
             contract=data_source_contract_address,
             chainHeightRange=EpochBaseSnapshot(begin=epoch_begin, end=epoch_end),

@@ -36,16 +36,32 @@ async def get_token_pair_price_and_white_token_reserves(
     rpc_helper: RpcHelper,
 ):
     """
-    Function to get:
-    1. token price based on pair reserves of both token: token0Price = token1Price/token0Price
-    2. whitelisted token reserves
+    Get token price based on pair reserves and whitelisted token reserves.
 
-    We can write different function for each value, but to optimize we are reusing reserves value
+    This function calculates the token price and whitelisted token reserves for a given pair
+    over a range of blocks.
+
+    Args:
+        pair_address (str): The address of the token pair.
+        from_block (int): The starting block number.
+        to_block (int): The ending block number.
+        pair_metadata (dict): Metadata about the token pair.
+        white_token (str): The address of the whitelisted token.
+        redis_conn: Redis connection object.
+        rpc_helper (RpcHelper): RPC helper object for making blockchain calls.
+
+    Returns:
+        tuple: A tuple containing two dictionaries:
+            - token_price_dict: Block number to token price mapping.
+            - white_token_reserves_dict: Block number to white token reserves mapping.
+
+    Raises:
+        Exception: If unable to get pair price and white token reserves.
     """
     token_price_dict = dict()
     white_token_reserves_dict = dict()
 
-    # get white
+    # Get pair contract ABI and fetch reserves for the block range
     pair_abi_dict = get_contract_abi_dict(pair_contract_abi)
     pair_reserves_list = await rpc_helper.batch_eth_call_on_block_range(
         abi_dict=pair_abi_dict,
@@ -73,10 +89,11 @@ async def get_token_pair_price_and_white_token_reserves(
             f'got result: {pair_reserves_list}',
         )
 
-    index = 0
-    for block_num in range(from_block, to_block + 1):
+    # Calculate token price and white token reserves for each block
+    for index, block_num in enumerate(range(from_block, to_block + 1)):
         token_price = 0
 
+        # Adjust reserves based on token decimals
         pair_reserve_token0 = pair_reserves_list[index][0] / 10 ** int(
             pair_metadata['token0']['decimals'],
         )
@@ -84,26 +101,16 @@ async def get_token_pair_price_and_white_token_reserves(
             pair_metadata['token1']['decimals'],
         )
 
-        if float(pair_reserve_token0) == float(0) or float(
-            pair_reserve_token1,
-        ) == float(0):
+        # Handle cases where reserves are zero
+        if float(pair_reserve_token0) == float(0) or float(pair_reserve_token1) == float(0):
             token_price_dict[block_num] = token_price
             white_token_reserves_dict[block_num] = 0
-        elif (
-            Web3.to_checksum_address(pair_metadata['token0']['address']) ==
-            white_token
-        ):
-            token_price_dict[block_num] = float(
-                pair_reserve_token0 / pair_reserve_token1,
-            )
+        elif Web3.to_checksum_address(pair_metadata['token0']['address']) == white_token:
+            token_price_dict[block_num] = float(pair_reserve_token0 / pair_reserve_token1)
             white_token_reserves_dict[block_num] = pair_reserve_token0
         else:
-            token_price_dict[block_num] = float(
-                pair_reserve_token1 / pair_reserve_token0,
-            )
+            token_price_dict[block_num] = float(pair_reserve_token1 / pair_reserve_token0)
             white_token_reserves_dict[block_num] = pair_reserve_token1
-
-        index += 1
 
     return token_price_dict, white_token_reserves_dict
 
@@ -115,39 +122,44 @@ async def get_token_derived_eth(
     redis_conn,
     rpc_helper: RpcHelper,
 ):
+    """
+    Get the token's derived ETH value over a range of blocks.
+
+    This function calculates how much ETH a token is worth for each block in the given range.
+
+    Args:
+        from_block (int): The starting block number.
+        to_block (int): The ending block number.
+        token_metadata (dict): Metadata about the token.
+        redis_conn: Redis connection object.
+        rpc_helper (RpcHelper): RPC helper object for making blockchain calls.
+
+    Returns:
+        dict: A dictionary mapping block numbers to derived ETH values.
+
+    Raises:
+        Exception: If unable to get token derived ETH values.
+    """
     token_derived_eth_dict = dict()
-    token_address = Web3.to_checksum_address(
-        token_metadata['address'],
-    )
+    token_address = Web3.to_checksum_address(token_metadata['address'])
+
+    # If the token is WETH, set derived ETH as 1 for all blocks
     if token_address == Web3.to_checksum_address(worker_settings.contract_addresses.WETH):
-        # set derived eth as 1 if token is weth
-        for block_num in range(from_block, to_block + 1):
-            token_derived_eth_dict[block_num] = 1
+        return {block_num: 1 for block_num in range(from_block, to_block + 1)}
 
-        return token_derived_eth_dict
-
+    # Check cache for derived ETH values
     cached_derived_eth_dict = await redis_conn.zrangebyscore(
-        name=uniswap_token_derived_eth_cached_block_height.format(
-            token_address,
-        ),
+        name=uniswap_token_derived_eth_cached_block_height.format(token_address),
         min=int(from_block),
         max=int(to_block),
     )
-    if cached_derived_eth_dict and len(cached_derived_eth_dict) == to_block - (
-        from_block - 1
-    ):
-        token_derived_eth_dict = {
-            json.loads(
-                price.decode(
-                    'utf-8',
-                ),
-            )[
-                'blockHeight'
-            ]: json.loads(price.decode('utf-8'))['price']
+    if cached_derived_eth_dict and len(cached_derived_eth_dict) == to_block - (from_block - 1):
+        return {
+            json.loads(price.decode('utf-8'))['blockHeight']: json.loads(price.decode('utf-8'))['price']
             for price in cached_derived_eth_dict
         }
-        return token_derived_eth_dict
-    # get white
+
+    # If not in cache, calculate derived ETH values
     router_abi_dict = get_contract_abi_dict(router_contract_abi)
     token_derived_eth_list = await rpc_helper.batch_eth_call_on_block_range(
         abi_dict=router_abi_dict,
@@ -182,40 +194,30 @@ async def get_token_derived_eth(
             f'got result: {token_derived_eth_list}',
         )
 
-    index = 0
-    for block_num in range(from_block, to_block + 1):
+    # Process derived ETH values
+    for index, block_num in enumerate(range(from_block, to_block + 1)):
         if not token_derived_eth_list[index]:
             token_derived_eth_dict[block_num] = 0
-
-        _, derivedEth = token_derived_eth_list[index][0]
-        token_derived_eth_dict[block_num] = (
-            derivedEth / 10 ** tokens_decimals['WETH'] if derivedEth != 0 else 0
-        )
-        index += 1
-
-    if (
-        len(token_derived_eth_dict) > 0
-    ):
-        redis_cache_mapping = {
-            json.dumps({'blockHeight': height, 'price': price}): int(
-                height,
+        else:
+            _, derivedEth = token_derived_eth_list[index][0]
+            token_derived_eth_dict[block_num] = (
+                derivedEth / 10 ** tokens_decimals['WETH'] if derivedEth != 0 else 0
             )
+
+    # Cache the results
+    if token_derived_eth_dict:
+        redis_cache_mapping = {
+            json.dumps({'blockHeight': height, 'price': price}): int(height)
             for height, price in token_derived_eth_dict.items()
         }
         source_chain_epoch_size = int(await redis_conn.get(source_chain_epoch_size_key()))
         await asyncio.gather(
             redis_conn.zadd(
-                name=uniswap_token_derived_eth_cached_block_height.format(
-                    token_address,
-                ),
-                # timestamp so zset do not ignore same height on multiple heights
+                name=uniswap_token_derived_eth_cached_block_height.format(token_address),
                 mapping=redis_cache_mapping,
             ),
-
             redis_conn.zremrangebyscore(
-                name=uniswap_token_derived_eth_cached_block_height.format(
-                    token_address,
-                ),
+                name=uniswap_token_derived_eth_cached_block_height.format(token_address),
                 min=0,
                 max=int(from_block) - source_chain_epoch_size * 4,
             ),
@@ -233,35 +235,49 @@ async def get_token_price_in_block_range(
     debug_log=True,
 ):
     """
-    returns the price of a token at a given block range
+    Get the price of a token in USD for a given block range.
+
+    This function calculates the USD price of a token for each block in the given range.
+    It uses caching to improve performance and falls back to on-chain calculations when necessary.
+
+    Args:
+        token_metadata (dict): Metadata about the token.
+        from_block (int): The starting block number.
+        to_block (int): The ending block number.
+        redis_conn (aioredis.Redis): Redis connection object.
+        rpc_helper (RpcHelper): RPC helper object for making blockchain calls.
+        debug_log (bool): Whether to log debug information.
+
+    Returns:
+        dict: A dictionary mapping block numbers to token prices in USD.
+
+    Raises:
+        Exception: If an error occurs during price calculation.
     """
     try:
         token_price_dict = dict()
         token_address = Web3.to_checksum_address(token_metadata['address'])
-        # check if cahce exist for given epoch
+
+        # Check cache for token prices
         cached_price_dict = await redis_conn.zrangebyscore(
-            name=uniswap_pair_cached_block_height_token_price.format(
-                token_address,
-            ),
+            name=uniswap_pair_cached_block_height_token_price.format(token_address),
             min=int(from_block),
             max=int(to_block),
         )
         if cached_price_dict and len(cached_price_dict) == to_block - (from_block - 1):
-            price_dict = {
-                json.loads(
-                    price.decode(
-                        'utf-8',
-                    ),
-                )['blockHeight']: json.loads(price.decode('utf-8'))['price'] for price in cached_price_dict
+            return {
+                json.loads(price.decode('utf-8'))['blockHeight']: json.loads(price.decode('utf-8'))['price']
+                for price in cached_price_dict
             }
-            return price_dict
 
+        # If token is WETH, use ETH price in USD
         if token_address == Web3.to_checksum_address(worker_settings.contract_addresses.WETH):
             token_price_dict = await get_eth_price_usd(
                 from_block=from_block, to_block=to_block,
                 redis_conn=redis_conn, rpc_helper=rpc_helper,
             )
         else:
+            # Calculate token price using whitelisted token pairs
             token_eth_price_dict = dict()
 
             for white_token in worker_settings.uniswap_v2_whitelist:
@@ -276,14 +292,9 @@ async def get_token_price_in_block_range(
                         redis_conn=redis_conn,
                         rpc_helper=rpc_helper,
                     )
-                    white_token_metadata = new_pair_metadata['token0'] if white_token == new_pair_metadata[
-                        'token0'
-                    ]['address'] else new_pair_metadata['token1']
+                    white_token_metadata = new_pair_metadata['token0'] if white_token == new_pair_metadata['token0']['address'] else new_pair_metadata['token1']
 
-                    (
-                        white_token_price_dict,
-                        white_token_reserves_dict,
-                    ) = await get_token_pair_price_and_white_token_reserves(
+                    white_token_price_dict, white_token_reserves_dict = await get_token_pair_price_and_white_token_reserves(
                         pair_address=pairAddress, from_block=from_block, to_block=to_block,
                         pair_metadata=new_pair_metadata, white_token=white_token, redis_conn=redis_conn,
                         rpc_helper=rpc_helper,
@@ -293,42 +304,36 @@ async def get_token_price_in_block_range(
                         redis_conn=redis_conn, rpc_helper=rpc_helper,
                     )
 
+                    # Calculate token price in ETH
                     less_than_minimum_liquidity = False
                     for block_num in range(from_block, to_block + 1):
+                        white_token_reserves = white_token_reserves_dict.get(block_num) * white_token_derived_eth_dict.get(block_num)
 
-                        white_token_reserves = white_token_reserves_dict.get(
-                            block_num,
-                        ) * white_token_derived_eth_dict.get(block_num)
-
-                        # ignore if reservers are less than threshold
+                        # Ignore if reserves are less than threshold
                         if white_token_reserves < 1:
                             less_than_minimum_liquidity = True
                             break
 
-                        # else store eth price in dictionary
-                        token_eth_price_dict[block_num] = white_token_price_dict.get(
-                            block_num,
-                        ) * white_token_derived_eth_dict.get(block_num)
+                        # Store ETH price in dictionary
+                        token_eth_price_dict[block_num] = white_token_price_dict.get(block_num) * white_token_derived_eth_dict.get(block_num)
 
-                    # if reserves are less than threshold then try next whitelist token pair
+                    # If reserves are less than threshold, try next whitelist token pair
                     if less_than_minimum_liquidity:
                         token_eth_price_dict = {}
                         continue
 
                     break
 
-            if len(token_eth_price_dict) > 0:
+            # Calculate final USD price
+            if token_eth_price_dict:
                 eth_usd_price_dict = await get_eth_price_usd(
                     from_block=from_block, to_block=to_block, redis_conn=redis_conn,
                     rpc_helper=rpc_helper,
                 )
                 for block_num in range(from_block, to_block + 1):
-                    token_price_dict[block_num] = token_eth_price_dict.get(
-                        block_num, 0,
-                    ) * eth_usd_price_dict.get(block_num, 0)
+                    token_price_dict[block_num] = token_eth_price_dict.get(block_num, 0) * eth_usd_price_dict.get(block_num, 0)
             else:
-                for block_num in range(from_block, to_block + 1):
-                    token_price_dict[block_num] = 0
+                token_price_dict = {block_num: 0 for block_num in range(from_block, to_block + 1)}
 
             if debug_log:
                 pricing_logger.debug(
@@ -336,19 +341,16 @@ async def get_token_price_in_block_range(
                     f' | its eth price is {token_eth_price_dict}',
                 )
 
-        # cache price at height
-        if len(token_price_dict) > 0:
+        # Cache calculated prices
+        if token_price_dict:
             redis_cache_mapping = {
-                json.dumps({'blockHeight': height, 'price': price}): int(
-                    height,
-                ) for height, price in token_price_dict.items()
+                json.dumps({'blockHeight': height, 'price': price}): int(height)
+                for height, price in token_price_dict.items()
             }
 
             await redis_conn.zadd(
-                name=uniswap_pair_cached_block_height_token_price.format(
-                    Web3.to_checksum_address(token_metadata['address']),
-                ),
-                mapping=redis_cache_mapping,  # timestamp so zset do not ignore same height on multiple heights
+                name=uniswap_pair_cached_block_height_token_price.format(token_address),
+                mapping=redis_cache_mapping,
             )
 
         return token_price_dict
