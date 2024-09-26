@@ -4,24 +4,24 @@ import json
 from redis import asyncio as aioredis
 from web3 import Web3
 
-from ..redis_keys import (
+from computes.redis_keys import (
     uniswap_pair_cached_block_height_token_price,
 )
-from ..redis_keys import (
+from computes.redis_keys import (
     uniswap_token_derived_eth_cached_block_height,
 )
-from ..settings.config import settings as worker_settings
-from .constants import factory_contract_obj
-from .constants import pair_contract_abi
-from .constants import router_contract_abi
-from .constants import tokens_decimals
-from .helpers import get_pair
-from .helpers import get_pair_metadata
+from computes.settings.config import settings as worker_settings
+from computes.utils.constants import factory_contract_obj
+from computes.utils.constants import pair_contract_abi
+from computes.utils.constants import router_contract_abi
+from computes.utils.constants import tokens_decimals
+from computes.utils.helpers import get_pair
+from computes.utils.helpers import get_pair_metadata
 from snapshotter.utils.default_logger import logger
 from snapshotter.utils.redis.redis_keys import source_chain_epoch_size_key
 from snapshotter.utils.rpc import get_contract_abi_dict
 from snapshotter.utils.rpc import RpcHelper
-from snapshotter.utils.snapshot_utils import get_eth_price_usd
+from computes.preloaders.eth_price.preloader import eth_price_preloader
 
 pricing_logger = logger.bind(module='PowerLoom|Uniswap|Pricing')
 
@@ -272,7 +272,7 @@ async def get_token_price_in_block_range(
 
         # If token is WETH, use ETH price in USD
         if token_address == Web3.to_checksum_address(worker_settings.contract_addresses.WETH):
-            token_price_dict = await get_eth_price_usd(
+            token_price_dict = await eth_price_preloader.get_eth_price_usd(
                 from_block=from_block, to_block=to_block,
                 redis_conn=redis_conn, rpc_helper=rpc_helper,
             )
@@ -326,7 +326,7 @@ async def get_token_price_in_block_range(
 
             # Calculate final USD price
             if token_eth_price_dict:
-                eth_usd_price_dict = await get_eth_price_usd(
+                eth_usd_price_dict = await eth_price_preloader.get_eth_price_usd(
                     from_block=from_block, to_block=to_block, redis_conn=redis_conn,
                     rpc_helper=rpc_helper,
                 )

@@ -1,11 +1,11 @@
 from ipfs_client.main import AsyncIPFSClient
 from redis import asyncio as aioredis
 
-from ..utils.helpers import get_pair_metadata
-from ..utils.models.message_models import UniswapPairTotalReservesSnapshot
-from ..utils.models.message_models import UniswapTopTokenSnapshot
-from ..utils.models.message_models import UniswapTopTokensSnapshot
-from ..utils.models.message_models import UniswapTradesAggregateSnapshot
+from computes.utils.helpers import get_pair_metadata
+from computes.utils.models.message_models import UniswapPairTotalReservesSnapshot
+from computes.utils.models.message_models import UniswapTopTokenSnapshot
+from computes.utils.models.message_models import UniswapTopTokensSnapshot
+from computes.utils.models.message_models import UniswapTradesAggregateSnapshot
 from snapshotter.utils.callback_helpers import GenericProcessorAggregate
 from snapshotter.utils.data_utils import get_project_epoch_snapshot
 from snapshotter.utils.data_utils import get_submission_data_bulk

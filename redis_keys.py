@@ -66,3 +66,8 @@ uniswap_token_derived_eth_cached_block_height = (
     'uniswap:token:' + settings.namespace +
     ':{}:cachedDerivedEthBlockHeight'
 )
+
+# Redis key for Uniswap ETH/USD price data
+uniswap_eth_usd_price_zset = (
+    'uniswap:ethBlockHeightPrice:' + settings.namespace + ':ethPriceZset'
+)

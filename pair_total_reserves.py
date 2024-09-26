@@ -3,8 +3,8 @@ from typing import Dict, Optional, Union
 
 from redis import asyncio as aioredis
 
-from .utils.core import get_pair_reserves
-from .utils.models.message_models import EpochBaseSnapshot, UniswapPairTotalReservesSnapshot
+from computes.utils.core import get_pair_reserves
+from computes.utils.models.message_models import EpochBaseSnapshot, UniswapPairTotalReservesSnapshot
 from snapshotter.utils.callback_helpers import GenericProcessorSnapshot
 from snapshotter.utils.default_logger import logger
 from snapshotter.utils.models.message_models import PowerloomSnapshotProcessMessage

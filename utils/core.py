@@ -4,14 +4,14 @@ import json
 from redis import asyncio as aioredis
 from web3 import Web3
 
-from .constants import pair_contract_abi
-from .constants import UNISWAP_EVENTS_ABI
-from .constants import UNISWAP_TRADE_EVENT_SIGS
-from .helpers import get_pair_metadata
-from .models.data_models import epoch_event_trade_data
-from .models.data_models import event_trade_data
-from .models.data_models import trade_data
-from .pricing import (
+from computes.utils.constants import pair_contract_abi
+from computes.utils.constants import UNISWAP_EVENTS_ABI
+from computes.utils.constants import UNISWAP_TRADE_EVENT_SIGS
+from computes.utils.helpers import get_pair_metadata
+from computes.utils.models.data_models import epoch_event_trade_data
+from computes.utils.models.data_models import event_trade_data
+from computes.utils.models.data_models import trade_data
+from computes.utils.pricing import (
     get_token_price_in_block_range,
 )
 from snapshotter.utils.default_logger import logger

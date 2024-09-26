@@ -2,6 +2,7 @@ from typing import Dict, List
 from pydantic import BaseModel
 from snapshotter.utils.models.message_models import AggregateBase
 
+
 class EpochBaseSnapshot(BaseModel):
     """
     Represents a base snapshot for an epoch.

@@ -8,7 +8,7 @@ a Settings object with the loaded data.
 import json
 import os
 
-from .settings_model import Settings
+from computes.settings.settings_model import Settings
 
 # Get the directory path of the current file
 dir_path = os.path.dirname(os.path.realpath(__file__))
