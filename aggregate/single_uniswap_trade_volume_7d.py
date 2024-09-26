@@ -19,13 +19,10 @@ class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
     A processor class for aggregating Uniswap trade volume data over a 7-day period.
     """
 
-    transformation_lambdas = None
-
     def __init__(self) -> None:
         """
         Initialize the AggregateTradeVolumeProcessor.
         """
-        self.transformation_lambdas = []
         self._logger = logger.bind(module='AggregateTradeVolumeProcessor7d')
 
     def _add_aggregate_snapshot(

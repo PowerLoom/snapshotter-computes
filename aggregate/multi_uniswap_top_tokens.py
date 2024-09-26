@@ -20,13 +20,10 @@ class AggreagateTopTokensProcessor(GenericProcessorAggregate):
     A processor class for aggregating top tokens data from Uniswap.
     """
 
-    transformation_lambdas = None
-
     def __init__(self) -> None:
         """
         Initialize the AggreagateTopTokensProcessor.
         """
-        self.transformation_lambdas = []
         self._logger = logger.bind(module='AggregateTopTokensProcessor')
 
     async def compute(

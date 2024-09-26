@@ -15,13 +15,10 @@ class PairTotalReservesProcessor(GenericProcessorSnapshot):
     """
     Processor for calculating and storing total reserves for a Uniswap pair.
     """
-    transformation_lambdas = None
-
     def __init__(self) -> None:
         """
         Initialize the PairTotalReservesProcessor.
         """
-        self.transformation_lambdas = []
         self._logger = logger.bind(module='PairTotalReservesProcessor')
 
     async def compute(

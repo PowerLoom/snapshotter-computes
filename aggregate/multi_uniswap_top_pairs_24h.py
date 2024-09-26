@@ -18,13 +18,10 @@ class AggreagateTopPairsProcessor(GenericProcessorAggregate):
     A processor class for aggregating top Uniswap pairs data over a 24-hour period.
     """
 
-    transformation_lambdas = None
-
     def __init__(self) -> None:
         """
         Initialize the AggreagateTopPairsProcessor.
         """
-        self.transformation_lambdas = []
         self._logger = logger.bind(module='AggregateTopPairsProcessor')
 
     async def compute(
