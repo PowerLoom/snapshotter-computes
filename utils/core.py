@@ -123,7 +123,6 @@ async def get_pair_reserves(
         contract_address=pair_address,
         from_block=from_block,
         to_block=to_block,
-        redis_conn=redis_conn,
     )
 
     core_logger.debug(
@@ -406,7 +405,6 @@ async def get_pair_trade_volume(
             'from_block': min_chain_height,
             'topics': [event_sig],
             'event_abi': event_abi,
-            'redis_conn': redis_conn,
         },
     )
 

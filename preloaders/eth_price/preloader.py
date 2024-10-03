@@ -110,7 +110,6 @@ class EthPricePreloader(GenericPreloader):
                 contract_address=self.dai_weth_pair,
                 from_block=from_block,
                 to_block=to_block,
-                redis_conn=redis_conn,
             )
             usdc_eth_pair_reserves_list = await rpc_helper.batch_eth_call_on_block_range(
                 abi_dict=pair_abi_dict,
@@ -118,7 +117,6 @@ class EthPricePreloader(GenericPreloader):
                 contract_address=self.usdc_weth_pair,
                 from_block=from_block,
                 to_block=to_block,
-                redis_conn=redis_conn,
             )
             eth_usdt_pair_reserves_list = await rpc_helper.batch_eth_call_on_block_range(
                 abi_dict=pair_abi_dict,
@@ -126,7 +124,6 @@ class EthPricePreloader(GenericPreloader):
                 contract_address=self.usdt_weth_pair,
                 from_block=from_block,
                 to_block=to_block,
-                redis_conn=redis_conn,
             )
 
             # Calculate ETH price for each block

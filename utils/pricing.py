@@ -69,7 +69,6 @@ async def get_token_pair_price_and_white_token_reserves(
         contract_address=pair_address,
         from_block=from_block,
         to_block=to_block,
-        redis_conn=redis_conn,
     )
 
     if len(pair_reserves_list) < to_block - (from_block - 1):
@@ -167,7 +166,6 @@ async def get_token_derived_eth(
         contract_address=worker_settings.contract_addresses.iuniswap_v2_router,
         from_block=from_block,
         to_block=to_block,
-        redis_conn=redis_conn,
         params=[
             10 ** int(token_metadata['decimals']),
             [
