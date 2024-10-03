@@ -1,7 +1,6 @@
 from typing import List
 
 from pydantic import BaseModel
-from pydantic import Field
 
 
 class UniswapContractAbis(BaseModel):
