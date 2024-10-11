@@ -6,7 +6,6 @@ from redis import asyncio as aioredis
 from snapshotter.utils.default_logger import logger
 from snapshotter.utils.rpc import get_contract_abi_dict
 from snapshotter.utils.rpc import RpcHelper
-from snapshotter.utils.snapshot_utils import get_eth_price_usd
 from snapshotter.utils.snapshot_utils import sqrtPriceX96ToTokenPrices
 from web3 import Web3
 
@@ -24,6 +23,7 @@ from computes.utils.constants import pair_contract_abi
 from computes.utils.constants import STABLE_TOKENS_LIST
 from computes.utils.constants import TOKENS_DECIMALS
 from computes.utils.constants import ZER0_ADDRESS
+from computes.preloaders.eth_price.preloader import eth_price_preloader
 
 helper_logger = logger.bind(module='PowerLoom|Uniswap|Helpers')
 
@@ -662,7 +662,7 @@ async def get_token_eth_quote_from_uniswap(
                     params=[],
                 )
 
-                eth_usd_price_dict = await get_eth_price_usd(
+                eth_usd_price_dict = await eth_price_preloader.get_eth_price_usd(
                     from_block=from_block,
                     to_block=to_block,
                     redis_conn=redis_conn,
