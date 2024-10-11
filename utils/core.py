@@ -477,7 +477,6 @@ async def get_pair_trade_volume(
             'from_block': min_chain_height,
             'topics': [event_sig],
             'event_abi': event_abi,
-            'redis_conn': redis_conn,
         },
     )
 

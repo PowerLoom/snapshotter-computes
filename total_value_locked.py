@@ -198,7 +198,6 @@ async def get_events(
         from_block=from_block,
         topics=[event_sig],
         event_abi=event_abi,
-        redis_conn=redis_con,
     )
 
     return events
@@ -301,22 +300,29 @@ async def get_tick_info(
 
         tick_tasks = []
 
+        # TODO: use rpc_helper batch_web3_call
         # getTicks() is inclusive for start and end ticks
         for idx in range(MIN_TICK, MAX_TICK + 1, step):
             tick_tasks.append(
-                helper_contract.functions.getTicks(
-                    pair_address, idx, min(idx + step - 1, MAX_TICK),
-                ),
+                ('getTicks', [pair_address, idx, min(idx + step - 1, MAX_TICK)]),
             )
 
         slot0_tasks = [
-            pair_contract.functions.slot0(),
+            ('slot0', []),
         ]
 
         # Execute RPC calls
         tickDataResponse, slot0Response = await asyncio.gather(
-            rpc_helper.web3_call(tick_tasks, redis_conn, overrides=overrides, block=from_block),
-            rpc_helper.web3_call(slot0_tasks, redis_conn, block=from_block),
+            rpc_helper.web3_call(
+                tasks=tick_tasks,
+                contract_addr=helper_contract.address,
+                abi=helper_contract.abi,
+            ),
+            rpc_helper.web3_call(
+                tasks=slot0_tasks,
+                contract_addr=pair_address,
+                abi=pair_contract_abi,
+            ),
         )
 
         # Process tick data

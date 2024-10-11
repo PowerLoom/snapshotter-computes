@@ -79,14 +79,14 @@ async def get_pair(
         return Web3.to_checksum_address(pair_address_cache)
 
     tasks = [
-        factory_contract_obj.functions.getPool(
-            Web3.to_checksum_address(token0),
-            Web3.to_checksum_address(token1),
-            fee,
-        ),
+        ('getPool', [Web3.to_checksum_address(token0), Web3.to_checksum_address(token1), fee]),
     ]
 
-    result = await rpc_helper.web3_call(tasks, redis_conn=redis_conn)
+    result = await rpc_helper.web3_call(
+        tasks=tasks,
+        contract_addr=factory_contract_obj.address,
+        abi=factory_contract_obj.abi,
+    )
     pair = result[0]
     # cache the pair address
     await redis_conn.hset(
@@ -151,17 +151,15 @@ async def get_pair_metadata(
             )
             fee = pair_token_addresses_cache[b'fee'].decode('utf-8')
         else:
-            pair_contract_obj = current_node['web3_client'].eth.contract(
-                address=Web3.to_checksum_address(pair_address),
-                abi=pair_contract_abi,
-            )
+            # TODO: use rpc_helper batch_web3_call
             token0Addr, token1Addr, fee = await rpc_helper.web3_call(
-                [
-                    pair_contract_obj.functions.token0(),
-                    pair_contract_obj.functions.token1(),
-                    pair_contract_obj.functions.fee(),
+                tasks=[
+                    ('token0', []),
+                    ('token1', []),
+                    ('fee', []),
                 ],
-                redis_conn=redis_conn,
+                contract_addr=pair_address,
+                abi=pair_contract_abi,
             )
 
             await redis_conn.hset(
@@ -188,79 +186,72 @@ async def get_pair_metadata(
 
         # parse token data cache or call eth rpc
         if pair_tokens_data_cache:
-            token0_decimals = pair_tokens_data_cache[b'token0_decimals'].decode(
-                'utf-8',
-            )
-            token1_decimals = pair_tokens_data_cache[b'token1_decimals'].decode(
-                'utf-8',
-            )
-            token0_symbol = pair_tokens_data_cache[b'token0_symbol'].decode(
-                'utf-8',
-            )
-            token1_symbol = pair_tokens_data_cache[b'token1_symbol'].decode(
-                'utf-8',
-            )
+            token0_decimals = pair_tokens_data_cache[b'token0_decimals'].decode('utf-8')
+            token1_decimals = pair_tokens_data_cache[b'token1_decimals'].decode('utf-8')
+            token0_symbol = pair_tokens_data_cache[b'token0_symbol'].decode('utf-8')
+            token1_symbol = pair_tokens_data_cache[b'token1_symbol'].decode('utf-8')
             token0_name = pair_tokens_data_cache[b'token0_name'].decode('utf-8')
             token1_name = pair_tokens_data_cache[b'token1_name'].decode('utf-8')
         else:
-            tasks = list()
+            # prepare tasks for fetching token data
+            token0_tasks = []
+            token1_tasks = []
 
             # special case to handle maker token
             maker_token0 = None
             maker_token1 = None
 
-            if (
-                Web3.to_checksum_address(token0Addr) == Web3.to_checksum_address(
-                    worker_settings.contract_addresses.MAKER,
-                )
-            ):
+            if Web3.to_checksum_address(token0Addr) == Web3.to_checksum_address(worker_settings.contract_addresses.MAKER):
                 token0_name = get_maker_pair_data('name')
                 token0_symbol = get_maker_pair_data('symbol')
-                tasks.append(token0.functions.decimals())
                 maker_token0 = True
             else:
-                tasks.append(token0.functions.name())
-                tasks.append(token0.functions.symbol())
-                tasks.append(token0.functions.decimals())
+                token0_tasks.extend([('name', []), ('symbol', [])])
+            token0_tasks.append(('decimals', []))
 
-            if (
-                Web3.to_checksum_address(token1Addr) == Web3.to_checksum_address(
-                    worker_settings.contract_addresses.MAKER,
-                )
-            ):
+            if Web3.to_checksum_address(token1Addr) == Web3.to_checksum_address(worker_settings.contract_addresses.MAKER):
                 token1_name = get_maker_pair_data('name')
                 token1_symbol = get_maker_pair_data('symbol')
-                tasks.append(token1.functions.decimals())
                 maker_token1 = True
             else:
-                tasks.append(token1.functions.name())
-                tasks.append(token1.functions.symbol())
-                tasks.append(token1.functions.decimals())
+                token1_tasks.extend([('name', []), ('symbol', [])])
+            token1_tasks.append(('decimals', []))
 
             if maker_token1:
-                [
-                    token0_name,
-                    token0_symbol,
-                    token0_decimals,
-                    token1_decimals,
-                ] = await rpc_helper.web3_call(tasks, redis_conn=redis_conn)
+                [token0_name, token0_symbol, token0_decimals] = await rpc_helper.web3_call(
+                    tasks=token0_tasks,
+                    contract_addr=token0.address,
+                    abi=token0.abi,
+                )
+                [token1_decimals] = await rpc_helper.web3_call(
+                    token1_tasks,
+                    contract_addr=token1.address,
+                    abi=token1.abi,
+                )
             elif maker_token0:
-                [
-                    token0_decimals,
-                    token1_name,
-                    token1_symbol,
-                    token1_decimals,
-                ] = await rpc_helper.web3_call(tasks, redis_conn=redis_conn)
+                [token1_name, token1_symbol, token1_decimals] = await rpc_helper.web3_call(
+                    tasks=token1_tasks,
+                    contract_addr=token1.address,
+                    abi=token1.abi,
+                )
+                [token0_decimals] = await rpc_helper.web3_call(
+                    tasks=token0_tasks,
+                    contract_addr=token0.address,
+                    abi=token0.abi,
+                )
             else:
-                [
-                    token0_name,
-                    token0_symbol,
-                    token0_decimals,
-                    token1_name,
-                    token1_symbol,
-                    token1_decimals,
-                ] = await rpc_helper.web3_call(tasks, redis_conn=redis_conn)
+                [token0_name, token0_symbol, token0_decimals] = await rpc_helper.web3_call(
+                    tasks=token0_tasks,
+                    contract_addr=token0.address,
+                    abi=token0.abi,
+                )
+                [token1_name, token1_symbol, token1_decimals] = await rpc_helper.web3_call(
+                    tasks=token1_tasks,
+                    contract_addr=token1.address,
+                    abi=token1.abi,
+                )
 
+            # cache the token data
             await redis_conn.hset(
                 name=uniswap_pair_contract_tokens_data.format(pair_address),
                 mapping={
@@ -453,13 +444,16 @@ async def get_token_pair_address_with_fees(
         ]
 
         tasks = [
-            pair_contract.functions.liquidity() for pair_contract in pair_contracts
+            asyncio.create_task(
+                rpc_helper.web3_call(
+                    tasks=[('liquidity', [])],
+                    contract_addr=pair_contract.address,
+                    abi=pair_contract.abi,
+                )
+            ) for pair_contract in pair_contracts
         ]
 
-        liquidity_list = await rpc_helper.web3_call(
-            tasks=tasks,
-            redis_conn=redis_conn,
-        )
+        liquidity_list = await asyncio.gather(*tasks)
 
         pair_liquidity_dict = dict(zip(pair_address_list, liquidity_list))
         best_pair = max(pair_liquidity_dict, key=pair_liquidity_dict.get)
@@ -634,7 +628,6 @@ async def get_token_eth_quote_from_uniswap(
                 to_block=to_block,
                 function_name='slot0',
                 params=[],
-                redis_conn=redis_conn,
             )
             sqrtP_list = [slot0[0] for slot0 in response]
 
@@ -667,7 +660,6 @@ async def get_token_eth_quote_from_uniswap(
                     to_block=to_block,
                     function_name='slot0',
                     params=[],
-                    redis_conn=redis_conn,
                 )
 
                 eth_usd_price_dict = await get_eth_price_usd(
