@@ -28,12 +28,23 @@ tvl_logger = logger.bind(module='PowerLoom|UniswapTotalValueLocked')
 
 
 def transform_tick_bytes_to_list(tickData: bytes):
-    if tickData == b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00 \x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00':
+    """
+    Transform tick data from bytes to a list of dictionaries.
+
+    Args:
+        tickData (bytes): Raw tick data in bytes format.
+
+    Returns:
+        list: A list of dictionaries containing liquidity_net and idx for each tick.
+    """
+    if tickData == b'\x00' * 64:
         return []
-    # eth_abi decode tickdata as a bytes[]
+    
+    # Decode tickdata as a bytes[]
     bytes_decoded_arr = abi.decode(
         ('bytes[]', '(int128,int24)'), tickData,
     )
+    
     ticks = [
         {
             'liquidity_net': int.from_bytes(i[:-3], 'big', signed=True),
@@ -46,6 +57,17 @@ def transform_tick_bytes_to_list(tickData: bytes):
 
 
 def calculate_tvl_from_ticks(ticks, pair_metadata, sqrt_price):
+    """
+    Calculate the Total Value Locked (TVL) from tick data.
+
+    Args:
+        ticks (list): List of tick data.
+        pair_metadata (dict): Metadata for the token pair.
+        sqrt_price (int): Square root of the current price.
+
+    Returns:
+        tuple: A tuple containing the liquidity of token0 and token1.
+    """
     sqrt_price = Decimal(sqrt_price) / Decimal(2 ** 96)
 
     liquidity_total = Decimal(0)
@@ -58,12 +80,14 @@ def calculate_tvl_from_ticks(ticks, pair_metadata, sqrt_price):
 
     int_fee = int(pair_metadata['pair']['fee'])
 
+    # Set tick spacing based on fee
     if int_fee == 3000:
         tick_spacing = Decimal(60)
     elif int_fee == 500:
         tick_spacing = Decimal(10)
     elif int_fee == 10000:
         tick_spacing = Decimal(200)
+
     # https://atiselsts.github.io/pdfs/uniswap-v3-liquidity-math.pdf
 
     for i in range(len(ticks)):
@@ -84,14 +108,12 @@ def calculate_tvl_from_ticks(ticks, pair_metadata, sqrt_price):
                 sqrtPriceLow,
                 sqrtPriceHigh,
             )
-
         elif sqrt_price >= sqrtPriceHigh:
             token1_liquidity += get_token1_in_pool(
                 liquidity_total,
                 sqrtPriceLow,
                 sqrtPriceHigh,
             )
-
         else:
             token0_liquidity += get_token0_in_pool(
                 liquidity_total,
@@ -112,6 +134,17 @@ def get_token0_in_pool(
     sqrtPriceLow: int,
     sqrtPriceHigh: int,
 ) -> int:
+    """
+    Calculate the amount of token0 in the pool for a given price range.
+
+    Args:
+        liquidity (int): The liquidity in the pool.
+        sqrtPriceLow (int): The square root of the lower price bound.
+        sqrtPriceHigh (int): The square root of the upper price bound.
+
+    Returns:
+        int: The amount of token0 in the pool.
+    """
     return liquidity * (sqrtPriceHigh - sqrtPriceLow) / (sqrtPriceLow * sqrtPriceHigh) // 1
 
 
@@ -120,6 +153,17 @@ def get_token1_in_pool(
     sqrtPriceLow: int,
     sqrtPriceHigh: int,
 ) -> int:
+    """
+    Calculate the amount of token1 in the pool for a given price range.
+
+    Args:
+        liquidity (int): The liquidity in the pool.
+        sqrtPriceLow (int): The square root of the lower price bound.
+        sqrtPriceHigh (int): The square root of the upper price bound.
+
+    Returns:
+        int: The amount of token1 in the pool.
+    """
     return liquidity * (sqrtPriceHigh - sqrtPriceLow) // 1
 
 
@@ -128,10 +172,21 @@ async def get_events(
     rpc: RpcHelper,
     from_block,
     to_block,
-
     redis_con,
 ):
+    """
+    Fetch events for a given pair address within a block range.
 
+    Args:
+        pair_address (str): The address of the token pair.
+        rpc (RpcHelper): An instance of RpcHelper for making RPC calls.
+        from_block: The starting block number.
+        to_block: The ending block number.
+        redis_con: Redis connection object.
+
+    Returns:
+        list: A list of events for the specified pair and block range.
+    """
     event_sig, event_abi = get_event_sig_and_abi(
         UNISWAP_TRADE_EVENT_SIGS,
         UNISWAP_EVENTS_ABI,
@@ -150,6 +205,15 @@ async def get_events(
 
 
 def _load_abi(path: str) -> str:
+    """
+    Load ABI from a JSON file.
+
+    Args:
+        path (str): The path to the JSON file containing the ABI.
+
+    Returns:
+        str: The loaded ABI as a string.
+    """
     with open(path) as f:
         abi: str = json.load(f)
     return abi
@@ -162,13 +226,25 @@ async def calculate_reserves(
     rpc_helper: RpcHelper,
     redis_conn,
 ):
+    """
+    Calculate the reserves for a given pair address.
+
+    Args:
+        pair_address (str): The address of the token pair.
+        from_block: The block number to calculate reserves from.
+        pair_per_token_metadata (dict): Metadata for the token pair.
+        rpc_helper (RpcHelper): An instance of RpcHelper for making RPC calls.
+        redis_conn: Redis connection object.
+
+    Returns:
+        list: A list containing the reserves of token0 and token1.
+    """
     ticks_list, slot0 = await get_tick_info(
         rpc_helper=rpc_helper,
         pair_address=pair_address,
         from_block=from_block,
         redis_conn=redis_conn,
         pair_per_token_metadata=pair_per_token_metadata,
-
     )
 
     sqrt_price = slot0[0]
@@ -188,8 +264,23 @@ async def get_tick_info(
         from_block,
         redis_conn,
         pair_per_token_metadata,
-
 ):
+    """
+    Fetch tick information for a given pair address.
+
+    Args:
+        rpc_helper (RpcHelper): An instance of RpcHelper for making RPC calls.
+        pair_address (str): The address of the token pair.
+        from_block: The block number to fetch tick info from.
+        redis_conn: Redis connection object.
+        pair_per_token_metadata (dict): Metadata for the token pair.
+
+    Returns:
+        tuple: A tuple containing the list of ticks and slot0 data.
+
+    Raises:
+        Exception: If there's an error fetching tick data.
+    """
     try:
         overrides = {
             override_address: {'code': univ3_helper_bytecode},
@@ -197,15 +288,10 @@ async def get_tick_info(
         current_node = rpc_helper.get_current_node()
         pair_contract = current_node['web3_client'].eth.contract(address=pair_address, abi=pair_contract_abi)
 
-        # batch rpc calls for tick data to prevent oog errors
-        # step must be a divisor of 887272 * 2
-        fee = pair_per_token_metadata['pair']['fee']
-        fee = int(fee)
-
-        # if fee is 100
+        # Determine step size based on fee
+        fee = int(pair_per_token_metadata['pair']['fee'])
         step = (MAX_TICK - MIN_TICK) // 16
 
-        # we can cut down on rpc requests by increasing step size for higher fees
         if fee == 500:
             step = (MAX_TICK - MIN_TICK) // 4
         elif fee == 3000:
@@ -227,13 +313,13 @@ async def get_tick_info(
             pair_contract.functions.slot0(),
         ]
 
-        # cant batch these tasks due to implementation of web3_call re: state override
-
+        # Execute RPC calls
         tickDataResponse, slot0Response = await asyncio.gather(
             rpc_helper.web3_call(tick_tasks, redis_conn, overrides=overrides, block=from_block),
             rpc_helper.web3_call(slot0_tasks, redis_conn, block=from_block),
         )
 
+        # Process tick data
         ticks_list = []
         for ticks in tickDataResponse:
             ticks_list.append(transform_tick_bytes_to_list(ticks))
@@ -248,5 +334,4 @@ async def get_tick_info(
             'Failed to get tick data for pair {} at block {} with error {}',
             pair_address, from_block, err,
         )
-        # if we erred, set ticks list and slot0 to empty
         raise err

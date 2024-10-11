@@ -37,6 +37,20 @@ async def get_pair_reserves(
     rpc_helper: RpcHelper,
     fetch_timestamp=False,
 ):
+    """
+    Fetch and calculate pair reserves for a given Uniswap pair over a block range.
+
+    Args:
+        pair_address (str): The address of the Uniswap pair contract.
+        from_block (int): The starting block number.
+        to_block (int): The ending block number.
+        redis_conn (aioredis.Redis): Redis connection for caching.
+        rpc_helper (RpcHelper): RPC helper for blockchain interactions.
+        fetch_timestamp (bool): Whether to fetch block timestamps.
+
+    Returns:
+        dict: A dictionary containing pair reserves data for each block in the range.
+    """
     core_logger.debug(
         f'Starting pair total reserves query for: {pair_address}',
     )
@@ -252,6 +266,20 @@ def extract_trade_volume_log(
     token1_price_map,
     block_details_dict,
 ):
+    """
+    Extract trade volume information from a single event log.
+
+    Args:
+        event_name (str): The name of the event (Swap, Mint, or Burn).
+        log (dict): The event log data.
+        pair_per_token_metadata (dict): Metadata for the token pair.
+        token0_price_map (dict): Price map for token0.
+        token1_price_map (dict): Price map for token1.
+        block_details_dict (dict): Block details including timestamps.
+
+    Returns:
+        tuple: A tuple containing trade_data and processed log information.
+    """
     token0_amount = 0
     token1_amount = 0
     token0_amount_usd = 0
@@ -376,6 +404,20 @@ async def get_pair_trade_volume(
     rpc_helper: RpcHelper,
     fetch_timestamp=True,
 ):
+    """
+    Fetch and calculate trade volume for a Uniswap pair over a block range.
+
+    Args:
+        data_source_contract_address (str): The address of the Uniswap pair contract.
+        min_chain_height (int): The starting block number.
+        max_chain_height (int): The ending block number.
+        redis_conn (aioredis.Redis): Redis connection for caching.
+        rpc_helper (RpcHelper): RPC helper for blockchain interactions.
+        fetch_timestamp (bool): Whether to fetch block timestamps.
+
+    Returns:
+        dict: A dictionary containing trade volume data for the specified block range.
+    """
     data_source_contract_address = Web3.to_checksum_address(
         data_source_contract_address,
     )
@@ -558,6 +600,20 @@ async def get_liquidity_depth(
     rpc_helper: RpcHelper,
     fetch_timestamp=False,
 ):
+    """
+    Calculate liquidity depth for a Uniswap pair over a block range.
+
+    Args:
+        pair_address (str): The address of the Uniswap pair contract.
+        from_block (int): The starting block number.
+        to_block (int): The ending block number.
+        redis_conn (aioredis.Redis): Redis connection for caching.
+        rpc_helper (RpcHelper): RPC helper for blockchain interactions.
+        fetch_timestamp (bool): Whether to fetch block timestamps.
+
+    Returns:
+        dict: A dictionary containing liquidity depth data for each block in the range.
+    """
     liquidity_depth_dict = dict()
     core_logger.debug(
         f'Starting liquidity depth query for: {pair_address}',
@@ -687,6 +743,17 @@ def calculate_liquidity_depth(
     sqrt_price,
     pair_metadata,
 ):
+    """
+    Calculate liquidity depth based on ticks and current price.
+
+    Args:
+        ticks (list): List of tick data.
+        sqrt_price (int): Current square root price.
+        pair_metadata (dict): Metadata for the token pair.
+
+    Returns:
+        dict: A dictionary containing liquidity depth information.
+    """
     liquidity_depth_dict = dict()
     sqrt_price = sqrt_price / 2 ** 96
     liquidity_total = 0

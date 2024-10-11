@@ -19,6 +19,10 @@ from snapshotter.utils.rpc import RpcHelper
 
 
 class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
+    """
+    Processor for aggregating Uniswap trade volume over a 24-hour period.
+    """
+
     transformation_lambdas = None
 
     def __init__(self) -> None:
@@ -30,6 +34,7 @@ class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
         previous_aggregate_snapshot: UniswapTradesAggregateSnapshot,
         current_snapshot: UniswapTradesSnapshot,
     ):
+        """Add current snapshot data to the aggregate snapshot."""
 
         previous_aggregate_snapshot.totalTrade += current_snapshot.totalTrade
         previous_aggregate_snapshot.totalFee += current_snapshot.totalFee
@@ -45,6 +50,7 @@ class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
         previous_aggregate_snapshot: UniswapTradesAggregateSnapshot,
         current_snapshot: UniswapTradesSnapshot,
     ):
+        """Remove current snapshot data from the aggregate snapshot."""
 
         previous_aggregate_snapshot.totalTrade -= current_snapshot.totalTrade
         previous_aggregate_snapshot.totalFee -= current_snapshot.totalFee
@@ -56,6 +62,7 @@ class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
         return previous_aggregate_snapshot
 
     def _truncate_snapshot(self, snapshot: UniswapTradesAggregateSnapshot):
+        """Truncate numerical values in the snapshot to avoid floating point issues."""
         snapshot.totalTrade = truncate(snapshot.totalTrade)
         snapshot.totalFee = truncate(snapshot.totalFee)
         snapshot.token0TradeVolume = truncate(snapshot.token0TradeVolume)
@@ -74,6 +81,10 @@ class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
         protocol_state_contract,
         project_id: str,
     ):
+        """
+        Calculate the 24-hour trade volume aggregate from scratch.
+        This is used when there's no previous aggregate or when data inconsistencies are detected.
+        """
         calculate_from_scratch_in_progress = await redis.get(f'calculate_from_scratch:{project_id}')
         if calculate_from_scratch_in_progress:
             self._logger.info('calculate_from_scratch already in progress, skipping')
@@ -127,6 +138,24 @@ class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
         project_id: str,
 
     ):
+        """
+        Compute the 24-hour trade volume aggregate for a Uniswap pair.
+
+        This method attempts to build on the previous aggregate if available,
+        otherwise it calculates from scratch.
+
+        Args:
+            msg_obj: Message object containing snapshot details.
+            redis: Redis connection.
+            rpc_helper: RPC helper for blockchain interactions.
+            anchor_rpc_helper: RPC helper for the protocol's anchor chain.
+            ipfs_reader: IPFS client for reading data.
+            protocol_state_contract: Address of the protocol state contract.
+            project_id: ID of the project.
+
+        Returns:
+            UniswapTradesAggregateSnapshot: 24-hour aggregate snapshot of trade volume.
+        """
         self._logger.info(f'Building trade volume aggregate snapshot for {msg_obj}')
 
         # aggregate project first epoch

@@ -30,10 +30,19 @@ helper_logger = logger.bind(module='PowerLoom|Uniswap|Helpers')
 
 
 def get_maker_pair_data(prop):
+    """
+    Get Maker token data based on the given property.
+    
+    Args:
+        prop (str): The property to retrieve ('name', 'symbol', or other).
+    
+    Returns:
+        str: The requested Maker token data.
+    """
     prop = prop.lower()
-    if prop.lower() == 'name':
+    if prop == 'name':
         return 'Maker'
-    elif prop.lower() == 'symbol':
+    elif prop == 'symbol':
         return 'MKR'
     else:
         return 'Maker'
@@ -47,6 +56,20 @@ async def get_pair(
     redis_conn: aioredis.Redis,
     rpc_helper: RpcHelper,
 ):
+    """
+    Get the pair address for two tokens and the given fee, using redis cache when available.
+
+    Args:
+        factory_contract_obj: The factory contract object.
+        token0 (str): The address of the first token.
+        token1 (str): The address of the second token.
+        fee (int): The fee for the pair.
+        redis_conn (aioredis.Redis): Redis connection for caching.
+        rpc_helper (RpcHelper): Helper for making RPC calls.
+
+    Returns:
+        str: The pair address.
+    """
     # check if pair cache exists
     pair_address_cache = await redis_conn.hget(
         uniswap_tokens_pair_map,
@@ -85,8 +108,21 @@ async def get_pair_metadata(
     rpc_helper: RpcHelper,
 ):
     """
-    returns information on the tokens contained within a pair contract - name, symbol, decimals of token0 and token1
-    also returns pair symbol by concatenating {token0Symbol}-{token1Symbol}
+    Get information on the tokens contained within a pair contract.
+
+    This function retrieves the name, symbol, and decimals of token0 and token1,
+    as well as the pair symbol by concatenating {token0Symbol}-{token1Symbol}.
+
+    Args:
+        pair_address (str): The address of the pair contract.
+        redis_conn (aioredis.Redis): Redis connection for caching.
+        rpc_helper (RpcHelper): Helper for making RPC calls.
+
+    Returns:
+        dict: A dictionary containing token and pair information.
+
+    Raises:
+        Exception: If there's an error fetching metadata for the pair.
     """
     try:
         pair_address = Web3.to_checksum_address(pair_address)
@@ -278,7 +314,21 @@ async def get_token_eth_price_dict(
     rpc_helper: RpcHelper,
 ):
     """
-    returns a dict of token price in eth for each block and stores it in redis
+    Get a dictionary of token prices in ETH for each block and store it in Redis.
+
+    Args:
+        token_address (str): The address of the token.
+        token_decimals (int): The number of decimals for the token.
+        from_block (int): The starting block number.
+        to_block (int): The ending block number.
+        redis_conn: Redis connection for caching.
+        rpc_helper (RpcHelper): Helper for making RPC calls.
+
+    Returns:
+        dict: A dictionary mapping block numbers to token prices in ETH.
+
+    Raises:
+        Exception: If there's an error fetching token prices.
     """
 
     token_address = Web3.to_checksum_address(token_address)
@@ -352,6 +402,18 @@ async def get_token_pair_address_with_fees(
     redis_conn: aioredis.Redis,
     rpc_helper: RpcHelper,
 ):
+    """
+    Get the best pair address for two tokens based on liquidity across different fee tiers.
+
+    Args:
+        token0 (str): The address of the first token.
+        token1 (str): The address of the second token.
+        redis_conn (aioredis.Redis): Redis connection for caching.
+        rpc_helper (RpcHelper): Helper for making RPC calls.
+
+    Returns:
+        str: The address of the best pair contract.
+    """
 
     # check if pair cache exists
     pair_address_cache = await redis_conn.hget(
@@ -424,6 +486,20 @@ async def get_token_stable_pair_data(
     redis_conn: aioredis.Redis,
     rpc_helper: RpcHelper,
 ):
+    """
+    Get the stable pair data for a given token.
+
+    This function attempts to find a pair between the given token and a stable token.
+
+    Args:
+        token (str): The address of the token.
+        token_decimals (int): The number of decimals for the token.
+        redis_conn (aioredis.Redis): Redis connection for caching.
+        rpc_helper (RpcHelper): Helper for making RPC calls.
+
+    Returns:
+        dict: A dictionary containing token pair data.
+    """
     # check if pair cache exists
     token_stable_pair_data_cache = await redis_conn.hgetall(
         uniswap_v3_token_stable_pair_map.format(Web3.to_checksum_address(token)),
@@ -509,6 +585,26 @@ async def get_token_eth_quote_from_uniswap(
     redis_conn,
     rpc_helper: RpcHelper,
 ):
+    """
+    Get the ETH quote for a token from Uniswap.
+
+    This function first attempts to price from a token-WETH pool. If that fails,
+    it tries to find a token-stable coin pool and calculates the ETH price.
+
+    Args:
+        token_address (str): The address of the token.
+        token_decimals (int): The number of decimals for the token.
+        from_block (int): The starting block number.
+        to_block (int): The ending block number.
+        redis_conn: Redis connection for caching.
+        rpc_helper (RpcHelper): Helper for making RPC calls.
+
+    Returns:
+        list: A list of tuples containing token prices in ETH for each block.
+
+    Raises:
+        Exception: If there's an error fetching token prices.
+    """
 
     token0 = token_address
     token1 = worker_settings.contract_addresses.WETH
@@ -608,7 +704,18 @@ async def get_token_eth_quote_from_uniswap(
 
 def truncate(number, decimals=5):
     """
-    Returns a value truncated to a specific number of decimal places.
+    Truncate a number to a specific number of decimal places.
+
+    Args:
+        number (float): The number to truncate.
+        decimals (int): The number of decimal places to keep (default: 5).
+
+    Returns:
+        float: The truncated number.
+
+    Raises:
+        TypeError: If decimals is not an integer.
+        ValueError: If decimals is negative.
     """
     if not isinstance(decimals, int):
         raise TypeError('decimal places must be an integer.')

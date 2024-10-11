@@ -15,7 +15,9 @@ from snapshotter.utils.rpc import RpcHelper
 
 
 class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
-    transformation_lambdas = None
+    """
+    Processor for aggregating Uniswap trade volume over a 7-day period.
+    """
 
     def __init__(self) -> None:
         self.transformation_lambdas = []
@@ -26,7 +28,7 @@ class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
         previous_aggregate_snapshot: UniswapTradesAggregateSnapshot,
         current_snapshot: UniswapTradesAggregateSnapshot,
     ):
-
+        """Add current snapshot data to the aggregate snapshot."""
         previous_aggregate_snapshot.totalTrade += current_snapshot.totalTrade
         previous_aggregate_snapshot.totalFee += current_snapshot.totalFee
         previous_aggregate_snapshot.token0TradeVolume += current_snapshot.token0TradeVolume
@@ -41,7 +43,7 @@ class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
         previous_aggregate_snapshot: UniswapTradesAggregateSnapshot,
         current_snapshot: UniswapTradesAggregateSnapshot,
     ):
-
+        """Remove current snapshot data from the aggregate snapshot."""
         previous_aggregate_snapshot.totalTrade -= current_snapshot.totalTrade
         previous_aggregate_snapshot.totalFee -= current_snapshot.totalFee
         previous_aggregate_snapshot.token0TradeVolume -= current_snapshot.token0TradeVolume
@@ -52,6 +54,7 @@ class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
         return previous_aggregate_snapshot
 
     def _truncate_snapshot(self, snapshot: UniswapTradesAggregateSnapshot):
+        """Truncate numerical values in the snapshot to avoid floating point issues."""
         snapshot.totalTrade = truncate(snapshot.totalTrade)
         snapshot.totalFee = truncate(snapshot.totalFee)
         snapshot.token0TradeVolume = truncate(snapshot.token0TradeVolume)
@@ -71,6 +74,21 @@ class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
         project_id: str,
 
     ):
+        """
+        Compute the 7-day trade volume aggregate for a Uniswap pair.
+
+        Args:
+            msg_obj: Message object containing snapshot details.
+            redis: Redis connection.
+            rpc_helper: RPC helper for the main chain.
+            anchor_rpc_helper: RPC helper for the anchor chain.
+            ipfs_reader: IPFS client for reading data.
+            protocol_state_contract: Contract for protocol state.
+            project_id: ID of the project.
+
+        Returns:
+            UniswapTradesAggregateSnapshot: 7-day aggregate snapshot of trade volume.
+        """
         self._logger.info(f'Building 7 day trade volume aggregate snapshot against {msg_obj}')
 
         contract = project_id.split(':')[-2]

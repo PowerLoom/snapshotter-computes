@@ -16,6 +16,10 @@ from .utils.models.message_models import UniswapPairTotalReservesSnapshot
 
 
 class PairTotalReservesProcessor(GenericProcessorSnapshot):
+    """
+    Processor for calculating and snapshotting total reserves for Uniswap pairs.
+    """
+
     transformation_lambdas = None
 
     def __init__(self) -> None:
@@ -28,12 +32,23 @@ class PairTotalReservesProcessor(GenericProcessorSnapshot):
         redis_conn: aioredis.Redis,
         rpc_helper: RpcHelper,
     ) -> Optional[Dict[str, Union[int, float]]]:
+        """
+        Compute the total reserves for a Uniswap pair within the given epoch.
+
+        Args:
+            epoch (PowerloomSnapshotProcessMessage): The epoch information.
+            redis_conn (aioredis.Redis): Redis connection object.
+            rpc_helper (RpcHelper): RPC helper object for blockchain interactions.
+
+        Returns:
+            Optional[Dict[str, Union[int, float]]]: Computed pair total reserves snapshot.
+        """
         
         min_chain_height = epoch.begin
         max_chain_height = epoch.end
-
         data_source_contract_address = epoch.data_source
 
+        # Initialize dictionaries to store reserve and price data for each block
         epoch_reserves_snapshot_map_token0 = dict()
         epoch_prices_snapshot_map_token0 = dict()
         epoch_prices_snapshot_map_token1 = dict()
@@ -45,6 +60,8 @@ class PairTotalReservesProcessor(GenericProcessorSnapshot):
         self._logger.debug(
             f"pair reserves {data_source_contract_address} computation init time {time.time()}"
         )
+        
+        # Fetch pair reserves for the entire epoch
         pair_reserve_total = await get_pair_reserves(
             pair_address=data_source_contract_address,
             from_block=min_chain_height,
@@ -54,10 +71,12 @@ class PairTotalReservesProcessor(GenericProcessorSnapshot):
             fetch_timestamp=True,
         )
 
+        # Process reserve data for each block in the epoch
         for block_num in range(min_chain_height, max_chain_height + 1):
             block_pair_total_reserves = pair_reserve_total.get(block_num)
             fetch_ts = True if block_num == max_chain_height else False
 
+            # Store reserve and price data for each token
             epoch_reserves_snapshot_map_token0[
                 f"block{block_num}"
             ] = block_pair_total_reserves["token0"]
@@ -70,15 +89,14 @@ class PairTotalReservesProcessor(GenericProcessorSnapshot):
             epoch_usd_reserves_snapshot_map_token1[
                 f"block{block_num}"
             ] = block_pair_total_reserves["token1USD"]
-
             epoch_prices_snapshot_map_token0[
                 f"block{block_num}"
             ] = block_pair_total_reserves["token0Price"]
-
             epoch_prices_snapshot_map_token1[
                 f"block{block_num}"
             ] = block_pair_total_reserves["token1Price"]
 
+            # Fetch timestamp for the last block in the epoch
             if fetch_ts:
                 if not block_pair_total_reserves.get("timestamp", None):
                     self._logger.error(
@@ -96,6 +114,8 @@ class PairTotalReservesProcessor(GenericProcessorSnapshot):
                     max_block_timestamp = block_pair_total_reserves.get(
                         "timestamp",
                     )
+        
+        # Create the final snapshot object
         pair_total_reserves_snapshot = UniswapPairTotalReservesSnapshot(
             **{
                 "token0Reserves": epoch_reserves_snapshot_map_token0,

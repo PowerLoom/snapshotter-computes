@@ -13,7 +13,9 @@ from snapshotter.utils.rpc import RpcHelper
 
 
 class AggregateTopPairsProcessor(GenericProcessorAggregate):
-    transformation_lambdas = None
+    """
+    Processor for aggregating top Uniswap pairs over a 7-day period.
+    """
 
     def __init__(self) -> None:
         self.transformation_lambdas = []
@@ -28,8 +30,22 @@ class AggregateTopPairsProcessor(GenericProcessorAggregate):
         ipfs_reader: AsyncIPFSClient,
         protocol_state_contract,
         project_id: str,
-
     ):
+        """
+        Compute the top Uniswap pairs based on 7-day trade volume.
+
+        Args:
+            msg_obj: Message object containing calculation details.
+            redis: Redis connection object.
+            rpc_helper: RPC helper for blockchain interactions.
+            anchor_rpc_helper: RPC helper for the protocol's anchor chain.
+            ipfs_reader: IPFS client for reading data.
+            protocol_state_contract: Address of the protocol state contract.
+            project_id: ID of the project.
+
+        Returns:
+            UniswapTopPairs7dSnapshot: Snapshot of top pairs over 7 days.
+        """
         self._logger.info(f'Calculating 7d top pairs trade volume data for {msg_obj}')
 
         epoch_id = msg_obj.epochId
@@ -61,7 +77,7 @@ class AggregateTopPairsProcessor(GenericProcessorAggregate):
 
                 all_pair_metadata[contract_address] = pair_metadata
 
-        # iterate over all snapshots and generate pair data
+        # Collect pair data and metadata
         pair_data = {}
         for snapshot_project_id in snapshot_mapping.keys():
             snapshot = snapshot_mapping[snapshot_project_id]
@@ -79,6 +95,7 @@ class AggregateTopPairsProcessor(GenericProcessorAggregate):
             pair_data[contract]['volume7d'] += snapshot.totalTrade
             pair_data[contract]['fee7d'] += snapshot.totalFee
 
+        # Sort pairs by volume and create final snapshot
         top_pairs = []
         for pair in pair_data.values():
             top_pairs.append(UniswapTopPair7dSnapshot.parse_obj(pair))

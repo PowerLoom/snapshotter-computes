@@ -16,7 +16,9 @@ from snapshotter.utils.rpc import RpcHelper
 
 
 class AggregateTopTokensProcessor(GenericProcessorAggregate):
-    transformation_lambdas = None
+    """
+    Processor for aggregating top Uniswap tokens.
+    """
 
     def __init__(self) -> None:
         self.transformation_lambdas = []
@@ -31,9 +33,22 @@ class AggregateTopTokensProcessor(GenericProcessorAggregate):
         ipfs_reader: AsyncIPFSClient,
         protocol_state_contract,
         project_id: str,
-
     ):
+        """
+        Compute the top Uniswap tokens based on liquidity and volume.
 
+        Args:
+            msg_obj: Message object containing calculation details.
+            redis: Redis connection.
+            rpc_helper: RPC helper for blockchain interactions.
+            anchor_rpc_helper: RPC helper for the protocol's anchor chain.
+            ipfs_reader: IPFS client for reading data.
+            protocol_state_contract: Address of the protocol state contract.
+            project_id: ID of the project.
+
+        Returns:
+            UniswapTopTokensSnapshot: Snapshot of top tokens.
+        """
         self._logger.info(f'Calculating top tokens data for {msg_obj}')
         epoch_id = msg_obj.epochId
 

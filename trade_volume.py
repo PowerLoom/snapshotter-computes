@@ -13,6 +13,10 @@ from .utils.models.message_models import UniswapTradesSnapshot
 
 
 class TradeVolumeProcessor(GenericProcessorSnapshot):
+    """
+    Processor for calculating and storing trade volume for Uniswap pairs.
+    """
+
     transformation_lambdas = None
 
     def __init__(self) -> None:
@@ -26,11 +30,21 @@ class TradeVolumeProcessor(GenericProcessorSnapshot):
         epoch: PowerloomSnapshotProcessMessage,
         redis_conn: aioredis.Redis,
         rpc_helper: RpcHelper,
-    ):  
+    ):
+        """
+        Compute the trade volume for a Uniswap pair within the given epoch.
+
+        Args:
+            epoch (PowerloomSnapshotProcessMessage): The epoch information.
+            redis_conn (aioredis.Redis): Redis connection object.
+            rpc_helper (RpcHelper): RPC helper object for blockchain interactions.
+
+        Returns:
+            dict: Computed trade volume data.
+        """
         
         min_chain_height = epoch.begin
         max_chain_height = epoch.end
-
         data_source_contract_address = epoch.data_source
 
         self._logger.debug(
@@ -55,12 +69,24 @@ class TradeVolumeProcessor(GenericProcessorSnapshot):
         epoch_begin,
         epoch_end,
     ):
+        """
+        Transform the processed epoch data into a trade volume snapshot.
+
+        Args:
+            snapshot (dict): The processed snapshot data.
+            data_source_contract_address (str): The address of the data source contract.
+            epoch_begin (int): The beginning of the epoch.
+            epoch_end (int): The end of the epoch.
+
+        Returns:
+            UniswapTradesSnapshot: The transformed trade volume snapshot.
+        """
         self._logger.debug(
             "Trade volume processed snapshot: {}",
             snapshot,
         )
 
-        # Set effective trade volume at top level
+        # Extract trade volume data from the snapshot
         total_trades_in_usd = snapshot["Trades"]["totalTradesUSD"]
         total_fee_in_usd = snapshot["Trades"]["totalFeeUSD"]
         total_token0_vol = snapshot["Trades"]["token0TradeVolume"]
@@ -70,6 +96,8 @@ class TradeVolumeProcessor(GenericProcessorSnapshot):
 
         max_block_timestamp = snapshot.get("timestamp")
         snapshot.pop("timestamp", None)
+
+        # Create the UniswapTradesSnapshot object
         trade_volume_snapshot = UniswapTradesSnapshot(
             contract=data_source_contract_address,
             epoch=EpochBaseSnapshot(begin=epoch_begin, end=epoch_end),
