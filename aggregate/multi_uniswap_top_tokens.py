@@ -21,7 +21,6 @@ class AggregateTopTokensProcessor(GenericProcessorAggregate):
     """
 
     def __init__(self) -> None:
-        self.transformation_lambdas = []
         self._logger = logger.bind(module='AggregateTopTokensProcessor')
 
     async def compute(

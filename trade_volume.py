@@ -16,12 +16,7 @@ class TradeVolumeProcessor(GenericProcessorSnapshot):
     Processor for calculating and storing trade volume for Uniswap pairs.
     """
 
-    transformation_lambdas = None
-
     def __init__(self) -> None:
-        self.transformation_lambdas = [
-            self.transform_processed_epoch_to_trade_volume,
-        ]
         self._logger = logger.bind(module="TradeVolumeProcessor")
 
     async def compute(
@@ -49,7 +44,7 @@ class TradeVolumeProcessor(GenericProcessorSnapshot):
         self._logger.debug(
             f"trade volume {data_source_contract_address}, computation init time {time.time()}"
         )
-        result = await get_pair_trade_volume(
+        snapshot = await get_pair_trade_volume(
             data_source_contract_address=data_source_contract_address,
             min_chain_height=min_chain_height,
             max_chain_height=max_chain_height,
@@ -58,31 +53,6 @@ class TradeVolumeProcessor(GenericProcessorSnapshot):
         )
         self._logger.debug(
             f"trade volume {data_source_contract_address}, computation end time {time.time()}"
-        )
-        return result
-
-    def transform_processed_epoch_to_trade_volume(
-        self,
-        snapshot,
-        data_source_contract_address,
-        epoch_begin,
-        epoch_end,
-    ):
-        """
-        Transform the processed epoch data into a trade volume snapshot.
-
-        Args:
-            snapshot (dict): The processed snapshot data.
-            data_source_contract_address (str): The address of the data source contract.
-            epoch_begin (int): The beginning of the epoch.
-            epoch_end (int): The end of the epoch.
-
-        Returns:
-            UniswapTradesSnapshot: The transformed trade volume snapshot.
-        """
-        self._logger.debug(
-            "Trade volume processed snapshot: {}",
-            snapshot,
         )
 
         # Extract trade volume data from the snapshot
@@ -99,7 +69,7 @@ class TradeVolumeProcessor(GenericProcessorSnapshot):
         # Create the UniswapTradesSnapshot object
         trade_volume_snapshot = UniswapTradesSnapshot(
             contract=data_source_contract_address,
-            epoch=EpochBaseSnapshot(begin=epoch_begin, end=epoch_end),
+            chainHeightRange=EpochBaseSnapshot(begin=min_chain_height, end=max_chain_height),
             timestamp=max_block_timestamp,
             totalTrade=float(f"{total_trades_in_usd: .6f}"),
             totalFee=float(f"{total_fee_in_usd: .6f}"),

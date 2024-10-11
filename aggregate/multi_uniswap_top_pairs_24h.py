@@ -21,10 +21,7 @@ class AggregateTopPairsProcessor(GenericProcessorAggregate):
     and generates a snapshot of the top pairs based on liquidity.
     """
 
-    transformation_lambdas = None
-
     def __init__(self) -> None:
-        self.transformation_lambdas = []
         self._logger = logger.bind(module='AggregateTopPairsProcessor')
 
     async def compute(

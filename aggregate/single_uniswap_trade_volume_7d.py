@@ -20,7 +20,6 @@ class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
     """
 
     def __init__(self) -> None:
-        self.transformation_lambdas = []
         self._logger = logger.bind(module='AggregateTradeVolumeProcessor7d')
 
     def _add_aggregate_snapshot(

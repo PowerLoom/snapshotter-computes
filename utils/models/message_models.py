@@ -58,7 +58,6 @@ class UniswapTradesSnapshot(BaseModel):
     """
     Represents a snapshot of Uniswap trades for a specific epoch and contract.
     """
-    epoch: EpochBaseSnapshot  # The epoch (block range) for this snapshot
     contract: str  # The contract address
     totalTrade: float  # Total trade volume in USD
     totalFee: float  # Total fees collected in USD

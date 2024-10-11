@@ -38,14 +38,6 @@ async def test_trade_volume_processor():
         rpc_helper=rpc_helper,
     )
 
-    trade_volume_snapshot = processor.transform_processed_epoch_to_trade_volume(
-        snapshot=trade_volume_snapshot,
-        data_source_contract_address=snapshot_process_message.data_source,
-        epoch_begin=snapshot_process_message.begin,
-        epoch_end=snapshot_process_message.end,
-    
-    )
-
     from pprint import pprint
     pprint(trade_volume_snapshot.dict())
 
