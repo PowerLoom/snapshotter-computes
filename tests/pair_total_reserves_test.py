@@ -5,8 +5,8 @@ from snapshotter.utils.redis.redis_conn import RedisPoolCache
 from snapshotter.utils.redis.redis_keys import source_chain_epoch_size_key
 from snapshotter.utils.rpc import RpcHelper
 
-from snapshotter.modules.computes.pair_total_reserves import PairTotalReservesProcessor
-from snapshotter.modules.computes.utils.models.message_models import UniswapPairTotalReservesSnapshot
+from computes.pair_total_reserves import PairTotalReservesProcessor
+from computes.utils.models.message_models import UniswapPairTotalReservesSnapshot
 
 
 async def test_pair_reserves_processor():

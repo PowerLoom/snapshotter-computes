@@ -3,9 +3,9 @@ import json
 from redis import asyncio as aioredis
 from web3 import Web3
 
-from ..utils.helpers import get_token_eth_price_dict
-from ..redis_keys import uniswap_pair_cached_block_height_token_price
-from ..settings.config import settings as worker_settings
+from computes.utils.helpers import get_token_eth_price_dict
+from computes.redis_keys import uniswap_pair_cached_block_height_token_price
+from computes.settings.config import settings as worker_settings
 from snapshotter.utils.default_logger import logger
 from snapshotter.utils.rpc import RpcHelper
 from snapshotter.utils.snapshot_utils import get_eth_price_usd

@@ -5,8 +5,8 @@ from typing import Union
 
 from redis import asyncio as aioredis
 
-from .utils.core import get_liquidity_depth, get_pair_reserves
-from .utils.models.message_models import LiquidityDepthSnapshot, UniswapPairTotalReservesSnapshot
+from computes.utils.core import get_liquidity_depth, get_pair_reserves
+from computes.utils.models.message_models import LiquidityDepthSnapshot, UniswapPairTotalReservesSnapshot
 from snapshotter.utils.callback_helpers import SnapshotProcessMessage
 from snapshotter.utils.default_logger import logger
 from snapshotter.utils.rpc import RpcHelper

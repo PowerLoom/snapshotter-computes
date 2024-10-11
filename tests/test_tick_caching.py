@@ -1,13 +1,9 @@
-import os
 from web3 import Web3
 import asyncio
-import sys
 
-from ..utils.constants import erc20_abi
-from ..total_value_locked import _load_abi, calculate_reserves
-from ..utils.helpers import get_pair_metadata
-from ..redis_keys import uniswap_cached_tick_data_block_height
-from snapshotter.settings.config import settings
+from computes.total_value_locked import calculate_reserves
+from computes.utils.helpers import get_pair_metadata
+from computes.redis_keys import uniswap_cached_tick_data_block_height
 from snapshotter.utils.redis.redis_conn import RedisPoolCache
 from snapshotter.utils.rpc import RpcHelper
 

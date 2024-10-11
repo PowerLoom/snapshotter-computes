@@ -1,11 +1,10 @@
 import os
 from web3 import Web3
 import asyncio
-import sys
 
-from ..utils.constants import erc20_abi
-from ..total_value_locked import _load_abi, calculate_reserves, calculate_tvl_from_ticks, get_tick_info
-from ..utils.helpers import get_pair_metadata
+from computes.utils.constants import erc20_abi
+from computes.total_value_locked import _load_abi, calculate_reserves, calculate_tvl_from_ticks, get_tick_info
+from computes.utils.helpers import get_pair_metadata
 from snapshotter.settings.config import settings
 from snapshotter.utils.redis.redis_conn import RedisPoolCache
 from snapshotter.utils.rpc import RpcHelper

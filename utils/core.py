@@ -3,28 +3,26 @@ import json
 from functools import reduce
 
 from redis import asyncio as aioredis
-from snapshotter.modules.computes.redis_keys import uniswap_pair_cached_block_height_reserves
 from snapshotter.utils.default_logger import logger
 from snapshotter.utils.rpc import get_event_sig_and_abi
 from snapshotter.utils.rpc import RpcHelper
-from snapshotter.utils.snapshot_utils import (
-    get_block_details_in_block_range,
-)
+from snapshotter.utils.snapshot_utils import get_block_details_in_block_range
 from web3 import Web3
 
-from ..total_value_locked import calculate_reserves
-from ..total_value_locked import get_events
-from ..total_value_locked import get_tick_info
-from ..total_value_locked import get_token0_in_pool
-from ..total_value_locked import get_token1_in_pool
-from .constants import UNISWAP_EVENTS_ABI
-from .constants import UNISWAP_TRADE_EVENT_SIGS
-from .constants import UNISWAPV3_FEE_DIV
-from .helpers import get_pair_metadata
-from .models.data_models import epoch_event_trade_data
-from .models.data_models import event_trade_data
-from .models.data_models import trade_data
-from .pricing import get_token_price_in_block_range
+from computes.redis_keys import uniswap_pair_cached_block_height_reserves
+from computes.total_value_locked import calculate_reserves
+from computes.total_value_locked import get_events
+from computes.total_value_locked import get_tick_info
+from computes.total_value_locked import get_token0_in_pool
+from computes.total_value_locked import get_token1_in_pool
+from computes.utils.constants import UNISWAP_EVENTS_ABI
+from computes.utils.constants import UNISWAP_TRADE_EVENT_SIGS
+from computes.utils.constants import UNISWAPV3_FEE_DIV
+from computes.utils.helpers import get_pair_metadata
+from computes.utils.models.data_models import epoch_event_trade_data
+from computes.utils.models.data_models import event_trade_data
+from computes.utils.models.data_models import trade_data
+from computes.utils.pricing import get_token_price_in_block_range
 
 core_logger = logger.bind(module='PowerLoom|UniswapCore')
 

@@ -13,14 +13,14 @@ from snapshotter.utils.default_logger import logger
 from snapshotter.utils.rpc import get_event_sig_and_abi
 from snapshotter.utils.rpc import RpcHelper
 
-from .utils.constants import helper_contract
-from .utils.constants import MAX_TICK
-from .utils.constants import MIN_TICK
-from .utils.constants import override_address
-from .utils.constants import pair_contract_abi
-from .utils.constants import UNISWAP_EVENTS_ABI
-from .utils.constants import UNISWAP_TRADE_EVENT_SIGS
-from .utils.constants import univ3_helper_bytecode
+from computes.utils.constants import helper_contract
+from computes.utils.constants import MAX_TICK
+from computes.utils.constants import MIN_TICK
+from computes.utils.constants import override_address
+from computes.utils.constants import pair_contract_abi
+from computes.utils.constants import UNISWAP_EVENTS_ABI
+from computes.utils.constants import UNISWAP_TRADE_EVENT_SIGS
+from computes.utils.constants import univ3_helper_bytecode
 
 AddressLike = Union[Address, ChecksumAddress]
 getcontext().prec = 36

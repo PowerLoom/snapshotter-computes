@@ -1,7 +1,6 @@
 import asyncio
 import json
 import math
-from functools import reduce
 
 from redis import asyncio as aioredis
 from snapshotter.utils.default_logger import logger
@@ -11,20 +10,20 @@ from snapshotter.utils.snapshot_utils import get_eth_price_usd
 from snapshotter.utils.snapshot_utils import sqrtPriceX96ToTokenPrices
 from web3 import Web3
 
-from ..redis_keys import uniswap_cached_block_height_token_eth_price
-from ..redis_keys import uniswap_pair_contract_tokens_addresses
-from ..redis_keys import uniswap_pair_contract_tokens_data
-from ..redis_keys import uniswap_tokens_pair_map
-from ..redis_keys import uniswap_v3_best_pair_map
-from ..redis_keys import uniswap_v3_token_stable_pair_map
-from ..settings.config import settings as worker_settings
-from .constants import current_node
-from .constants import erc20_abi
-from .constants import factory_contract_obj
-from .constants import pair_contract_abi
-from .constants import STABLE_TOKENS_LIST
-from .constants import TOKENS_DECIMALS
-from .constants import ZER0_ADDRESS
+from computes.redis_keys import uniswap_cached_block_height_token_eth_price
+from computes.redis_keys import uniswap_pair_contract_tokens_addresses
+from computes.redis_keys import uniswap_pair_contract_tokens_data
+from computes.redis_keys import uniswap_tokens_pair_map
+from computes.redis_keys import uniswap_v3_best_pair_map
+from computes.redis_keys import uniswap_v3_token_stable_pair_map
+from computes.settings.config import settings as worker_settings
+from computes.utils.constants import current_node
+from computes.utils.constants import erc20_abi
+from computes.utils.constants import factory_contract_obj
+from computes.utils.constants import pair_contract_abi
+from computes.utils.constants import STABLE_TOKENS_LIST
+from computes.utils.constants import TOKENS_DECIMALS
+from computes.utils.constants import ZER0_ADDRESS
 
 helper_logger = logger.bind(module='PowerLoom|Uniswap|Helpers')
 
