@@ -27,19 +27,19 @@ class EthPricePreloader(GenericPreloader):
         """
         self._logger = logger.bind(module='BlockDetailsPreloader')
 
-        self.dai_weth_pair = '0x60594a405d53811d3BC4766596EFD80fd545A270'
-        self.usdc_weth_pair = '0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640'
-        self.usdt_weth_pair = '0x11b815efB8f581194ae79006d24E0d814B7697F6'
+        self.dai_weth_pair = worker_settings.contract_addresses.DAI_WETH_PAIR
+        self.usdc_weth_pair = worker_settings.contract_addresses.USDC_WETH_PAIR
+        self.usdbc_weth_pair = worker_settings.contract_addresses.USDbC_WETH_PAIR
         # Token decimals for price calculations
         self.TOKENS_DECIMALS = {
-            'USDT': 6,
+            'USDbC': 6,
             'DAI': 18,
             'USDC': 6,
             'WETH': 18,
         }
         # Load pair contract ABI
         self.pair_contract_abi = read_json_file(
-            worker_settings.uniswap_contract_abis.pair_contract,
+            worker_settings.uniswap_contract_abis.pair_contract_v3,
             self._logger,
         )
 
@@ -119,10 +119,10 @@ class EthPricePreloader(GenericPreloader):
                 from_block=from_block,
                 to_block=to_block,
             )
-            usdt_eth_slot0_list = await rpc_helper.batch_eth_call_on_block_range(
+            usdbc_eth_slot0_list = await rpc_helper.batch_eth_call_on_block_range(
                 abi_dict=pair_abi_dict,
                 function_name='slot0',
-                contract_address=self.usdt_weth_pair,
+                contract_address=self.usdbc_weth_pair,
                 from_block=from_block,
                 to_block=to_block,
             )
@@ -131,26 +131,28 @@ class EthPricePreloader(GenericPreloader):
             for block_count, block_num in enumerate(range(from_block, to_block + 1), start=0):
                 dai_eth_sqrt_price_x96 = dai_eth_slot0_list[block_count][0]
                 usdc_eth_sqrt_price_x96 = usdc_eth_slot0_list[block_count][0]
-                usdt_eth_sqrt_price_x96 = usdt_eth_slot0_list[block_count][0]
+                usdbc_eth_sqrt_price_x96 = usdbc_eth_slot0_list[block_count][0]
 
-                _, dai_eth_price = self.sqrtPriceX96ToTokenPrices(
+                dai_eth_price, _ = self.sqrtPriceX96ToTokenPrices(
                     sqrtPriceX96=dai_eth_sqrt_price_x96,
-                    token0_decimals=self.TOKENS_DECIMALS['DAI'],
-                    token1_decimals=self.TOKENS_DECIMALS['WETH'],
-                )
-                _, usdc_eth_price = self.sqrtPriceX96ToTokenPrices(
-                    sqrtPriceX96=usdc_eth_sqrt_price_x96,
-                    token0_decimals=self.TOKENS_DECIMALS['USDC'],
-                    token1_decimals=self.TOKENS_DECIMALS['WETH'],
-                )
-                usdt_eth_price, _ = self.sqrtPriceX96ToTokenPrices(
-                    sqrtPriceX96=usdt_eth_sqrt_price_x96,
                     token0_decimals=self.TOKENS_DECIMALS['WETH'],
-                    token1_decimals=self.TOKENS_DECIMALS['USDT'],
+                    token1_decimals=self.TOKENS_DECIMALS['DAI'],
+                )
+
+                usdc_eth_price, _ = self.sqrtPriceX96ToTokenPrices(
+                    sqrtPriceX96=usdc_eth_sqrt_price_x96,
+                    token0_decimals=self.TOKENS_DECIMALS['WETH'],
+                    token1_decimals=self.TOKENS_DECIMALS['USDC'],
+                )
+
+                usdbc_eth_price, _ = self.sqrtPriceX96ToTokenPrices(
+                    sqrtPriceX96=usdbc_eth_sqrt_price_x96,
+                    token0_decimals=self.TOKENS_DECIMALS['WETH'],
+                    token1_decimals=self.TOKENS_DECIMALS['USDbC'],
                 )
 
                 # using fixed weightage for now, will use liquidity based weightage later
-                eth_price_usd = (dai_eth_price + usdc_eth_price + usdt_eth_price) / 3
+                eth_price_usd = (dai_eth_price + usdc_eth_price + usdbc_eth_price) / 3
                 eth_price_usd_dict[block_num] = float(eth_price_usd)
 
                 redis_cache_mapping[
