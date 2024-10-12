@@ -27,30 +27,25 @@ getcontext().prec = 36
 tvl_logger = logger.bind(module='PowerLoom|UniswapTotalValueLocked')
 
 
-def transform_tick_bytes_to_list(tickData: bytes):
+def transform_tick_bytes_to_list(tick_bytes):
     """
-    Transform tick data from bytes to a list of dictionaries.
+    Transform tick data from decoded web3 call result to a list of dictionaries.
 
     Args:
-        tickData (bytes): Raw tick data in bytes format.
+        decoded_data: Decoded tick data from web3 call.
 
     Returns:
         list: A list of dictionaries containing liquidity_net and idx for each tick.
     """
-    if tickData == b'\x00' * 64:
+    if len(tick_bytes) == 0:
         return []
-    
-    # Decode tickdata as a bytes[]
-    bytes_decoded_arr = abi.decode(
-        ('bytes[]', '(int128,int24)'), tickData,
-    )
-    
+
     ticks = [
         {
             'liquidity_net': int.from_bytes(i[:-3], 'big', signed=True),
             'idx': int.from_bytes(i[-3:], 'big', signed=True),
         }
-        for i in bytes_decoded_arr[0]
+        for i in tick_bytes
     ]
 
     return ticks
@@ -313,10 +308,11 @@ async def get_tick_info(
 
         # Execute RPC calls
         tickDataResponse, slot0Response = await asyncio.gather(
-            rpc_helper.web3_call(
+            rpc_helper.web3_call_with_override(
                 tasks=tick_tasks,
                 contract_addr=helper_contract.address,
                 abi=helper_contract.abi,
+                overrides=overrides,
             ),
             rpc_helper.web3_call(
                 tasks=slot0_tasks,

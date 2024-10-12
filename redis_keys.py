@@ -97,3 +97,8 @@ uniswap_v3_best_pair_map = (
 uniswap_v3_token_stable_pair_map = (
     f"uniswap:pairContract:" + settings.namespace + ":{}:tokenStablePairMap"
 )
+
+# Redis key for Uniswap ETH/USD price data
+uniswap_eth_usd_price_zset = (
+    'uniswap:ethBlockHeightPrice:' + settings.namespace + ':ethPriceZset'
+)
