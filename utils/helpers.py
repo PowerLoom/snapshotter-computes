@@ -6,7 +6,6 @@ from redis import asyncio as aioredis
 from snapshotter.utils.default_logger import logger
 from snapshotter.utils.rpc import get_contract_abi_dict
 from snapshotter.utils.rpc import RpcHelper
-from snapshotter.utils.snapshot_utils import sqrtPriceX96ToTokenPrices
 from web3 import Web3
 
 from computes.redis_keys import uniswap_cached_block_height_token_eth_price
@@ -630,9 +629,12 @@ async def get_token_eth_quote_from_uniswap(
                 params=[],
             )
             sqrtP_list = [slot0[0] for slot0 in response]
-
             for sqrtP in sqrtP_list:
-                price0, price1 = sqrtPriceX96ToTokenPrices(sqrtP, token0_decimals, token1_decimals)
+                price0, price1 = eth_price_preloader.sqrtPriceX96ToTokenPrices(
+                    sqrtP,
+                    token0_decimals,
+                    token1_decimals,
+                )
 
                 if token0.lower() == token_address.lower():
                     token_eth_quote.append((price0,))
@@ -679,7 +681,11 @@ async def get_token_eth_quote_from_uniswap(
                 for i in range(len(sqrtP_list)):
                     sqrtP = sqrtP_list[i]
                     eth_price = sqrtP_eth_list[i]
-                    price0, price1 = sqrtPriceX96ToTokenPrices(sqrtP, token0_decimals, token1_decimals)
+                    price0, price1 = eth_price_preloader.sqrtPriceX96ToTokenPrices(
+                        sqrtP,
+                        token0_decimals,
+                        token1_decimals,
+                    )
                     if token0.lower() == token_address.lower():
                         token_eth_quote.append((price0 / eth_price,))
                     else:

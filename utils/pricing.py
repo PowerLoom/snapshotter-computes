@@ -3,12 +3,13 @@ import json
 from redis import asyncio as aioredis
 from web3 import Web3
 
+from computes.preloaders.eth_price.preloader import eth_price_preloader
 from computes.utils.helpers import get_token_eth_price_dict
 from computes.redis_keys import uniswap_pair_cached_block_height_token_price
 from computes.settings.config import settings as worker_settings
 from snapshotter.utils.default_logger import logger
 from snapshotter.utils.rpc import RpcHelper
-from snapshotter.utils.snapshot_utils import get_eth_price_usd
+
 
 pricing_logger = logger.bind(module="PowerLoom|Uniswap|Pricing")
 
@@ -68,7 +69,7 @@ async def get_token_price_in_block_range(
         if token_address == Web3.to_checksum_address(
             worker_settings.contract_addresses.WETH
         ):
-            token_price_dict = await get_eth_price_usd(
+            token_price_dict = await eth_price_preloader.get_eth_price_usd(
                 from_block=from_block,
                 to_block=to_block,
                 redis_conn=redis_conn,
@@ -87,7 +88,7 @@ async def get_token_price_in_block_range(
 
             if token_eth_price_dict:
                 # Get ETH price in USD
-                eth_usd_price_dict = await get_eth_price_usd(
+                eth_usd_price_dict = await eth_price_preloader.get_eth_price_usd(
                     from_block=from_block,
                     to_block=to_block,
                     redis_conn=redis_conn,
