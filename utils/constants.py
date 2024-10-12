@@ -43,12 +43,6 @@ factory_contract_abi = read_json_file(
 )
 
 # Initialize Uniswap V2 Core contract objects
-router_contract_obj = current_node['web3_client'].eth.contract(
-    address=Web3.to_checksum_address(
-        worker_settings.contract_addresses.iuniswap_v2_router,
-    ),
-    abi=router_contract_abi,
-)
 factory_contract_obj = current_node['web3_client'].eth.contract(
     address=Web3.to_checksum_address(
         worker_settings.contract_addresses.iuniswap_v2_factory,
@@ -67,9 +61,9 @@ usdc_eth_contract_obj = current_node['web3_client'].eth.contract(
     ),
     abi=pair_contract_abi,
 )
-eth_usdt_contract_obj = current_node['web3_client'].eth.contract(
+eth_usdbc_contract_obj = current_node['web3_client'].eth.contract(
     address=Web3.to_checksum_address(
-        worker_settings.contract_addresses.USDT_WETH_PAIR,
+        worker_settings.contract_addresses.USDbC_WETH_PAIR,
     ),
     abi=pair_contract_abi,
 )
@@ -92,7 +86,7 @@ UNISWAP_EVENTS_ABI = {
 
 # Token decimals for common tokens
 tokens_decimals = {
-    'USDT': 6,
+    'USDbC': 6,
     'DAI': 18,
     'USDC': 6,
     'WETH': 18,
