@@ -19,6 +19,7 @@ class UniswapContractAbis(BaseModel):
     pair_contract: str
     erc20: str
     trade_events: str
+    pair_contract_v3: str
 
 
 class ContractAddresses(BaseModel):
@@ -27,36 +28,24 @@ class ContractAddresses(BaseModel):
 
     Attributes:
         iuniswap_v2_factory (str): Address of the Uniswap V2 Factory contract.
-        iuniswap_v2_router (str): Address of the Uniswap V2 Router contract.
         MAKER (str): Address of the Maker token contract.
-        USDT (str): Address of the USDT token contract.
+        USDbC (str): Address of the USDbC token contract.
         DAI (str): Address of the DAI token contract.
         USDC (str): Address of the USDC token contract.
         WETH (str): Address of the Wrapped Ether (WETH) token contract.
-        WETH_USDT (str): Address of the WETH-USDT pair contract.
-        FRAX (str): Address of the FRAX token contract.
-        SYN (str): Address of the SYN token contract.
-        FEI (str): Address of the FEI token contract.
-        agEUR (str): Address of the agEUR token contract.
         DAI_WETH_PAIR (str): Address of the DAI-WETH pair contract.
         USDC_WETH_PAIR (str): Address of the USDC-WETH pair contract.
-        USDT_WETH_PAIR (str): Address of the USDT-WETH pair contract.
+        USDbC_WETH_PAIR (str): Address of the USDbC-WETH pair contract.
     """
     iuniswap_v2_factory: str
-    iuniswap_v2_router: str 
     MAKER: str
-    USDT: str
+    USDbC: str
     DAI: str
     USDC: str
     WETH: str
-    WETH_USDT: str
-    FRAX: str
-    SYN: str
-    FEI: str
-    agEUR: str
     DAI_WETH_PAIR: str
     USDC_WETH_PAIR: str
-    USDT_WETH_PAIR: str
+    USDbC_WETH_PAIR: str
 
 
 class Settings(BaseModel):
