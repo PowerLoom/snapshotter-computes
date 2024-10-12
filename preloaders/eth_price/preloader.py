@@ -143,7 +143,7 @@ class EthPricePreloader(GenericPreloader):
                     token0_decimals=self.TOKENS_DECIMALS['USDC'],
                     token1_decimals=self.TOKENS_DECIMALS['WETH'],
                 )
-                _, usdt_eth_price = self.sqrtPriceX96ToTokenPrices(
+                usdt_eth_price, _ = self.sqrtPriceX96ToTokenPrices(
                     sqrtPriceX96=usdt_eth_sqrt_price_x96,
                     token0_decimals=self.TOKENS_DECIMALS['WETH'],
                     token1_decimals=self.TOKENS_DECIMALS['USDT'],
