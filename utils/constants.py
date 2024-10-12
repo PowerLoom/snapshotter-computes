@@ -23,15 +23,16 @@ ZER0_ADDRESS = str('0x' + '0' * 40)
 # Uniswap V3 fee divisor
 UNISWAPV3_FEE_DIV = int(1000000)
 
+# Set up logger for this module
+constants_logger = logger.bind(module='PowerLoom|Uniswap|Constants')
+
 # Bytecode for Uniswap V3 helper contract
 # https://github.com/getjiggy/evm-helpers
 univ3_helper_bytecode_json = read_json_file(
     'computes/static/bytecode/univ3_helper.json',
+    constants_logger,
 )
 univ3_helper_bytecode = univ3_helper_bytecode_json['bytecode']
-
-# Set up logger for this module
-constants_logger = logger.bind(module='PowerLoom|Uniswap|Constants')
 
 # Initialize RPC helper and get current node
 rpc_helper = RpcHelper()
@@ -62,7 +63,8 @@ factory_contract_abi = read_json_file(
 
 # Load helper contract ABI
 helper_contract_abi = read_json_file(
-    'snapshotter/modules/computes/static/abis/UniV3Helper.json',
+    'computes/static/abis/UniV3Helper.json',
+    constants_logger,
 )
 
 # Override address for helper contract
@@ -97,7 +99,8 @@ pool_contract_obj = current_node['web3_client'].eth.contract(
 
 # Initialize 1inch quoter contract
 quoter_1inch_contract_abi = read_json_file(
-    'snapshotter/modules/computes/static/abis/OneInchQuoter.json',
+    'computes/static/abis/OneInchQuoter.json',
+    constants_logger,
 )
 
 quoter_1inch_contract_obj = current_node['web3_client'].eth.contract(
