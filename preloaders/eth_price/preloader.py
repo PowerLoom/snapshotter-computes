@@ -27,38 +27,39 @@ class EthPricePreloader(GenericPreloader):
         """
         self._logger = logger.bind(module='BlockDetailsPreloader')
 
-        self.dai_weth_pair = '0xa478c2975ab1ea89e8196811f51a7b7ade33eb11'
-        self.usdc_weth_pair = '0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc'
-        self.usdt_weth_pair = '0x0d4a11d5eeaac28ec3f61d100daf4d40471f1852'
+        self.dai_weth_pair = worker_settings.contract_addresses.DAI_WETH_PAIR
+        self.usdc_weth_pair = worker_settings.contract_addresses.USDC_WETH_PAIR
+        self.usdbc_weth_pair = worker_settings.contract_addresses.USDbC_WETH_PAIR
         # Token decimals for price calculations
         self.TOKENS_DECIMALS = {
-            'USDT': 6,
+            'USDbC': 6,
             'DAI': 18,
             'USDC': 6,
             'WETH': 18,
         }
         # Load pair contract ABI
         self.pair_contract_abi = read_json_file(
-            worker_settings.uniswap_contract_abis.pair_contract,
+            worker_settings.uniswap_contract_abis.pair_contract_v3,
             self._logger,
         )
 
-    def calculate_token_price(self, reserves, token0, token1, reverse=False):
-        """
-        Calculate the price of token0 in terms of token1 based on the reserves.
+    @staticmethod
+    def sqrtPriceX96ToTokenPricesNoDecimals(sqrtPriceX96):
+        price0 = ((sqrtPriceX96 / (2**96))** 2)
+        price1 = 1 / price0
+        return price0, price1
 
-        Args:
-            reserves (list): List of reserves [reserve0, reserve1, timestamp]
-            token0 (str): The first token in the pair
-            token1 (str): The second token in the pair
-            reverse (bool): If True, calculate price of token1 in terms of token0
+    @staticmethod
+    def sqrtPriceX96ToTokenPrices(sqrtPriceX96, token0_decimals, token1_decimals):
+        # https://blog.uniswap.org/uniswap-v3-math-primer
 
-        Returns:
-            float: The calculated price
-        """
-        reserve0 = reserves[0] / 10 ** self.TOKENS_DECIMALS[token0]
-        reserve1 = reserves[1] / 10 ** self.TOKENS_DECIMALS[token1]
-        return reserve1 / reserve0 if reverse else reserve0 / reserve1
+        price0 = ((sqrtPriceX96 / (2**96))** 2) / (10 ** token1_decimals / 10 ** token0_decimals)
+        price1 = 1 / price0
+
+        price0 = round(price0, token0_decimals)
+        price1 = round(price1, token1_decimals)
+
+        return price0, price1
 
     async def get_eth_price_usd(
         self,
@@ -104,63 +105,67 @@ class EthPricePreloader(GenericPreloader):
             pair_abi_dict = get_contract_abi_dict(self.pair_contract_abi)
 
             # Fetch reserves for each pair across the block range
-            dai_eth_pair_reserves_list = await rpc_helper.batch_eth_call_on_block_range(
+            dai_eth_slot0_list = await rpc_helper.batch_eth_call_on_block_range(
                 abi_dict=pair_abi_dict,
-                function_name='getReserves',
+                function_name='slot0',
                 contract_address=self.dai_weth_pair,
                 from_block=from_block,
                 to_block=to_block,
             )
-            usdc_eth_pair_reserves_list = await rpc_helper.batch_eth_call_on_block_range(
+            usdc_eth_slot0_list = await rpc_helper.batch_eth_call_on_block_range(
                 abi_dict=pair_abi_dict,
-                function_name='getReserves',
+                function_name='slot0',
                 contract_address=self.usdc_weth_pair,
                 from_block=from_block,
                 to_block=to_block,
             )
-            eth_usdt_pair_reserves_list = await rpc_helper.batch_eth_call_on_block_range(
+            usdbc_eth_slot0_list = await rpc_helper.batch_eth_call_on_block_range(
                 abi_dict=pair_abi_dict,
-                function_name='getReserves',
-                contract_address=self.usdt_weth_pair,
+                function_name='slot0',
+                contract_address=self.usdbc_weth_pair,
                 from_block=from_block,
                 to_block=to_block,
             )
 
-            # Calculate ETH price for each block
+            # Calculate ETH price for each block using a weighted average of the three pairs
             for block_count, block_num in enumerate(range(from_block, to_block + 1), start=0):
-                # Calculate prices for each pair
-                dai_price = self.calculate_token_price(dai_eth_pair_reserves_list[block_count], 'DAI', 'WETH')
-                usdc_price = self.calculate_token_price(usdc_eth_pair_reserves_list[block_count], 'USDC', 'WETH')
-                usdt_price = self.calculate_token_price(eth_usdt_pair_reserves_list[block_count], 'USDT', 'WETH', reverse=True)
+                dai_eth_sqrt_price_x96 = dai_eth_slot0_list[block_count][0]
+                usdc_eth_sqrt_price_x96 = usdc_eth_slot0_list[block_count][0]
+                usdbc_eth_sqrt_price_x96 = usdbc_eth_slot0_list[block_count][0]
 
-                # Calculate total ETH liquidity
-                total_eth_liquidity = (
-                    dai_eth_pair_reserves_list[block_count][1] / 10 ** self.TOKENS_DECIMALS['WETH'] +
-                    usdc_eth_pair_reserves_list[block_count][1] / 10 ** self.TOKENS_DECIMALS['WETH'] +
-                    eth_usdt_pair_reserves_list[block_count][0] / 10 ** self.TOKENS_DECIMALS['WETH']
+                dai_eth_price, _ = self.sqrtPriceX96ToTokenPrices(
+                    sqrtPriceX96=dai_eth_sqrt_price_x96,
+                    token0_decimals=self.TOKENS_DECIMALS['WETH'],
+                    token1_decimals=self.TOKENS_DECIMALS['DAI'],
                 )
 
-                # Calculate weights for each pair
-                daiWeight = (dai_eth_pair_reserves_list[block_count][1] / 10 ** self.TOKENS_DECIMALS['WETH']) / total_eth_liquidity
-                usdcWeight = (usdc_eth_pair_reserves_list[block_count][1] / 10 ** self.TOKENS_DECIMALS['WETH']) / total_eth_liquidity
-                usdtWeight = (eth_usdt_pair_reserves_list[block_count][0] / 10 ** self.TOKENS_DECIMALS['WETH']) / total_eth_liquidity
-
-                # Calculate weighted average ETH price
-                eth_price_usd = (
-                    daiWeight * dai_price +
-                    usdcWeight * usdc_price +
-                    usdtWeight * usdt_price
+                usdc_eth_price, _ = self.sqrtPriceX96ToTokenPrices(
+                    sqrtPriceX96=usdc_eth_sqrt_price_x96,
+                    token0_decimals=self.TOKENS_DECIMALS['WETH'],
+                    token1_decimals=self.TOKENS_DECIMALS['USDC'],
                 )
 
+                usdbc_eth_price, _ = self.sqrtPriceX96ToTokenPrices(
+                    sqrtPriceX96=usdbc_eth_sqrt_price_x96,
+                    token0_decimals=self.TOKENS_DECIMALS['WETH'],
+                    token1_decimals=self.TOKENS_DECIMALS['USDbC'],
+                )
+
+                # using fixed weightage for now, will use liquidity based weightage later
+                eth_price_usd = (dai_eth_price + usdc_eth_price + usdbc_eth_price) / 3
                 eth_price_usd_dict[block_num] = float(eth_price_usd)
+
                 redis_cache_mapping[
                     json.dumps(
                         {'blockHeight': block_num, 'price': float(eth_price_usd)},
                     )
                 ] = int(block_num)
 
-            # Cache prices and prune old data
-            source_chain_epoch_size = int(await redis_conn.get(source_chain_epoch_size_key()))
+            # cache price at height
+            source_chain_epoch_size = int(
+                await redis_conn.get(source_chain_epoch_size_key()),
+            )
+
             await asyncio.gather(
                 redis_conn.zadd(
                     name=uniswap_eth_usd_price_zset,
