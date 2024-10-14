@@ -1,13 +1,13 @@
 {
     "aave_contract_abis":{
-        "pool_contract":"snapshotter/modules/computes/static/abis/AaveV3Pool.json",
-        "pool_data_provider_contract": "snapshotter/modules/computes/static/abis/AaveProtocolDataProvider.json",
-        "erc20": "snapshotter/modules/computes/static/abis/IERC20.json",
-        "a_token": "snapshotter/modules/computes/static/abis/AToken.json",
-        "stable_token": "snapshotter/modules/computes/static/abis/StableDebtToken.json",
-        "variable_token": "snapshotter/modules/computes/static/abis/VariableDebtToken.json",
-        "aave_oracle": "snapshotter/modules/computes/static/abis/AaveOracle.json",
-        "ui_pool_data_provider": "snapshotter/modules/computes/static/abis/UiPoolDataProvider.json"
+        "pool_contract":"computes/static/abis/AaveV3Pool.json",
+        "pool_data_provider_contract": "computes/static/abis/AaveProtocolDataProvider.json",
+        "erc20": "computes/static/abis/IERC20.json",
+        "a_token": "computes/static/abis/AToken.json",
+        "stable_token": "computes/static/abis/StableDebtToken.json",
+        "variable_token": "computes/static/abis/VariableDebtToken.json",
+        "aave_oracle": "computes/static/abis/AaveOracle.json",
+        "ui_pool_data_provider": "computes/static/abis/UiPoolDataProvider.json"
     },
     "contract_addresses": {
         "WETH": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
