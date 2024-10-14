@@ -45,17 +45,33 @@ async def get_asset_supply_and_debt_bulk(
     rpc_helper: RpcHelper,
     fetch_timestamp=True,
 ):
+    """
+    Retrieves the supply and debt data for a specific asset over a range of blocks.
+
+    Args:
+        asset_address (str): The address of the asset.
+        from_block (int): The starting block number.
+        to_block (int): The ending block number.
+        redis_conn (aioredis.Redis): Redis connection object.
+        rpc_helper (RpcHelper): RPC helper object.
+        fetch_timestamp (bool): Whether to fetch block timestamps.
+
+    Returns:
+        dict: A dictionary containing supply and debt data for each block in the range.
+    """
     core_logger.debug(
         f'Starting bulk asset total supply query for: {asset_address}',
     )
     asset_address = Web3.toChecksumAddress(asset_address)
 
+    # Fetch asset metadata
     asset_metadata = await get_asset_metadata(
         asset_address=asset_address,
         redis_conn=redis_conn,
         rpc_helper=rpc_helper,
     )
 
+    # Fetch block details if required
     if fetch_timestamp:
         try:
             block_details_dict = await get_block_details_in_block_range(
@@ -75,7 +91,6 @@ async def get_asset_supply_and_debt_bulk(
                 err,
             )
             raise err
-
     else:
         block_details_dict = dict()
 
@@ -86,12 +101,12 @@ async def get_asset_supply_and_debt_bulk(
         ),
     )
 
+    # Initialize dictionaries to store asset data
     asset_data_dict = {}
     asset_details_dict = {}
     asset_rates_dict = {}
 
-    # get cached asset data from redis
-    # data is retrieved in bulk by the asset_data preloader and is saved to the cache on epoch release
+    # Fetch cached asset data from Redis
     [
         cached_asset_data_dict,
         cached_asset_details_dict,
@@ -120,7 +135,7 @@ async def get_asset_supply_and_debt_bulk(
         ),
     )
 
-    # decode and parse the cached data if it exists
+    # Parse cached data if it exists
     if cached_asset_data_dict and len(cached_asset_data_dict) == to_block - (from_block - 1):
         asset_data_dict = {
             json.loads(
@@ -159,16 +174,17 @@ async def get_asset_supply_and_debt_bulk(
 
     asset_supply_debt_dict = dict()
 
+    # Process data for each block in the range
     for block_num in range(from_block, to_block + 1):
         current_block_details = block_details_dict.get(block_num, None)
         timestamp = current_block_details.get('timestamp')
 
-        # get the asset data, details and rate details for the current block
+        # Get the asset data, details and rate details for the current block
         asset_data = asset_data_dict.get(block_num, None)
         asset_details = asset_details_dict.get(block_num, None)
         asset_rate_details = asset_rates_dict.get(block_num, None)
 
-        # initialize the data models using the retrieved data
+        # Initialize the data models using the retrieved data
         asset_data = UiDataProviderReserveData.parse_obj(asset_data)
         asset_details = AssetDetailsData.parse_obj(asset_details)
         asset_rate_details = RateDetailsData.parse_obj(asset_rate_details)
@@ -180,18 +196,15 @@ async def get_asset_supply_and_debt_bulk(
             rate=asset_data.variableBorrowRate,
             current_timestamp=timestamp,
             last_update_timestamp=asset_data.lastUpdateTimestamp,
-
         )
 
         stable_interest = calculate_compound_interest_rate(
             rate=asset_data.averageStableRate,
             current_timestamp=timestamp,
             last_update_timestamp=asset_data.stableDebtLastUpdateTimestamp,
-
         )
 
-        # Apply the interest rate to the scaled variable debt to get the current variable debt
-        # The scaled debt value is the value of the debt in ray at the last update timestamp
+        # Calculate current debt values
         total_variable_debt = calculate_current_from_scaled(
             scaled_value=asset_data.totalScaledVariableDebt,
             index=asset_data.variableBorrowIndex,
@@ -201,17 +214,16 @@ async def get_asset_supply_and_debt_bulk(
         # stable debt is not scaled, so we can directly apply the interest rate to the stable debt
         total_stable_debt = rayMul(asset_data.totalPrincipalStableDebt, stable_interest)
 
+        # Calculate total supply and USD values
         total_supply = asset_data.availableLiquidity + total_variable_debt + total_stable_debt
-
         asset_usd_price = asset_data.priceInMarketReferenceCurrency * (10 ** -ORACLE_DECIMALS)
-
         total_supply_usd = (total_supply * asset_usd_price) / (10 ** int(asset_metadata['decimals']))
         total_variable_debt_usd = (total_variable_debt * asset_usd_price) / (10 ** int(asset_metadata['decimals']))
         total_stable_debt_usd = (total_stable_debt * asset_usd_price) / (10 ** int(asset_metadata['decimals']))
         available_liquidity_usd = (asset_data.availableLiquidity * asset_usd_price) / \
             (10 ** int(asset_metadata['decimals']))
 
-        # Normalize asset detail rates, rates are returned in 5 decimal format
+        # Normalize asset detail rates
         asset_details.ltv = (asset_details.ltv / DETAILS_BASIS) * 100
         asset_details.liqThreshold = (asset_details.liqThreshold / DETAILS_BASIS) * 100
         asset_details.resFactor = (asset_details.resFactor / DETAILS_BASIS) * 100
@@ -230,6 +242,7 @@ async def get_asset_supply_and_debt_bulk(
         asset_rate_details.baseStableRate = convert_from_ray(asset_rate_details.baseStableRate)
         asset_rate_details.optimalRate = convert_from_ray(asset_rate_details.optimalRate)
 
+        # Create AssetTotalData object with all calculated values
         total_asset_data = AssetTotalData(
             totalSupply=AaveSupplyData(
                 token_supply=total_supply,
@@ -279,11 +292,26 @@ async def get_asset_trade_volume(
     rpc_helper: RpcHelper,
     fetch_timestamp=True,
 ):
+    """
+    Retrieves the trade volume data for a specific asset over a range of blocks.
+
+    Args:
+        asset_address (str): The address of the asset.
+        from_block (int): The starting block number.
+        to_block (int): The ending block number.
+        redis_conn (aioredis.Redis): Redis connection object.
+        rpc_helper (RpcHelper): RPC helper object.
+        fetch_timestamp (bool): Whether to fetch block timestamps.
+
+    Returns:
+        dict: A dictionary containing trade volume data for the asset.
+    """
     asset_address = Web3.toChecksumAddress(
         asset_address,
     )
     block_details_dict = dict()
 
+    # Fetch block details if required
     if fetch_timestamp:
         try:
             block_details_dict = await get_block_details_in_block_range(
@@ -303,15 +331,14 @@ async def get_asset_trade_volume(
             )
             raise err
 
+    # Fetch asset metadata
     asset_metadata = await get_asset_metadata(
         asset_address=asset_address,
         redis_conn=redis_conn,
         rpc_helper=rpc_helper,
     )
 
-    # fetch pre-cached prices for all assets in the pool
-    # Used to calculate the USD value of any debt that may be repaid during
-    # the liquidation of the current asset, along with the USD value of the asset itself
+    # Fetch pre-cached prices for all assets in the pool
     price_dict = await get_all_asset_prices(
         from_block,
         to_block,
@@ -319,8 +346,7 @@ async def get_asset_trade_volume(
         rpc_helper,
     )
 
-    # fetch events for all assets in the pool from redis if cached
-    # event data is retrieved and cached in the volume_events preloader
+    # Fetch events for all assets in the pool from redis if cached
     supply_events = await get_pool_supply_events(
         rpc_helper=rpc_helper,
         from_block=from_block,
@@ -328,7 +354,7 @@ async def get_asset_trade_volume(
         redis_conn=redis_conn,
     )
 
-    # TODO: Filter events by address in get_pool_data_events?
+    # Filter events for the specific asset
     asset_supply_events = {
         key: filter(
             lambda x:
@@ -339,7 +365,7 @@ async def get_asset_trade_volume(
         for key, value in supply_events.items()
     }
 
-    # init data models with empty/0 values
+    # Initialize data models with empty/0 values
     epoch_results = epochEventVolumeData(
         borrow=eventVolumeData(
             logs=[],
@@ -379,14 +405,14 @@ async def get_asset_trade_volume(
         ),
     )
 
+    # Process events for each block in the range
     for block_num in range(from_block, to_block + 1):
-
-        # get the asset price for the current block
+        # Get the asset price for the current block
         block_all_asset_prices = price_dict.get(block_num, None)
         asset_usd_price = block_all_asset_prices.get(asset_address, 0)
         asset_usd_price = asset_usd_price * (10 ** -ORACLE_DECIMALS) / (10 ** int(asset_metadata['decimals']))
 
-        # iterate over the current block's events and update the respective volume data
+        # Iterate over the current block's events and update the respective volume data
         for event in asset_supply_events.get(block_num, None):
             if event['event'] in AAVE_CORE_EVENTS:
                 amount = event['args']['amount']
@@ -414,10 +440,10 @@ async def get_asset_trade_volume(
                 debt_to_cover = event['args']['debtToCover']
                 debt_asset = event['args']['debtAsset']
 
-                # get the price for the repaid debt asset
+                # Get the price for the repaid debt asset
                 debt_usd_price = block_all_asset_prices.get(Web3.to_checksum_address(debt_asset), 0)
 
-                # fetch decimal data for the debt asset
+                # Fetch decimal data for the debt asset
                 debt_asset_metadata = await get_asset_metadata(
                     asset_address=debt_asset,
                     redis_conn=redis_conn,

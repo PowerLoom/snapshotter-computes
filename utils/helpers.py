@@ -38,27 +38,32 @@ async def get_asset_metadata(
     redis_conn: aioredis.Redis,
     rpc_helper: RpcHelper,
 ):
+    """
+    Retrieves metadata for a given asset.
+
+    Args:
+        asset_address (str): The address of the asset.
+        redis_conn (aioredis.Redis): Redis connection object.
+        rpc_helper (RpcHelper): RPC helper object.
+
+    Returns:
+        dict: A dictionary containing asset metadata (address, decimals, symbol, name).
+    """
     try:
         asset_address = Web3.toChecksumAddress(asset_address)
 
-        # check if cache exist
+        # Check if cache exists
         asset_data_cache = await redis_conn.hgetall(
             aave_asset_contract_data.format(asset_address),
         )
 
         if asset_data_cache:
-            asset_decimals = asset_data_cache[b'asset_decimals'].decode(
-                'utf-8',
-            )
-            asset_symbol = asset_data_cache[b'asset_symbol'].decode(
-                'utf-8',
-            )
-            asset_name = asset_data_cache[b'asset_name'].decode(
-                'utf-8',
-            )
-
+            # Retrieve data from cache
+            asset_decimals = asset_data_cache[b'asset_decimals'].decode('utf-8')
+            asset_symbol = asset_data_cache[b'asset_symbol'].decode('utf-8')
+            asset_name = asset_data_cache[b'asset_name'].decode('utf-8')
         else:
-
+            # Fetch data from blockchain if not cached
             asset_contract_obj = current_node['web3_client'].eth.contract(
                 address=Web3.toChecksumAddress(asset_address),
                 abi=erc20_abi,
@@ -66,6 +71,7 @@ async def get_asset_metadata(
 
             tasks = []
 
+            # Special handling for MakerDAO token
             if Web3.toChecksumAddress(
                 worker_settings.contract_addresses.MAKER,
             ) == Web3.toChecksumAddress(asset_address):
@@ -73,10 +79,7 @@ async def get_asset_metadata(
                 asset_symbol = get_maker_pair_data('symbol')
                 tasks.append(asset_contract_obj.functions.decimals())
 
-                [
-                    asset_decimals,
-                ] = await rpc_helper.web3_call(tasks, redis_conn=redis_conn)
-
+                [asset_decimals] = await rpc_helper.web3_call(tasks, redis_conn=redis_conn)
             else:
                 tasks.append(asset_contract_obj.functions.decimals())
                 tasks.append(asset_contract_obj.functions.symbol())
@@ -87,6 +90,7 @@ async def get_asset_metadata(
                     asset_name,
                 ] = await rpc_helper.web3_call(tasks, redis_conn=redis_conn)
 
+            # Cache the fetched data
             await redis_conn.hset(
                 name=aave_asset_contract_data.format(asset_address),
                 mapping={
@@ -104,10 +108,9 @@ async def get_asset_metadata(
         }
 
     except Exception as err:
-        # this will be retried in next cycle
         helper_logger.opt(exception=True).error(
             (
-                f'RPC error while fetcing metadata for asset {asset_address},'
+                f'RPC error while fetching metadata for asset {asset_address},'
                 f' error_msg:{err}'
             ),
         )
@@ -119,10 +122,21 @@ async def get_pool_supply_events(
     from_block: int,
     to_block: int,
     redis_conn: aioredis.Redis,
-
 ):
-    try:
+    """
+    Retrieves pool supply events for a given block range.
 
+    Args:
+        rpc_helper (RpcHelper): RPC helper object.
+        from_block (int): Starting block number.
+        to_block (int): Ending block number.
+        redis_conn (aioredis.Redis): Redis connection object.
+
+    Returns:
+        dict: A dictionary of events indexed by block number.
+    """
+    try:
+        # Check if events are cached
         cached_event_dict = await redis_conn.zrangebyscore(
             name=aave_cached_block_height_core_event_data,
             min=int(from_block),
@@ -130,6 +144,7 @@ async def get_pool_supply_events(
         )
 
         if cached_event_dict:
+            # Return cached events if available
             event_dict = {
                 json.loads(event.decode('utf-8'))['blockHeight']:
                 [event for event in json.loads(event.decode('utf-8'))['events']]
@@ -139,12 +154,12 @@ async def get_pool_supply_events(
             return event_dict
 
         else:
+            # Fetch events from blockchain if not cached
             event_sig, event_abi = get_event_sig_and_abi(
                 AAVE_EVENT_SIGS,
                 AAVE_EVENTS_ABI,
             )
 
-            # events for all assets are emitted by the single pool contract when an action is taken
             events = await rpc_helper.get_events_logs(
                 contract_address=worker_settings.contract_addresses.aave_v3_pool,
                 to_block=to_block,
@@ -161,7 +176,7 @@ async def get_pool_supply_events(
                 event_dict[block_num] = [dict(event) for event in block_events]
 
             if len(event_dict) > 0:
-
+                # Cache the fetched events
                 redis_cache_mapping = {
                     Web3.to_json({'blockHeight': height, 'events': events}): int(height)
                     for height, events in event_dict.items()
@@ -169,7 +184,7 @@ async def get_pool_supply_events(
 
                 source_chain_epoch_size = int(await redis_conn.get(source_chain_epoch_size_key()))
 
-                # save all assets' event data in redis and remove stale events
+                # Save all assets' event data in redis and remove stale events
                 await asyncio.gather(
                     redis_conn.zadd(
                         name=aave_cached_block_height_core_event_data,
@@ -185,20 +200,28 @@ async def get_pool_supply_events(
             return event_dict
 
     except Exception as err:
-        # this will be retried in next cycle
         helper_logger.opt(exception=True).error(
             (
-                f'Error while fetcing Aave supply events in block range {from_block} : {to_block}'
+                f'Error while fetching Aave supply events in block range {from_block} : {to_block}'
             ),
         )
         raise err
 
 
 def get_maker_pair_data(prop):
+    """
+    Returns specific data for the Maker token.
+
+    Args:
+        prop (str): The property to retrieve ('name' or 'symbol').
+
+    Returns:
+        str: The requested property value.
+    """
     prop = prop.lower()
-    if prop.lower() == 'name':
+    if prop == 'name':
         return 'Maker'
-    elif prop.lower() == 'symbol':
+    elif prop == 'symbol':
         return 'MKR'
     else:
         return 'Maker'
@@ -210,9 +233,20 @@ async def get_bulk_asset_data(
     from_block: int,
     to_block: int,
 ):
-    try:
+    """
+    Retrieves bulk asset data for all assets in the Aave pool.
 
-        # check if asset set cache exist
+    Args:
+        redis_conn (aioredis.Redis): Redis connection object.
+        rpc_helper (RpcHelper): RPC helper object.
+        from_block (int): Starting block number.
+        to_block (int): Ending block number.
+
+    Returns:
+        dict: A dictionary containing asset data for all assets in the pool.
+    """
+    try:
+        # Check if asset set cache exists
         asset_list_set_cache = await redis_conn.smembers(
             aave_pool_asset_set_data,
         )
@@ -227,7 +261,7 @@ async def get_bulk_asset_data(
                 redis_conn=redis_conn,
             )
 
-            # save the asset set in redis for use in future epochs
+            # Save the asset set in redis for use in future epochs
             await redis_conn.sadd(
                 aave_pool_asset_set_data, *asset_list,
             )
@@ -238,10 +272,9 @@ async def get_bulk_asset_data(
         # PoolAddressProvider contract serves as a registry for the Aave protocol's core contracts
         # to be consumed by the Aave UI and the protocol's contracts
         param = Web3.toChecksumAddress(worker_settings.contract_addresses.pool_address_provider)
-
         function = ui_pool_data_provider_contract_obj.functions.getReservesData(param)
 
-        # generate types for abi decoding
+        # Generate types for abi decoding
         output_type = [
             str(
                 tuple(
@@ -273,15 +306,14 @@ async def get_bulk_asset_data(
         all_assets_data_dict = {asset: {} for asset in asset_set}
         all_assets_price_dict = {block_num: {} for block_num in range(from_block, to_block + 1)}
 
-        # iterate over the bulk asset data response and decode the data
+        # Iterate over the bulk asset data response and decode the data
         for i, block_num in enumerate(range(from_block, to_block + 1)):
             decoded_assets_data = abi.decode(
                 (type_string, output_type[1]), asset_data_bulk[i],
             )
 
-            # each data point in the response array represents a single asset
+            # Each data point in the response array represents a single asset
             for data in decoded_assets_data[0]:
-
                 asset = Web3.toChecksumAddress(data[0])
 
                 # full response interface can be found in the following github repo:
@@ -344,9 +376,8 @@ async def get_bulk_asset_data(
                     all_assets_data_dict[asset][block_num] = data_dict
                     all_assets_price_dict[block_num][asset] = asset_data['priceInMarketReferenceCurrency']
 
-        # cache each data dict for later retrieval by snapshotter during compute
+        # Cache each data dict for later retrieval by snapshotter during compute
         for address, data_dict in all_assets_data_dict.items():
-            # cache data at height
             if len(data_dict) > 0:
                 redis_data_cache_mapping = {
                     json.dumps({'blockHeight': height, 'data': data['asset_data']}): int(
@@ -416,7 +447,7 @@ async def get_bulk_asset_data(
                     ),
                 )
 
-        # cache asset prices by block number
+        # Cache asset prices by block number
         redis_data_cache_mapping = {
             json.dumps({'blockHeight': height, 'data': asset_prices}): int(
                 height,
@@ -439,19 +470,28 @@ async def get_bulk_asset_data(
         return all_assets_data_dict
 
     except Exception as err:
-        # this will be retried in next cycle
         helper_logger.opt(exception=True).error(
             (
-                f'RPC error while fetcing bulk asset data,'
+                f'RPC error while fetching bulk asset data,'
                 f' error_msg:{err}'
             ),
         )
         raise err
 
 
-
 # Normalizes the interest rate using the given index, and then applies the rate to the scaled value
 def calculate_current_from_scaled(scaled_value: int, interest_rate: int, index: int) -> int:
+    """
+    Calculates the current value from a scaled value using the given interest rate and index.
+
+    Args:
+        scaled_value (int): The scaled value.
+        interest_rate (int): The interest rate.
+        index (int): The index value.
+
+    Returns:
+        int: The calculated current value.
+    """
     normalized = calculate_normalized_value(
         interest_rate=interest_rate,
         index=index,
@@ -459,8 +499,8 @@ def calculate_current_from_scaled(scaled_value: int, interest_rate: int, index: 
     return rayMul(scaled_value, normalized)
 
 
-# multiply two ray values, rounding half up to the nearest ray
-# on-chain implementation here:
+# Multiply two ray values, rounding half up to the nearest ray
+# On-chain implementation here:
 # https://github.com/aave/aave-v3-core/blob/master/contracts/protocol/libraries/math/WadRayMath.sol#L65
 def rayMul(a: int, b: int) -> int:
     x = Decimal(str(a)) * Decimal(str(b))
@@ -470,7 +510,7 @@ def rayMul(a: int, b: int) -> int:
 
 
 # Divides two ray values, rounding half up to the nearest ray
-# on-chain implementation here:
+# On-chain implementation here:
 # https://github.com/aave/aave-v3-core/blob/master/contracts/protocol/libraries/math/WadRayMath.sol#L83
 def rayDiv(a: int, b: int) -> int:
     x = Decimal(str(b)) / Decimal(2)
@@ -479,8 +519,8 @@ def rayDiv(a: int, b: int) -> int:
     return int(z)
 
 
-# calculates the normalized interest rate value by multiplying the interest rate by the current rate index
-# example here: https://github.com/aave/aave-utilities/blob/master/packages/math-utils/src/pool-math.ts#L51
+# Calculates the normalized interest rate value by multiplying the interest rate by the current rate index
+# Example here: https://github.com/aave/aave-utilities/blob/master/packages/math-utils/src/pool-math.ts#L51
 def calculate_normalized_value(interest_rate: int, index: int) -> int:
     return rayMul(interest_rate, index)
 
@@ -493,13 +533,13 @@ def calculate_normalized_value(interest_rate: int, index: int) -> int:
 # https://github.com/aave/aave-v3-core/blob/master/contracts/protocol/libraries/math/MathUtils.sol#L50
 def calculate_compound_interest_rate(rate: int, current_timestamp: int, last_update_timestamp: int) -> int:
 
-    # get the time elapsed in seconds since last update, n in the formula
+    # Get the time elapsed in seconds since last update, n in the formula
     exp = current_timestamp - last_update_timestamp
 
-    # get the annualized rate per second, x in the formula
+    # Get the annualized rate per second, x in the formula
     base = Decimal(str(rate)) / Decimal(SECONDS_IN_YEAR)
 
-    # if the time elapsed is 0, return the base rate of 1
+    # If the time elapsed is 0, return the base rate of 1
     if exp == 0:
         return int(RAY)
 
@@ -508,13 +548,13 @@ def calculate_compound_interest_rate(rate: int, current_timestamp: int, last_upd
     # (n - 2)
     expMinusTwo = max(0, exp - 2)
 
-    # pre-calculate base^2, equivalent to x^2 in the formula: (rate / SECONDS_IN_YEAR)^2
+    # Pre-calculate base^2, equivalent to x^2 in the formula: (rate / SECONDS_IN_YEAR)^2
     basePowerTwo = rayMul(rate, rate) / Decimal(SECONDS_IN_YEAR * SECONDS_IN_YEAR)
 
-    # pre-calculate base^3, equivalent to x^3 in the formula
+    # Pre-calculate base^3, equivalent to x^3 in the formula
     basePowerThree = rayMul(basePowerTwo, base)
 
-    # calculate the first, second, and third terms of the binomial approximation
+    # Calculate the first, second, and third terms of the binomial approximation
     # n*x
     firstTerm = exp * base
     firstTerm = Decimal(str(firstTerm))
@@ -527,13 +567,13 @@ def calculate_compound_interest_rate(rate: int, current_timestamp: int, last_upd
     thirdTerm = exp * expMinusOne * expMinusTwo * basePowerThree
     thirdTerm = Decimal(str(thirdTerm)) / Decimal('6')
 
-    # calculate the total interest using the binomial approximation
+    # Calculate the total interest using the binomial approximation
     interest = Decimal(str(RAY)) + firstTerm + secondTerm + thirdTerm
 
     return int(interest)
 
 
-# converts a ray value to a float, rounding to 16 decimal places
+# Converts a ray value to a float, rounding to 16 decimal places
 def convert_from_ray(value: int) -> float:
     with localcontext() as ctx:
         ctx.prec = 16

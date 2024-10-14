@@ -17,6 +17,10 @@ from ..utils.models.message_models import AaveTopSupplyData
 
 
 class AggreagateTopAssetsProcessor(GenericProcessorAggregate):
+    """
+    Processor for aggregating top assets data across multiple Aave pools.
+    """
+
     transformation_lambdas = None
 
     def __init__(self) -> None:
@@ -32,8 +36,22 @@ class AggreagateTopAssetsProcessor(GenericProcessorAggregate):
         ipfs_reader: AsyncIPFSClient,
         protocol_state_contract,
         project_id: str,
-
     ):
+        """
+        Compute aggregated top assets data for Aave pools.
+
+        Args:
+            msg_obj (PowerloomCalculateAggregateMessage): Message object containing calculation details.
+            redis (aioredis.Redis): Redis connection.
+            rpc_helper (RpcHelper): RPC helper for the source chain.
+            anchor_rpc_helper (RpcHelper): RPC helper for the anchor chain.
+            ipfs_reader (AsyncIPFSClient): IPFS client for reading data.
+            protocol_state_contract: Contract for accessing protocol state.
+            project_id (str): ID of the project.
+
+        Returns:
+            AaveTopAssetsSnapshot: Aggregated top assets snapshot.
+        """
 
         self._logger.info(f'Calculating top asset data for {msg_obj}')
         epoch_id = msg_obj.epochId
@@ -41,12 +59,14 @@ class AggreagateTopAssetsProcessor(GenericProcessorAggregate):
         snapshot_mapping = {}
         projects_metadata = {}
 
+        # Fetch snapshot data for all messages
         snapshot_data = await get_submission_data_bulk(
             redis, [msg.snapshotCid for msg in msg_obj.messages], ipfs_reader, [
                 msg.projectId for msg in msg_obj.messages
             ],
         )
 
+        # Process snapshot data and fetch asset metadata
         for msg, data in zip(msg_obj.messages, snapshot_data):
             snapshot = AavePoolTotalAssetSnapshot.parse_obj(data)
             snapshot_mapping[msg.projectId] = snapshot
@@ -62,7 +82,7 @@ class AggreagateTopAssetsProcessor(GenericProcessorAggregate):
 
         asset_data = {}
 
-        # iterate over all snapshots and generate asset data
+        # Calculate asset data for each snapshot
         for snapshot_project_id in snapshot_mapping.keys():
             snapshot = snapshot_mapping[snapshot_project_id]
             asset_metadata = projects_metadata[snapshot_project_id]
@@ -71,6 +91,7 @@ class AggreagateTopAssetsProcessor(GenericProcessorAggregate):
 
             self._logger.info(f'Got meta data: {asset_metadata}')
 
+            # Initialize asset data
             asset_data[asset_metadata['address']] = {
                 'address': asset_metadata['address'],
                 'name': asset_metadata['name'],
@@ -78,6 +99,7 @@ class AggreagateTopAssetsProcessor(GenericProcessorAggregate):
                 'decimals': asset_metadata['decimals'],
             }
 
+            # Calculate APY and other metrics
             supply_apr = snapshot.liquidityRate[f'block{max_epoch_block}'] / RAY
             variable_apr = snapshot.variableBorrowRate[f'block{max_epoch_block}'] / RAY
 
@@ -91,6 +113,7 @@ class AggreagateTopAssetsProcessor(GenericProcessorAggregate):
                 10 ** int(asset_metadata['decimals'])
             )
 
+            # Populate asset data
             asset_data[asset_metadata['address']]['liquidityApy'] = supply_apy
             asset_data[asset_metadata['address']]['totalAToken'] = AaveTopSupplyData(
                 token_supply=token_supply_conv,
@@ -106,13 +129,16 @@ class AggreagateTopAssetsProcessor(GenericProcessorAggregate):
             isIsolated = snapshot.isolationModeTotalDebt[f'block{max_epoch_block}'] > 0
             asset_data[asset_metadata['address']]['isIsolated'] = isIsolated
 
+        # Create top assets list
         top_assets = []
         for asset in asset_data.values():
             self._logger.info(f'Got asset data: {asset}')
             top_assets.append(AaveTopAssetSnapshot.parse_obj(asset))
 
+        # Sort top assets by supply amount in USD
         top_assets = sorted(top_assets, key=lambda x: x.totalAToken.usd_supply, reverse=True)
 
+        # Create and return the final snapshot
         top_assets_snapshot = AaveTopAssetsSnapshot(
             epochId=epoch_id,
             assets=top_assets,

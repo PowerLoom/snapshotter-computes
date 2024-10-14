@@ -13,6 +13,10 @@ from ..utils.models.message_models import AavePoolTotalAssetSnapshot
 
 
 class AggreagateMarketStatsProcessor(GenericProcessorAggregate):
+    """
+    Processor for aggregating market statistics across multiple Aave pools.
+    """
+
     transformation_lambdas = None
 
     def __init__(self) -> None:
@@ -28,9 +32,22 @@ class AggreagateMarketStatsProcessor(GenericProcessorAggregate):
         ipfs_reader: AsyncIPFSClient,
         protocol_state_contract,
         project_id: str,
-
     ):
+        """
+        Compute aggregated market statistics for Aave pools.
 
+        Args:
+            msg_obj (PowerloomCalculateAggregateMessage): Message object containing calculation details.
+            redis (aioredis.Redis): Redis connection.
+            rpc_helper (RpcHelper): RPC helper for the source chain.
+            anchor_rpc_helper (RpcHelper): RPC helper for the anchor chain.
+            ipfs_reader (AsyncIPFSClient): IPFS client for reading data.
+            protocol_state_contract: Contract for accessing protocol state.
+            project_id (str): ID of the project.
+
+        Returns:
+            AaveMarketStatsSnapshot: Aggregated market statistics snapshot.
+        """
         self._logger.info(f'Calculating market stats for {msg_obj}')
 
         epoch_id = msg_obj.epochId
@@ -38,12 +55,14 @@ class AggreagateMarketStatsProcessor(GenericProcessorAggregate):
 
         snapshot_mapping = {}
 
+        # Fetch snapshot data for all messages
         snapshot_data = await get_submission_data_bulk(
             redis, [msg.snapshotCid for msg in msg_obj.messages], ipfs_reader, [
                 msg.projectId for msg in msg_obj.messages
             ],
         )
 
+        # Parse snapshot data
         for msg, data in zip(msg_obj.messages, snapshot_data):
             if not data:
                 self._logger.debug(f'Retrieved snapshot with no data: {msg}')
@@ -51,6 +70,7 @@ class AggreagateMarketStatsProcessor(GenericProcessorAggregate):
             snapshot = AavePoolTotalAssetSnapshot.parse_obj(data)
             snapshot_mapping[msg.projectId] = snapshot
 
+        # Initialize market data object
         stats_data = {
             'totalMarketSize': 0,
             'totalAvailable': 0,
@@ -60,7 +80,7 @@ class AggreagateMarketStatsProcessor(GenericProcessorAggregate):
             'borrowChange24h': 0,
         }
 
-        # iterate over all snapshots and generate asset data
+        # Calculate total market statistics
         for snapshot_project_id in snapshot_mapping.keys():
             snapshot = snapshot_mapping[snapshot_project_id]
             max_epoch_block = snapshot.chainHeightRange.end
@@ -70,7 +90,7 @@ class AggreagateMarketStatsProcessor(GenericProcessorAggregate):
             stats_data['totalBorrows'] += snapshot.totalVariableDebt[f'block{max_epoch_block}'].usd_debt
             stats_data['totalMarketSize'] += snapshot.totalAToken[f'block{max_epoch_block}'].usd_supply
 
-        # source project tail epoch
+        # Calculate 24-hour changes
         tail_epoch_id, extrapolated_flag = await get_tail_epoch_id(
             redis, protocol_state_contract, anchor_rpc_helper, msg_obj.epochId, 86400, project_id,
         )
@@ -83,7 +103,7 @@ class AggreagateMarketStatsProcessor(GenericProcessorAggregate):
             if previous_stats_snapshot_data:
                 previous_stats_snapshot = AaveMarketStatsSnapshot.parse_obj(previous_stats_snapshot_data)
 
-                # calculate change in percentage
+                # Calculate percentage changes
                 stats_data['marketChange24h'] = (stats_data['totalMarketSize'] - previous_stats_snapshot.totalMarketSize) / \
                     previous_stats_snapshot.totalMarketSize * 100
 
@@ -95,6 +115,7 @@ class AggreagateMarketStatsProcessor(GenericProcessorAggregate):
 
                 complete = True
 
+        # Create and return the final snapshot
         aave_market_stats_snapshot = AaveMarketStatsSnapshot(
             epochId=epoch_id,
             totalMarketSize=stats_data['totalMarketSize'],
@@ -104,7 +125,6 @@ class AggreagateMarketStatsProcessor(GenericProcessorAggregate):
             availableChange24h=stats_data['availableChange24h'],
             borrowChange24h=stats_data['borrowChange24h'],
             complete=complete,
-
         )
 
         self._logger.info(f'Got market stats data: {aave_market_stats_snapshot}')

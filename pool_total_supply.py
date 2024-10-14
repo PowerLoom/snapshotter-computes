@@ -16,6 +16,10 @@ from .utils.models.message_models import EpochBaseSnapshot
 
 
 class AssetTotalSupplyProcessor(GenericProcessorSnapshot):
+    """
+    Processor for computing total supply and related metrics for assets in the Aave protocol.
+    """
+
     transformation_lambdas = None
 
     def __init__(self) -> None:
@@ -27,14 +31,23 @@ class AssetTotalSupplyProcessor(GenericProcessorSnapshot):
         epoch: PowerloomSnapshotProcessMessage,
         redis_conn: aioredis.Redis,
         rpc_helper: RpcHelper,
-
     ) -> Optional[Dict[str, Union[int, float]]]:
+        """
+        Compute the total supply and related metrics for an asset over a given epoch.
 
+        Args:
+            epoch (PowerloomSnapshotProcessMessage): The epoch information.
+            redis_conn (aioredis.Redis): Redis connection for caching.
+            rpc_helper (RpcHelper): RPC helper for blockchain interactions.
+
+        Returns:
+            Optional[Dict[str, Union[int, float]]]: A snapshot of the asset's total supply and related metrics.
+        """
         min_chain_height = epoch.begin
         max_chain_height = epoch.end
-
         data_source_contract_address = epoch.data_source
 
+        # Initialize dictionaries to store snapshot data for each block in the epoch
         epoch_asset_snapshot_map_total_supply = dict()
         epoch_asset_snapshot_map_liquidity_rate = dict()
         epoch_asset_snapshot_map_liquidity_index = dict()
@@ -55,6 +68,8 @@ class AssetTotalSupplyProcessor(GenericProcessorSnapshot):
         max_block_timestamp = int(time.time())
 
         self._logger.debug(f'asset supply {data_source_contract_address} computation init time {time.time()}')
+        
+        # Fetch asset supply and debt data for the entire epoch
         asset_supply_debt_total: Dict[str, AssetTotalData] = await get_asset_supply_and_debt_bulk(
             asset_address=data_source_contract_address,
             from_block=min_chain_height,
@@ -64,10 +79,12 @@ class AssetTotalSupplyProcessor(GenericProcessorSnapshot):
             fetch_timestamp=True,
         )
 
+        # Process data for each block in the epoch
         for block_num in range(min_chain_height, max_chain_height + 1):
             block_asset_supply_debt = asset_supply_debt_total.get(block_num)
             fetch_ts = True if block_num == max_chain_height else False
 
+            # Populate snapshot maps with data for each block
             epoch_asset_snapshot_map_total_supply[
                 f'block{block_num}'
             ] = block_asset_supply_debt.totalSupply
@@ -108,6 +125,7 @@ class AssetTotalSupplyProcessor(GenericProcessorSnapshot):
                 f'block{block_num}'
             ] = block_asset_supply_debt.isolationModeTotalDebt
 
+            # Update max_block_timestamp if timestamp is available for the last block
             if fetch_ts:
                 if not block_asset_supply_debt.timestamp:
                     self._logger.error(
@@ -123,6 +141,8 @@ class AssetTotalSupplyProcessor(GenericProcessorSnapshot):
                     )
                 else:
                     max_block_timestamp = block_asset_supply_debt.timestamp
+
+        # Create the final snapshot object
         asset_total_snapshot = AavePoolTotalAssetSnapshot(
             **{
                 'totalAToken': epoch_asset_snapshot_map_total_supply,

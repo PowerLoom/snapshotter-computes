@@ -22,6 +22,10 @@ from ..utils.models.message_models import AavePoolTotalAssetSnapshot
 
 
 class AggreagateSingleAprProcessor(GenericProcessorAggregate):
+    """
+    Processor for aggregating APR data for a single Aave pool over a 6-hour period.
+    """
+
     transformation_lambdas = None
 
     def __init__(self) -> None:
@@ -32,10 +36,20 @@ class AggreagateSingleAprProcessor(GenericProcessorAggregate):
         self,
         previous_aggregate_snapshot: AaveAprAggregateSnapshot,
         current_snapshot: AavePoolTotalAssetSnapshot,
-        sample_size,
-    ):
+        sample_size: int,
+    ) -> tuple[AaveAprAggregateSnapshot, int]:
+        """
+        Add a new snapshot to the aggregate and update rolling averages.
 
-        # build averages and normalize values
+        Args:
+            previous_aggregate_snapshot (AaveAprAggregateSnapshot): The previous aggregate snapshot.
+            current_snapshot (AavePoolTotalAssetSnapshot): The current snapshot to add.
+            sample_size (int): The current sample size.
+
+        Returns:
+            tuple[AaveAprAggregateSnapshot, int]: Updated aggregate snapshot and new sample size.
+        """
+        # Build averages and normalize values
         current_liq_avg = sum(current_snapshot.liquidityRate.values()) / len(current_snapshot.liquidityRate.values())
         current_liq_avg /= RAY
 
@@ -51,37 +65,15 @@ class AggreagateSingleAprProcessor(GenericProcessorAggregate):
             [details.utilRate for details in current_snapshot.rateDetails.values()],
         ) / len(current_snapshot.rateDetails.values())
 
-        # increment rolling averages
-        previous_aggregate_snapshot.avgLiquidityRate = sample_size * \
-            previous_aggregate_snapshot.avgLiquidityRate + current_liq_avg
-        previous_aggregate_snapshot.avgLiquidityRate /= sample_size + 1
-        previous_aggregate_snapshot.avgLiquidityRate = truncate(
-            previous_aggregate_snapshot.avgLiquidityRate, 
-            5,
-        )
-
-        previous_aggregate_snapshot.avgVariableRate = sample_size * \
-            previous_aggregate_snapshot.avgVariableRate + current_variable_avg
-        previous_aggregate_snapshot.avgVariableRate /= sample_size + 1
-        previous_aggregate_snapshot.avgVariableRate = truncate(
-            previous_aggregate_snapshot.avgVariableRate,
-            5,
-        )
-
-        previous_aggregate_snapshot.avgStableRate = sample_size * previous_aggregate_snapshot.avgStableRate + current_stable_avg
-        previous_aggregate_snapshot.avgStableRate /= sample_size + 1
-        previous_aggregate_snapshot.avgStableRate = truncate(
-            previous_aggregate_snapshot.avgStableRate, 
-            5,
-        )
-
-        previous_aggregate_snapshot.avgUtilizationRate = sample_size * \
-            previous_aggregate_snapshot.avgUtilizationRate + current_util_avg
-        previous_aggregate_snapshot.avgUtilizationRate /= sample_size + 1
-        previous_aggregate_snapshot.avgUtilizationRate = truncate(
-            previous_aggregate_snapshot.avgUtilizationRate,
-            5,
-        )
+        # Increment rolling averages
+        previous_aggregate_snapshot.avgLiquidityRate = self._update_rolling_average(
+            previous_aggregate_snapshot.avgLiquidityRate, current_liq_avg, sample_size)
+        previous_aggregate_snapshot.avgVariableRate = self._update_rolling_average(
+            previous_aggregate_snapshot.avgVariableRate, current_variable_avg, sample_size)
+        previous_aggregate_snapshot.avgStableRate = self._update_rolling_average(
+            previous_aggregate_snapshot.avgStableRate, current_stable_avg, sample_size)
+        previous_aggregate_snapshot.avgUtilizationRate = self._update_rolling_average(
+            previous_aggregate_snapshot.avgUtilizationRate, current_util_avg, sample_size)
 
         sample_size += 1
 
@@ -91,10 +83,20 @@ class AggreagateSingleAprProcessor(GenericProcessorAggregate):
         self,
         previous_aggregate_snapshot: AaveAprAggregateSnapshot,
         current_snapshot: AavePoolTotalAssetSnapshot,
-        sample_size,
-    ):
+        sample_size: int,
+    ) -> tuple[AaveAprAggregateSnapshot, int]:
+        """
+        Remove a snapshot from the aggregate and update rolling averages.
 
-        # build averages and normalize values
+        Args:
+            previous_aggregate_snapshot (AaveAprAggregateSnapshot): The previous aggregate snapshot.
+            current_snapshot (AavePoolTotalAssetSnapshot): The snapshot to remove.
+            sample_size (int): The current sample size.
+
+        Returns:
+            tuple[AaveAprAggregateSnapshot, int]: Updated aggregate snapshot and new sample size.
+        """
+        # Build averages and normalize values
         current_liq_avg = sum(current_snapshot.liquidityRate.values()) / len(current_snapshot.liquidityRate.values())
         current_liq_avg /= RAY
 
@@ -110,41 +112,34 @@ class AggreagateSingleAprProcessor(GenericProcessorAggregate):
             [details.utilRate for details in current_snapshot.rateDetails.values()],
         ) / len(current_snapshot.rateDetails.values())
 
-        # decrement rolling averages
-        previous_aggregate_snapshot.avgLiquidityRate = sample_size * \
-            previous_aggregate_snapshot.avgLiquidityRate - current_liq_avg
-        previous_aggregate_snapshot.avgLiquidityRate /= sample_size - 1
-        previous_aggregate_snapshot.avgLiquidityRate = truncate(
-            previous_aggregate_snapshot.avgLiquidityRate, 
-            5,
-        )
-
-        previous_aggregate_snapshot.avgVariableRate = sample_size * \
-            previous_aggregate_snapshot.avgVariableRate - current_variable_avg
-        previous_aggregate_snapshot.avgVariableRate /= sample_size - 1
-        previous_aggregate_snapshot.avgVariableRate = truncate(
-            previous_aggregate_snapshot.avgVariableRate,
-            5,
-        )
-
-        previous_aggregate_snapshot.avgStableRate = sample_size * previous_aggregate_snapshot.avgStableRate - current_stable_avg
-        previous_aggregate_snapshot.avgStableRate /= sample_size - 1
-        previous_aggregate_snapshot.avgStableRate = truncate(
-            previous_aggregate_snapshot.avgStableRate, 
-            5,
-        )
-
-        previous_aggregate_snapshot.avgUtilizationRate = sample_size * \
-            previous_aggregate_snapshot.avgUtilizationRate - current_util_avg
-        previous_aggregate_snapshot.avgUtilizationRate /= sample_size - 1
-        previous_aggregate_snapshot.avgUtilizationRate = truncate(
-            previous_aggregate_snapshot.avgUtilizationRate,
-            5,
-        )
+        # Decrement rolling averages
+        previous_aggregate_snapshot.avgLiquidityRate = self._update_rolling_average(
+            previous_aggregate_snapshot.avgLiquidityRate, -current_liq_avg, sample_size - 1)
+        previous_aggregate_snapshot.avgVariableRate = self._update_rolling_average(
+            previous_aggregate_snapshot.avgVariableRate, -current_variable_avg, sample_size - 1)
+        previous_aggregate_snapshot.avgStableRate = self._update_rolling_average(
+            previous_aggregate_snapshot.avgStableRate, -current_stable_avg, sample_size - 1)
+        previous_aggregate_snapshot.avgUtilizationRate = self._update_rolling_average(
+            previous_aggregate_snapshot.avgUtilizationRate, -current_util_avg, sample_size - 1)
 
         sample_size -= 1
 
         return previous_aggregate_snapshot, sample_size
+
+    def _update_rolling_average(self, current_avg: float, new_value: float, sample_size: int) -> float:
+        """
+        Update a rolling average with a new value.
+
+        Args:
+            current_avg (float): The current average.
+            new_value (float): The new value to add to the average.
+            sample_size (int): The current sample size.
+
+        Returns:
+            float: The updated rolling average.
+        """
+        updated_avg = (current_avg * sample_size + new_value) / (sample_size + 1)
+        return truncate(updated_avg, 5)
 
     async def _calculate_from_scratch(
         self,
@@ -155,7 +150,22 @@ class AggreagateSingleAprProcessor(GenericProcessorAggregate):
         ipfs_reader: AsyncIPFSClient,
         protocol_state_contract,
         project_id: str,
-    ):
+    ) -> AaveAprAggregateSnapshot:
+        """
+        Calculate the aggregate APR snapshot from scratch.
+
+        Args:
+            msg_obj (PowerloomSnapshotSubmittedMessage): The snapshot submission message.
+            redis (aioredis.Redis): Redis connection.
+            rpc_helper (RpcHelper): RPC helper for the source chain.
+            anchor_rpc_helper (RpcHelper): RPC helper for the anchor chain.
+            ipfs_reader (AsyncIPFSClient): IPFS client for reading data.
+            protocol_state_contract: Contract for accessing protocol state.
+            project_id (str): ID of the project.
+
+        Returns:
+            AaveAprAggregateSnapshot: The calculated aggregate APR snapshot.
+        """
         calculate_from_scratch_in_progress = await redis.get(f'calculate_from_scratch:{project_id}')
         if calculate_from_scratch_in_progress:
             self._logger.info('calculate_from_scratch already in progress, skipping')
@@ -217,19 +227,32 @@ class AggreagateSingleAprProcessor(GenericProcessorAggregate):
         ipfs_reader: AsyncIPFSClient,
         protocol_state_contract,
         project_id: str,
+    ) -> AaveAprAggregateSnapshot:
+        """
+        Compute the aggregate APR snapshot for a 6-hour period.
 
-    ):
+        Args:
+            msg_obj (PowerloomSnapshotSubmittedMessage): The snapshot submission message.
+            redis (aioredis.Redis): Redis connection.
+            rpc_helper (RpcHelper): RPC helper for the source chain.
+            anchor_rpc_helper (RpcHelper): RPC helper for the anchor chain.
+            ipfs_reader (AsyncIPFSClient): IPFS client for reading data.
+            protocol_state_contract: Contract for accessing protocol state.
+            project_id (str): ID of the project.
 
+        Returns:
+            AaveAprAggregateSnapshot: The computed aggregate APR snapshot.
+        """
         self._logger.info(f'Calculating 6h asset apr data for {msg_obj}')
 
-        # aggregate project first epoch
+        # Get the first epoch for the project
         project_first_epoch = await get_project_first_epoch(
             redis, protocol_state_contract, anchor_rpc_helper, project_id,
         )
 
         self._logger.debug(f'Project first epoch is {project_first_epoch}')
 
-        # If no past snapshots exist, then aggregate will be current snapshot
+        # If no past snapshots exist, then aggregate will be calculated from scratch
         if project_first_epoch == 0:
             return await self._calculate_from_scratch(
                 msg_obj, redis, rpc_helper, anchor_rpc_helper, ipfs_reader, protocol_state_contract, project_id,
@@ -237,7 +260,7 @@ class AggreagateSingleAprProcessor(GenericProcessorAggregate):
         else:
             self._logger.info('project_first_epoch is not 0, building aggregate from previous aggregate')
 
-            # get key with highest score
+            # Fetch the most recent finalized data from Redis
             project_last_finalized = await redis.zrevrangebyscore(
                 project_finalized_data_zset(project_id),
                 max='+inf',
@@ -248,6 +271,7 @@ class AggreagateSingleAprProcessor(GenericProcessorAggregate):
             )
 
             if project_last_finalized:
+                # Extract the CID and epoch of the last finalized data
                 project_last_finalized_cid, project_last_finalized_epoch = project_last_finalized[0]
                 project_last_finalized_epoch = int(project_last_finalized_epoch)
                 project_last_finalized_cid = project_last_finalized_cid.decode('utf-8')
@@ -257,6 +281,7 @@ class AggreagateSingleAprProcessor(GenericProcessorAggregate):
                     msg_obj, redis, rpc_helper, anchor_rpc_helper, ipfs_reader, protocol_state_contract, project_id,
                 )
 
+            # Calculate the tail epoch (6 hours ago)
             tail_epoch_id, extrapolated_flag = await get_tail_epoch_id(
                 redis, protocol_state_contract, anchor_rpc_helper, msg_obj.epochId, 21600, msg_obj.projectId,
             )
@@ -266,12 +291,14 @@ class AggreagateSingleAprProcessor(GenericProcessorAggregate):
             else:
                 aggregate_complete_flag = True
 
+            # If the last finalized epoch is older than the tail epoch, recalculate from scratch
             if project_last_finalized_epoch <= tail_epoch_id:
                 self._logger.error('last finalized epoch is too old, building aggregate from scratch')
                 return await self._calculate_from_scratch(
                     msg_obj, redis, rpc_helper, anchor_rpc_helper, ipfs_reader, protocol_state_contract, project_id,
                 )
 
+            # Fetch the last finalized data
             project_last_finalized_data = await get_submission_data(
                 redis, project_last_finalized_cid, ipfs_reader, project_id,
             )
@@ -282,10 +309,12 @@ class AggreagateSingleAprProcessor(GenericProcessorAggregate):
                     msg_obj, redis, rpc_helper, anchor_rpc_helper, ipfs_reader, protocol_state_contract, project_id,
                 )
 
+            # Initialize the aggregate snapshot with the last finalized data
             aggregate_snapshot = AaveAprAggregateSnapshot.parse_obj(project_last_finalized_data)
-            # updating epochId to current epoch
+            # Update the epoch ID to the current epoch
             aggregate_snapshot.epochId = msg_obj.epochId
 
+            # Fetch the last finalized epoch for the base project
             base_project_last_finalized = await redis.zrevrangebyscore(
                 project_finalized_data_zset(msg_obj.projectId),
                 max='+inf',
@@ -301,8 +330,9 @@ class AggreagateSingleAprProcessor(GenericProcessorAggregate):
             else:
                 base_project_last_finalized_epoch = 0
 
+            # Fetch and process new snapshots since the last finalized data
             if base_project_last_finalized_epoch and project_last_finalized_epoch < base_project_last_finalized_epoch:
-                # fetch base finalized snapshots if they exist and are within 5 epochs of current epoch
+                # Fetch finalized snapshots between last processed and last available
                 base_finalized_snapshot_range = (
                     project_last_finalized_epoch + 1,
                     base_project_last_finalized_epoch,
@@ -316,6 +346,7 @@ class AggreagateSingleAprProcessor(GenericProcessorAggregate):
                 base_finalized_snapshots = []
                 base_finalized_snapshot_range = (0, project_last_finalized_epoch)
 
+            # Fetch unfinalized snapshots
             base_unfinalized_tasks = []
             for epoch_id in range(base_finalized_snapshot_range[1] + 1, msg_obj.epochId + 1):
                 base_unfinalized_tasks.append(
@@ -324,6 +355,7 @@ class AggreagateSingleAprProcessor(GenericProcessorAggregate):
 
             base_unfinalized_snapshots_raw = await asyncio.gather(*base_unfinalized_tasks, return_exceptions=True)
 
+            # Process unfinalized snapshots
             base_unfinalized_snapshots = []
             for snapshot_data in base_unfinalized_snapshots_raw:
                 # check if not exception and not None
@@ -349,18 +381,17 @@ class AggreagateSingleAprProcessor(GenericProcessorAggregate):
             source_chain_block_time = await get_source_chain_block_time(redis, protocol_state_contract, anchor_rpc_helper)
             epoch_time = source_chain_block_time * source_chain_epoch_size
 
-            # set sample size based on how many epochs have been processed
+            # Determine the sample size based on the last finalized data
             if last_finalized_extrapolated_flag:
-                # use derived sample size
+                # Use derived sample size
                 sample_size = project_last_finalized_epoch - last_finalized_tail + 1
-                self._logger.debug(f'using derived sample_size {sample_size} for {msg_obj.projectId}')
-
+                self._logger.debug(f'Using derived sample_size {sample_size} for {msg_obj.projectId}')
             else:
-                # use full sample size
+                # Use full sample size (6 hours worth of epochs)
                 sample_size = int(21600 / epoch_time) + 1
-                self._logger.debug(f'using base sample_size {sample_size} for {msg_obj.projectId}')
+                self._logger.debug(f'Using base sample_size {sample_size} for {msg_obj.projectId}')
 
-            # add new snapshots
+            # Process new snapshots and update the aggregate
             for snapshot_data in base_snapshots:
                 if snapshot_data:
                     snapshot = AavePoolTotalAssetSnapshot.parse_obj(snapshot_data)
@@ -368,9 +399,9 @@ class AggreagateSingleAprProcessor(GenericProcessorAggregate):
                         aggregate_snapshot, snapshot, sample_size,
                     )
                     aggregate_snapshot.timestamp = snapshot.timestamp
-                    self._logger.debug(f'added 1 to sample_size: {sample_size}')
+                    self._logger.debug(f'Added 1 to sample_size: {sample_size}')
 
-            # Remove from tail if needed
+            # Remove outdated snapshots from the tail if needed
             tail_epochs_to_remove = []
             for epoch_id in range(project_last_finalized_epoch, msg_obj.epochId):
                 tail_epoch_id, extrapolated_flag = await get_tail_epoch_id(
@@ -378,6 +409,7 @@ class AggreagateSingleAprProcessor(GenericProcessorAggregate):
                 )
                 if not extrapolated_flag:
                     tail_epochs_to_remove.append(tail_epoch_id)
+            
             if tail_epochs_to_remove:
                 tail_epoch_snapshots = await get_project_epoch_snapshot_bulk(
                     redis, protocol_state_contract, anchor_rpc_helper, ipfs_reader,
@@ -390,7 +422,7 @@ class AggreagateSingleAprProcessor(GenericProcessorAggregate):
                         aggregate_snapshot, sample_size = self._remove_aggregate_snapshot(
                             aggregate_snapshot, snapshot, sample_size,
                         )
-                        self._logger.debug(f'removed 1 from sample_size: {sample_size}')
+                        self._logger.debug(f'Removed 1 from sample_size: {sample_size}')
 
             self._logger.debug(f'Final sample size for {project_id}: {sample_size}')
 

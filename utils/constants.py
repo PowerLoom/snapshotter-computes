@@ -6,14 +6,15 @@ from web3 import Web3
 
 from ..settings.config import settings as worker_settings
 
+# Initialize logger for the constants module
 constants_logger = logger.bind(module='PowerLoom|Aave|Constants')
-# Getting current node
 
+# Initialize RPC helper and get current node
 rpc_helper = RpcHelper()
 rpc_helper.sync_init()
 current_node = rpc_helper.get_current_node()
 
-# LOAD AAVE ABIs
+# Load Aave contract ABIs
 pool_contract_abi = read_json_file(
     worker_settings.aave_contract_abis.pool_contract,
     constants_logger,
@@ -54,7 +55,7 @@ vaiable_debt_token_abi = read_json_file(
     constants_logger,
 )
 
-# Init Aave V3 Core contract Objects
+# Initialize Aave V3 Core contract objects
 pool_contract_obj = current_node['web3_client'].eth.contract(
     address=Web3.toChecksumAddress(
         worker_settings.contract_addresses.aave_v3_pool,
@@ -83,7 +84,7 @@ aave_oracle_contract_obj = current_node['web3_client'].eth.contract(
     abi=aave_oracle_abi,
 )
 
-# FUNCTION SIGNATURES and OTHER CONSTANTS
+# Define Aave event signatures and ABIs
 AAVE_EVENT_SIGS = {
     'Withdraw': 'Withdraw(address,address,address,uint256)',
     'Supply': 'Supply(address,address,address,uint256,uint16)',
@@ -100,7 +101,7 @@ AAVE_EVENTS_ABI = {
 }
 AAVE_CORE_EVENTS = ('Withdraw', 'Supply', 'Borrow', 'Repay')
 
-# AAVE Base 27 format
+# Aave Base 27 format constants
 RAY = 1000000000000000000000000000
 HALF_RAY = 500000000000000000000000000
 

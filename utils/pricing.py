@@ -27,12 +27,24 @@ async def get_asset_price_in_block_range(
     debug_log=True,
 ):
     """
-    returns the price of a token at a given block range
+    Retrieves the price of a token for a given block range.
+
+    Args:
+        asset_metadata (dict): Metadata of the asset.
+        from_block (int): Starting block number.
+        to_block (int): Ending block number.
+        redis_conn (aioredis.Redis): Redis connection object.
+        rpc_helper (RpcHelper): RPC helper object.
+        debug_log (bool): Flag to enable debug logging.
+
+    Returns:
+        dict: A dictionary mapping block numbers to asset prices.
     """
     try:
         asset_price_dict = dict()
         asset_address = Web3.to_checksum_address(asset_metadata['address'])
-        # check if cahce exist for given epoch
+        
+        # Check if cache exists for the given epoch
         cached_price_dict = await redis_conn.zrangebyscore(
             name=aave_cached_block_height_asset_price.format(
                 asset_address,
@@ -41,6 +53,7 @@ async def get_asset_price_in_block_range(
             max=int(to_block),
         )
 
+        # If cache exists and covers the entire block range, return the cached data
         if cached_price_dict and len(cached_price_dict) == to_block - (from_block - 1):
             price_dict = {
                 json.loads(
@@ -55,6 +68,7 @@ async def get_asset_price_in_block_range(
 
             return price_dict
 
+        # If cache doesn't exist or is incomplete, fetch prices from the blockchain
         abi_dict = get_contract_abi_dict(
             abi=aave_oracle_abi,
         )
@@ -69,7 +83,7 @@ async def get_asset_price_in_block_range(
             redis_conn=redis_conn,
         )
 
-        # all asset prices are returned in 8 decimal format
+        # Convert prices to 8 decimal format
         asset_usd_quote = [(quote[0] * (10 ** -8)) for quote in asset_usd_quote]
         for i, block_num in enumerate(range(from_block, to_block + 1)):
             asset_price_dict[block_num] = asset_usd_quote[i]
@@ -79,7 +93,7 @@ async def get_asset_price_in_block_range(
                 f"{asset_metadata['symbol']}: usd price is {asset_price_dict}",
             )
 
-        # cache price at height
+        # Cache prices at each block height
         if len(asset_price_dict) > 0:
             redis_cache_mapping = {
                 json.dumps({'blockHeight': height, 'price': price}): int(
@@ -92,7 +106,7 @@ async def get_asset_price_in_block_range(
                 name=aave_cached_block_height_asset_price.format(
                     Web3.to_checksum_address(asset_metadata['address']),
                 ),
-                mapping=redis_cache_mapping,  # timestamp so zset do not ignore same height on multiple heights
+                mapping=redis_cache_mapping,
             )
 
         return asset_price_dict
@@ -116,16 +130,28 @@ async def get_all_asset_prices(
     rpc_helper: RpcHelper,
     debug_log=True,
 ):
-    try:
+    """
+    Retrieves prices for all assets in the Aave pool for a given block range.
 
-        # asset prices are fetched and cached in the asset_data preloader
+    Args:
+        from_block (int): Starting block number.
+        to_block (int): Ending block number.
+        redis_conn (aioredis.Redis): Redis connection object.
+        rpc_helper (RpcHelper): RPC helper object.
+        debug_log (bool): Flag to enable debug logging.
+
+    Returns:
+        dict: A dictionary mapping block numbers to dictionaries of asset prices.
+    """
+    try:
+        # Check if cache exists for the given epoch
         cached_price_dict = await redis_conn.zrangebyscore(
             name=aave_cached_block_height_assets_prices,
             min=int(from_block),
             max=int(to_block),
         )
 
-        # return cached price data if it exists
+        # If cache exists and covers the entire block range, return the cached data
         if cached_price_dict and len(cached_price_dict) == to_block - (from_block - 1):
             all_assets_price_dict = {
                 json.loads(
@@ -140,7 +166,7 @@ async def get_all_asset_prices(
 
             return all_assets_price_dict
 
-        # check if asset set cache exist
+        # If cache doesn't exist or is incomplete, fetch asset list and prices from the blockchain
         asset_list_data_cache = await redis_conn.smembers(
             aave_pool_asset_set_data,
         )
@@ -148,8 +174,7 @@ async def get_all_asset_prices(
         if asset_list_data_cache:
             asset_list = [asset.decode('utf-8') for asset in asset_list_data_cache]
         else:
-            # if asset set does not exist, fetch it from the pool contract
-            # https://github.com/aave/aave-v3-core/blob/master/contracts/protocol/pool/Pool.sol#L516
+            # Fetch asset list from the pool contract if not cached
             [asset_list] = await rpc_helper.web3_call(
                 tasks=[pool_contract_obj.functions.getReservesList()],
                 redis_conn=redis_conn,
@@ -180,16 +205,16 @@ async def get_all_asset_prices(
                 f'Retrieved bulk prices for aave assets: {asset_prices_bulk}',
             )
 
+        # Organize prices by block number and asset address
         all_assets_price_dict = {block_num: {} for block_num in range(from_block, to_block + 1)}
 
-        # match each asset to its price for each block, prices are returned in the given order
         for i, block_num in enumerate(range(from_block, to_block + 1)):
             matches = zip(asset_list, asset_prices_bulk[i][0])
 
             for match in matches:
-                # all asset prices are returned with 8 decimal format
                 all_assets_price_dict[block_num][match[0]] = match[1]
 
+        # Cache the retrieved prices
         source_chain_epoch_size = await redis_conn.get(source_chain_epoch_size_key())
         source_chain_epoch_size = int(source_chain_epoch_size)
 
@@ -200,7 +225,7 @@ async def get_all_asset_prices(
             for height, asset_prices in all_assets_price_dict.items() if len(asset_prices) > 0
         }
 
-        # cache asset prices at each block height and remove stale data
+        # Cache asset prices at each block height and remove stale data
         await gather(
             redis_conn.zadd(
                 name=aave_cached_block_height_assets_prices,
