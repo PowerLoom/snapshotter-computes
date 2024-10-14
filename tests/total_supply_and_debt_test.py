@@ -61,7 +61,6 @@ async def test_total_supply_and_debt_calc():
         contract_address=pool_data_provider_contract_obj.address,
         from_block=from_block,
         to_block=to_block,
-        redis_conn=redis_conn,
         params=[asset_address],
     )
 

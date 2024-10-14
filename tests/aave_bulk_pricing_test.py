@@ -40,7 +40,6 @@ async def test_aave_oracle_bulk_pricing():
             to_block=to_block,
             function_name='getAssetPrice',
             params=[asset],
-            redis_conn=redis_conn,
         )
 
         asset_usd_quote = [(quote[0] * (10 ** -8)) for quote in asset_usd_quote]
