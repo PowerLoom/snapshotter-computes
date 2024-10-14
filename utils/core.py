@@ -62,7 +62,7 @@ async def get_asset_supply_and_debt_bulk(
     core_logger.debug(
         f'Starting bulk asset total supply query for: {asset_address}',
     )
-    asset_address = Web3.toChecksumAddress(asset_address)
+    asset_address = Web3.to_checksum_address(asset_address)
 
     # Fetch asset metadata
     asset_metadata = await get_asset_metadata(
@@ -306,7 +306,7 @@ async def get_asset_trade_volume(
     Returns:
         dict: A dictionary containing trade volume data for the asset.
     """
-    asset_address = Web3.toChecksumAddress(
+    asset_address = Web3.to_checksum_address(
         asset_address,
     )
     block_details_dict = dict()

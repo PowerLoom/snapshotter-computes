@@ -56,28 +56,28 @@ vaiable_debt_token_abi = read_json_file(
 
 # Initialize Aave V3 Core contract objects
 pool_contract_obj = current_node['web3_client'].eth.contract(
-    address=Web3.toChecksumAddress(
+    address=Web3.to_checksum_address(
         worker_settings.contract_addresses.aave_v3_pool,
     ),
     abi=pool_contract_abi,
 )
 
 pool_data_provider_contract_obj = current_node['web3_client'].eth.contract(
-    address=Web3.toChecksumAddress(
+    address=Web3.to_checksum_address(
         worker_settings.contract_addresses.pool_data_provider,
     ),
     abi=pool_data_provider_abi,
 )
 
 ui_pool_data_provider_contract_obj = current_node['web3_client'].eth.contract(
-    address=Web3.toChecksumAddress(
+    address=Web3.to_checksum_address(
         worker_settings.contract_addresses.ui_pool_data_provider,
     ),
     abi=ui_pool_data_provider_abi,
 )
 
 aave_oracle_contract_obj = current_node['web3_client'].eth.contract(
-    address=Web3.toChecksumAddress(
+    address=Web3.to_checksum_address(
         worker_settings.contract_addresses.aave_oracle,
     ),
     abi=aave_oracle_abi,

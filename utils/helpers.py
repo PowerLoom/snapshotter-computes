@@ -50,7 +50,7 @@ async def get_asset_metadata(
         dict: A dictionary containing asset metadata (address, decimals, symbol, name).
     """
     try:
-        asset_address = Web3.toChecksumAddress(asset_address)
+        asset_address = Web3.to_checksum_address(asset_address)
 
         # Check if cache exists
         asset_data_cache = await redis_conn.hgetall(
@@ -65,16 +65,16 @@ async def get_asset_metadata(
         else:
             # Fetch data from blockchain if not cached
             asset_contract_obj = current_node['web3_client'].eth.contract(
-                address=Web3.toChecksumAddress(asset_address),
+                address=Web3.to_checksum_address(asset_address),
                 abi=erc20_abi,
             )
 
             tasks = []
 
             # Special handling for MakerDAO token
-            if Web3.toChecksumAddress(
+            if Web3.to_checksum_address(
                 worker_settings.contract_addresses.MAKER,
-            ) == Web3.toChecksumAddress(asset_address):
+            ) == Web3.to_checksum_address(asset_address):
                 asset_name = get_maker_pair_data('name')
                 asset_symbol = get_maker_pair_data('symbol')
                 tasks.append(('decimals', []))
@@ -257,7 +257,7 @@ async def get_bulk_asset_data(
         )
 
         if asset_list_set_cache:
-            asset_set = {Web3.toChecksumAddress(asset.decode('utf-8')) for asset in asset_list_set_cache}
+            asset_set = {Web3.to_checksum_address(asset.decode('utf-8')) for asset in asset_list_set_cache}
         else:
             # if asset set does not exist, fetch it from the pool contract
             # https://github.com/aave/aave-v3-core/blob/master/contracts/protocol/pool/Pool.sol#L516
@@ -277,7 +277,7 @@ async def get_bulk_asset_data(
 
         # PoolAddressProvider contract serves as a registry for the Aave protocol's core contracts
         # to be consumed by the Aave UI and the protocol's contracts
-        param = Web3.toChecksumAddress(worker_settings.contract_addresses.pool_address_provider)
+        param = Web3.to_checksum_address(worker_settings.contract_addresses.pool_address_provider)
         function = ui_pool_data_provider_contract_obj.functions.getReservesData(param)
 
         # Generate types for abi decoding
@@ -319,7 +319,7 @@ async def get_bulk_asset_data(
 
             # Each data point in the response array represents a single asset
             for data in decoded_assets_data[0]:
-                asset = Web3.toChecksumAddress(data[0])
+                asset = Web3.to_checksum_address(data[0])
 
                 # full response interface can be found in the following github repo:
                 # https://github.com/aave/aave-v3-periphery/blob/master/contracts/misc/interfaces/IUiPoolDataProviderV3.sol#L17
