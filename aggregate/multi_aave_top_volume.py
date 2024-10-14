@@ -172,4 +172,3 @@ class AggreagateTopVolumeProcessor(GenericProcessorAggregate):
                 current_value = current_asset[total_key].totalUSD
                 change = (current_value - previous_value) / previous_value * 100
                 current_asset[f'{change_key}Change24h'] = change
-
