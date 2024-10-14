@@ -176,8 +176,9 @@ async def get_all_asset_prices(
         else:
             # Fetch asset list from the pool contract if not cached
             [asset_list] = await rpc_helper.web3_call(
-                tasks=[pool_contract_obj.functions.getReservesList()],
-                redis_conn=redis_conn,
+                tasks=[('getReservesList', [])],
+                contract_addr=pool_contract_obj.address,
+                abi=pool_contract_obj.abi,
             )
 
             await redis_conn.sadd(

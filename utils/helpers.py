@@ -77,18 +77,24 @@ async def get_asset_metadata(
             ) == Web3.toChecksumAddress(asset_address):
                 asset_name = get_maker_pair_data('name')
                 asset_symbol = get_maker_pair_data('symbol')
-                tasks.append(asset_contract_obj.functions.decimals())
+                tasks.append(('decimals', []))
 
-                [asset_decimals] = await rpc_helper.web3_call(tasks, redis_conn=redis_conn)
+                [asset_decimals] = await rpc_helper.web3_call(
+                    tasks=tasks,
+                    contract_addr=asset_contract_obj.address,
+                    abi=asset_contract_obj.abi,
+                )
             else:
-                tasks.append(asset_contract_obj.functions.decimals())
-                tasks.append(asset_contract_obj.functions.symbol())
-                tasks.append(asset_contract_obj.functions.name())
+                tasks.extend([('decimals', []), ('symbol', []), ('name', [])])
                 [
                     asset_decimals,
                     asset_symbol,
                     asset_name,
-                ] = await rpc_helper.web3_call(tasks, redis_conn=redis_conn)
+                ] = await rpc_helper.web3_call(
+                    tasks=tasks,
+                    contract_addr=asset_contract_obj.address,
+                    abi=asset_contract_obj.abi,
+                )
 
             # Cache the fetched data
             await redis_conn.hset(
@@ -166,7 +172,6 @@ async def get_pool_supply_events(
                 from_block=from_block,
                 topics=[event_sig],
                 event_abi=event_abi,
-                redis_conn=redis_conn,
             )
 
             event_dict = {}
@@ -257,8 +262,9 @@ async def get_bulk_asset_data(
             # if asset set does not exist, fetch it from the pool contract
             # https://github.com/aave/aave-v3-core/blob/master/contracts/protocol/pool/Pool.sol#L516
             [asset_list] = await rpc_helper.web3_call(
-                tasks=[pool_contract_obj.functions.getReservesList()],
-                redis_conn=redis_conn,
+                tasks=[('getReservesList', [])],
+                contract_addr=pool_contract_obj.address,
+                abi=pool_contract_obj.abi,
             )
 
             # Save the asset set in redis for use in future epochs
@@ -300,7 +306,6 @@ async def get_bulk_asset_data(
             to_block=to_block,
             function_name='getReservesData',
             params=[param],
-            redis_conn=redis_conn,
         )
 
         all_assets_data_dict = {asset: {} for asset in asset_set}
