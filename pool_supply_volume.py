@@ -19,10 +19,7 @@ class AssetSupplyVolumeProcessor(GenericProcessorSnapshot):
     Processor for computing supply volume and related metrics for assets in the Aave protocol.
     """
 
-    transformation_lambdas = None
-
     def __init__(self) -> None:
-        self.transformation_lambdas = []
         self._logger = logger.bind(module='AssetSupplyVolumeProcessor')
 
     async def compute(

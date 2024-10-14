@@ -20,10 +20,7 @@ class AssetTotalSupplyProcessor(GenericProcessorSnapshot):
     Processor for computing total supply and related metrics for assets in the Aave protocol.
     """
 
-    transformation_lambdas = None
-
     def __init__(self) -> None:
-        self.transformation_lambdas = []
         self._logger = logger.bind(module='AssetTotalSupplyProcessor')
 
     async def compute(

@@ -26,10 +26,7 @@ class AggreagateSingleAprProcessor(GenericProcessorAggregate):
     Processor for aggregating APR data for a single Aave pool over a 6-hour period.
     """
 
-    transformation_lambdas = None
-
     def __init__(self) -> None:
-        self.transformation_lambdas = []
         self._logger = logger.bind(module='AggregateSingleAprProcessor')
 
     def _add_aggregate_snapshot(

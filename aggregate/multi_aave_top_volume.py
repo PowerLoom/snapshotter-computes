@@ -19,10 +19,7 @@ class AggreagateTopVolumeProcessor(GenericProcessorAggregate):
     Processor for aggregating top volume data across multiple Aave pools.
     """
 
-    transformation_lambdas = None
-
     def __init__(self) -> None:
-        self.transformation_lambdas = []
         self._logger = logger.bind(module='AggregateTopVolumeProcessor')
 
     async def compute(

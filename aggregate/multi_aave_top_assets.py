@@ -21,10 +21,7 @@ class AggreagateTopAssetsProcessor(GenericProcessorAggregate):
     Processor for aggregating top assets data across multiple Aave pools.
     """
 
-    transformation_lambdas = None
-
     def __init__(self) -> None:
-        self.transformation_lambdas = []
         self._logger = logger.bind(module='AggregateTopAssetsProcessor')
 
     async def compute(
