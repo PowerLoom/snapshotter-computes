@@ -8,10 +8,10 @@ from snapshotter.utils.default_logger import logger
 from snapshotter.utils.models.message_models import PowerloomCalculateAggregateMessage
 from snapshotter.utils.rpc import RpcHelper
 
-from ..utils.helpers import get_asset_metadata
-from ..utils.models.message_models import AaveTopAssetsVolumeSnapshot
-from ..utils.models.message_models import AaveTopAssetVolumeSnapshot
-from ..utils.models.message_models import AaveVolumeAggregateSnapshot
+from computes.utils.helpers import get_asset_metadata
+from computes.utils.models.message_models import AaveTopAssetsVolumeSnapshot
+from computes.utils.models.message_models import AaveTopAssetVolumeSnapshot
+from computes.utils.models.message_models import AaveVolumeAggregateSnapshot
 
 
 class AggreagateTopVolumeProcessor(GenericProcessorAggregate):
@@ -172,3 +172,4 @@ class AggreagateTopVolumeProcessor(GenericProcessorAggregate):
                 current_value = current_asset[total_key].totalUSD
                 change = (current_value - previous_value) / previous_value * 100
                 current_asset[f'{change_key}Change24h'] = change
+

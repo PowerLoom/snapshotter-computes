@@ -8,12 +8,12 @@ from snapshotter.utils.rpc import get_contract_abi_dict
 from snapshotter.utils.rpc import RpcHelper
 from web3 import Web3
 
-from ..redis_keys import aave_cached_block_height_asset_price
-from ..redis_keys import aave_cached_block_height_assets_prices
-from ..redis_keys import aave_pool_asset_set_data
-from ..settings.config import settings as worker_settings
-from .constants import aave_oracle_abi
-from .constants import pool_contract_obj
+from computes.redis_keys import aave_cached_block_height_asset_price
+from computes.redis_keys import aave_cached_block_height_assets_prices
+from computes.redis_keys import aave_pool_asset_set_data
+from computes.settings.config import settings as worker_settings
+from computes.utils.constants import aave_oracle_abi
+from computes.utils.constants import pool_contract_obj
 
 pricing_logger = logger.bind(module='PowerLoom|Aave|Pricing')
 

@@ -6,10 +6,10 @@ from snapshotter.utils.rpc import get_contract_abi_dict
 from snapshotter.utils.rpc import RpcHelper
 from web3 import Web3
 
-from ..utils.constants import pool_data_provider_contract_obj
-from ..utils.core import get_asset_supply_and_debt_bulk
-from ..utils.helpers import get_bulk_asset_data
-from ..utils.models.data_models import DataProviderReserveData
+from computes.utils.constants import pool_data_provider_contract_obj
+from computes.utils.core import get_asset_supply_and_debt_bulk
+from computes.utils.helpers import get_bulk_asset_data
+from computes.utils.models.data_models import DataProviderReserveData
 
 
 async def test_total_supply_and_debt_calc():

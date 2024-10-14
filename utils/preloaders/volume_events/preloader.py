@@ -1,5 +1,5 @@
 from redis import asyncio as aioredis
-from snapshotter.modules.computes.utils.helpers import get_pool_supply_events
+from computes.utils.helpers import get_pool_supply_events
 from snapshotter.utils.callback_helpers import GenericPreloader
 from snapshotter.utils.default_logger import logger
 from snapshotter.utils.models.message_models import EpochBase

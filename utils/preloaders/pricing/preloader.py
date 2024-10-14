@@ -4,7 +4,7 @@ from snapshotter.utils.default_logger import logger
 from snapshotter.utils.models.message_models import EpochBase
 from snapshotter.utils.rpc import RpcHelper
 
-from ....utils.pricing import get_all_asset_prices
+from computes.utils.pricing import get_all_asset_prices
 
 
 class BulkPricePreloader(GenericPreloader):

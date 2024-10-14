@@ -5,9 +5,9 @@ from snapshotter.utils.redis.redis_conn import RedisPoolCache
 from snapshotter.utils.redis.redis_keys import source_chain_epoch_size_key
 from snapshotter.utils.rpc import RpcHelper
 
-from ..pool_total_supply import AssetTotalSupplyProcessor
-from ..utils.helpers import get_bulk_asset_data
-from ..utils.models.message_models import AavePoolTotalAssetSnapshot
+from computes.pool_total_supply import AssetTotalSupplyProcessor
+from computes.utils.helpers import get_bulk_asset_data
+from computes.utils.models.message_models import AavePoolTotalAssetSnapshot
 
 
 async def test_total_supply_processor():

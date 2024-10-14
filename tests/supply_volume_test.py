@@ -5,8 +5,8 @@ from snapshotter.utils.redis.redis_conn import RedisPoolCache
 from snapshotter.utils.redis.redis_keys import source_chain_epoch_size_key
 from snapshotter.utils.rpc import RpcHelper
 
-from ..pool_supply_volume import AssetSupplyVolumeProcessor
-from ..utils.models.message_models import AaveSupplyVolumeSnapshot
+from computes.pool_supply_volume import AssetSupplyVolumeProcessor
+from computes.utils.models.message_models import AaveSupplyVolumeSnapshot
 
 
 async def test_total_supply_processor():

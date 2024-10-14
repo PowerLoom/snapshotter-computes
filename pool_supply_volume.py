@@ -9,9 +9,9 @@ from snapshotter.utils.default_logger import logger
 from snapshotter.utils.models.message_models import PowerloomSnapshotProcessMessage
 from snapshotter.utils.rpc import RpcHelper
 
-from .utils.core import get_asset_trade_volume
-from .utils.models.message_models import AaveSupplyVolumeSnapshot
-from .utils.models.message_models import EpochBaseSnapshot
+from computes.utils.core import get_asset_trade_volume
+from computes.utils.models.message_models import AaveSupplyVolumeSnapshot
+from computes.utils.models.message_models import EpochBaseSnapshot
 
 
 class AssetSupplyVolumeProcessor(GenericProcessorSnapshot):

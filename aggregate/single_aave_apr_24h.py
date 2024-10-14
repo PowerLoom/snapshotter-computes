@@ -10,8 +10,8 @@ from snapshotter.utils.data_utils import get_tail_epoch_id
 from snapshotter.utils.default_logger import logger
 from snapshotter.utils.models.message_models import PowerloomSnapshotSubmittedMessage
 from snapshotter.utils.rpc import RpcHelper
-from ..utils.helpers import truncate
-from ..utils.models.message_models import AaveAprAggregateSnapshot
+from computes.utils.helpers import truncate
+from computes.utils.models.message_models import AaveAprAggregateSnapshot
 
 
 class AggreagateSingleAprProcessor(GenericProcessorAggregate):

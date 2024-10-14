@@ -4,12 +4,12 @@ from typing import List
 from pydantic import BaseModel
 from snapshotter.utils.models.message_models import AggregateBase
 
-from .data_models import AaveDebtData
-from .data_models import AaveSupplyData
-from .data_models import AssetDetailsData
-from .data_models import liquidationData
-from .data_models import RateDetailsData
-from .data_models import volumeData
+from computes.utils.models.data_models import AaveDebtData
+from computes.utils.models.data_models import AaveSupplyData
+from computes.utils.models.data_models import AssetDetailsData
+from computes.utils.models.data_models import liquidationData
+from computes.utils.models.data_models import RateDetailsData
+from computes.utils.models.data_models import volumeData
 
 
 class EpochBaseSnapshot(BaseModel):

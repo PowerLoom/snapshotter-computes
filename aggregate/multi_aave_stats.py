@@ -8,8 +8,8 @@ from snapshotter.utils.default_logger import logger
 from snapshotter.utils.models.message_models import PowerloomCalculateAggregateMessage
 from snapshotter.utils.rpc import RpcHelper
 
-from ..utils.models.message_models import AaveMarketStatsSnapshot
-from ..utils.models.message_models import AavePoolTotalAssetSnapshot
+from computes.utils.models.message_models import AaveMarketStatsSnapshot
+from computes.utils.models.message_models import AavePoolTotalAssetSnapshot
 
 
 class AggreagateMarketStatsProcessor(GenericProcessorAggregate):

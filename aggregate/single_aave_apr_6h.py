@@ -15,10 +15,10 @@ from snapshotter.utils.models.message_models import PowerloomSnapshotSubmittedMe
 from snapshotter.utils.redis.redis_keys import project_finalized_data_zset
 from snapshotter.utils.redis.redis_keys import submitted_base_snapshots_key
 from snapshotter.utils.rpc import RpcHelper
-from ..utils.helpers import truncate
-from ..utils.constants import RAY
-from ..utils.models.message_models import AaveAprAggregateSnapshot
-from ..utils.models.message_models import AavePoolTotalAssetSnapshot
+from computes.utils.helpers import truncate
+from computes.utils.constants import RAY
+from computes.utils.models.message_models import AaveAprAggregateSnapshot
+from computes.utils.models.message_models import AavePoolTotalAssetSnapshot
 
 
 class AggreagateSingleAprProcessor(GenericProcessorAggregate):

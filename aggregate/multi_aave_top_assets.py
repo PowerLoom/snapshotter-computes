@@ -6,14 +6,14 @@ from snapshotter.utils.default_logger import logger
 from snapshotter.utils.models.message_models import PowerloomCalculateAggregateMessage
 from snapshotter.utils.rpc import RpcHelper
 
-from ..utils.constants import RAY
-from ..utils.constants import SECONDS_IN_YEAR
-from ..utils.helpers import get_asset_metadata
-from ..utils.models.message_models import AavePoolTotalAssetSnapshot
-from ..utils.models.message_models import AaveTopAssetSnapshot
-from ..utils.models.message_models import AaveTopAssetsSnapshot
-from ..utils.models.message_models import AaveTopDebtData
-from ..utils.models.message_models import AaveTopSupplyData
+from computes.utils.constants import RAY
+from computes.utils.constants import SECONDS_IN_YEAR
+from computes.utils.helpers import get_asset_metadata
+from computes.utils.models.message_models import AavePoolTotalAssetSnapshot
+from computes.utils.models.message_models import AaveTopAssetSnapshot
+from computes.utils.models.message_models import AaveTopAssetsSnapshot
+from computes.utils.models.message_models import AaveTopDebtData
+from computes.utils.models.message_models import AaveTopSupplyData
 
 
 class AggreagateTopAssetsProcessor(GenericProcessorAggregate):

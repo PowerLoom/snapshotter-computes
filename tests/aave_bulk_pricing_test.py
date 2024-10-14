@@ -4,9 +4,9 @@ from snapshotter.utils.redis.redis_conn import RedisPoolCache
 from snapshotter.utils.rpc import get_contract_abi_dict
 from snapshotter.utils.rpc import RpcHelper
 
-from ..settings.config import settings as worker_settings
-from ..utils.constants import aave_oracle_abi
-from ..utils.pricing import get_all_asset_prices
+from computes.settings.config import settings as worker_settings
+from computes.utils.constants import aave_oracle_abi
+from computes.utils.pricing import get_all_asset_prices
 
 
 async def test_aave_oracle_bulk_pricing():

@@ -4,8 +4,8 @@ from snapshotter.utils.redis.redis_conn import RedisPoolCache
 from snapshotter.utils.rpc import RpcHelper
 from web3 import Web3
 
-from ..utils.helpers import get_asset_metadata
-from ..utils.pricing import get_asset_price_in_block_range
+from computes.utils.helpers import get_asset_metadata
+from computes.utils.pricing import get_asset_price_in_block_range
 
 
 async def test_aave_oracle_pricing():

@@ -12,23 +12,23 @@ from snapshotter.utils.rpc import get_event_sig_and_abi
 from snapshotter.utils.rpc import RpcHelper
 from web3 import Web3
 
-from ..redis_keys import aave_asset_contract_data
-from ..redis_keys import aave_cached_block_height_asset_data
-from ..redis_keys import aave_cached_block_height_asset_details
-from ..redis_keys import aave_cached_block_height_asset_rate_details
-from ..redis_keys import aave_cached_block_height_assets_prices
-from ..redis_keys import aave_cached_block_height_core_event_data
-from ..redis_keys import aave_pool_asset_set_data
-from ..settings.config import settings as worker_settings
-from .constants import AAVE_EVENT_SIGS
-from .constants import AAVE_EVENTS_ABI
-from .constants import current_node
-from .constants import erc20_abi
-from .constants import HALF_RAY
-from .constants import pool_contract_obj
-from .constants import RAY
-from .constants import SECONDS_IN_YEAR
-from .constants import ui_pool_data_provider_contract_obj
+from computes.redis_keys import aave_asset_contract_data
+from computes.redis_keys import aave_cached_block_height_asset_data
+from computes.redis_keys import aave_cached_block_height_asset_details
+from computes.redis_keys import aave_cached_block_height_asset_rate_details
+from computes.redis_keys import aave_cached_block_height_assets_prices
+from computes.redis_keys import aave_cached_block_height_core_event_data
+from computes.redis_keys import aave_pool_asset_set_data
+from computes.settings.config import settings as worker_settings
+from computes.utils.constants import AAVE_EVENT_SIGS
+from computes.utils.constants import AAVE_EVENTS_ABI
+from computes.utils.constants import current_node
+from computes.utils.constants import erc20_abi
+from computes.utils.constants import HALF_RAY
+from computes.utils.constants import pool_contract_obj
+from computes.utils.constants import RAY
+from computes.utils.constants import SECONDS_IN_YEAR
+from computes.utils.constants import ui_pool_data_provider_contract_obj
 
 
 helper_logger = logger.bind(module='PowerLoom|Aave|Helpers')
