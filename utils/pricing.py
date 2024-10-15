@@ -80,7 +80,6 @@ async def get_asset_price_in_block_range(
             to_block=to_block,
             function_name='getAssetPrice',
             params=[asset_address],
-            redis_conn=redis_conn,
         )
 
         # Convert prices to 8 decimal format
@@ -198,7 +197,6 @@ async def get_all_asset_prices(
             to_block=to_block,
             function_name='getAssetsPrices',
             params=[asset_list],
-            redis_conn=redis_conn,
         )
 
         if debug_log:
