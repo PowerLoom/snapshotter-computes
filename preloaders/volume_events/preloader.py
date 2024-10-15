@@ -47,6 +47,7 @@ class AaveBulkVolumeEventsPreloader(GenericPreloader):
             )
         except Exception as e:
             self._logger.error(f'Error in Bulk Volume Event preloader: {e}')
+            raise e
         finally:
             # Ensure Redis connection is closed even if an exception occurs
             await redis_conn.close()
