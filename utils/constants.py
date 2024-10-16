@@ -106,7 +106,7 @@ UNISWAP_EVENTS_ABI = {
 
 # Define token decimals for common tokens
 TOKENS_DECIMALS = {
-    worker_settings.contract_addresses.USDT: 6,
+    worker_settings.contract_addresses.USDbC: 6,
     worker_settings.contract_addresses.DAI: 18,
     worker_settings.contract_addresses.USDC: 6,
     worker_settings.contract_addresses.WETH: 18,
@@ -115,6 +115,6 @@ TOKENS_DECIMALS = {
 # List of stable tokens
 STABLE_TOKENS_LIST = [
     worker_settings.contract_addresses.USDC,
-    worker_settings.contract_addresses.USDT,
+    worker_settings.contract_addresses.USDbC,
     worker_settings.contract_addresses.DAI,
 ]
