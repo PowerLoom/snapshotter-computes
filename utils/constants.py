@@ -77,13 +77,6 @@ helper_contract = current_node['web3_client'].eth.contract(
     ), abi=helper_contract_abi,
 )
 
-# Initialize Uniswap V3 Core contract objects
-router_contract_obj = current_node['web3_client'].eth.contract(
-    address=Web3.to_checksum_address(
-        worker_settings.contract_addresses.uniswap_v3_router,
-    ),
-    abi=router_contract_abi,
-)
 factory_contract_obj = current_node['web3_client'].eth.contract(
     address=Web3.to_checksum_address(
         worker_settings.contract_addresses.uniswap_v3_factory,
