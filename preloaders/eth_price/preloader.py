@@ -39,7 +39,7 @@ class EthPricePreloader(GenericPreloader):
         }
         # Load pair contract ABI
         self.pair_contract_abi = read_json_file(
-            worker_settings.uniswap_contract_abis.pair_contract_v3,
+            worker_settings.uniswap_contract_abis.pair_contract,
             self._logger,
         )
 
