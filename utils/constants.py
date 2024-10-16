@@ -48,10 +48,6 @@ erc20_abi = read_json_file(
     worker_settings.uniswap_contract_abis.erc20,
     constants_logger,
 )
-router_contract_abi = read_json_file(
-    worker_settings.uniswap_contract_abis.router,
-    constants_logger,
-)
 uniswap_trade_events_abi = read_json_file(
     worker_settings.uniswap_contract_abis.trade_events,
     constants_logger,
