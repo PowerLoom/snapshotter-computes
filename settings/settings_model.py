@@ -6,29 +6,22 @@ from pydantic import Field
 
 
 class UniswapContractAbis(BaseModel):
-    factory: str = Field(...)
-    router: str = Field(...)
-    pair_contract: str = Field(...)
-    erc20: str = Field(...)
-    trade_events: str = Field(...)
+    factory: str
+    pair_contract: str
+    erc20: str
+    trade_events: str
 
 
 class ContractAddresses(BaseModel):
-    iuniswap_v2_factory: str = Field(...)
-    iuniswap_v2_router: str = Field(...)
-    MAKER: str = Field(...)
-    USDT: str = Field(...)
-    DAI: str = Field(...)
-    USDC: str = Field(...)
-    WETH: str = Field(...)
-    WETH_USDT: str = Field(...)
-    FRAX: str = Field(...)
-    SYN: str = Field(...)
-    FEI: str = Field(...)
-    agEUR: str = Field(...)
-    DAI_WETH_PAIR: str = Field(...)
-    USDC_WETH_PAIR: str = Field(...)
-    USDT_WETH_PAIR: str = Field(...)
+    uniswap_v3_factory: str
+    DAI_WETH_PAIR: str
+    USDC_WETH_PAIR: str
+    USDT_WETH_PAIR: str
+    WETH: str
+    MAKER: str
+    USDC: str
+    USDT: str
+    DAI: str
 
 
 class Settings(BaseModel):
