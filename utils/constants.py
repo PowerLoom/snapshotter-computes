@@ -97,19 +97,6 @@ pool_contract_obj = current_node['web3_client'].eth.contract(
     abi=pair_contract_abi,
 )
 
-# Initialize 1inch quoter contract
-quoter_1inch_contract_abi = read_json_file(
-    'computes/static/abis/OneInchQuoter.json',
-    constants_logger,
-)
-
-quoter_1inch_contract_obj = current_node['web3_client'].eth.contract(
-    address=Web3.to_checksum_address(
-        worker_settings.contract_addresses.QUOTER_1INCH,
-    ),
-    abi=quoter_1inch_contract_abi,
-)
-
 # Define Uniswap trade event signatures
 UNISWAP_TRADE_EVENT_SIGS = {
     'Swap': 'Swap(address,address,int256,int256,uint160,uint128,int24)',

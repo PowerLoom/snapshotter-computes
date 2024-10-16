@@ -4,10 +4,6 @@
       
       "uniswap_v3_router": "0xE592427A0AEce92De3Edee1F18E0157C05861564",
       
-      "uniswap_v3_quoter": "0xb27308f9F90D607463bb33eA1BeBb41C27CE5AB6",
-      
-      "uniswap_v3_multicall": "0x5BA1e12693Dc8F9c48aAD8770482f4739bEeD696",
-      
       "DAI_WETH_PAIR": "0xC2eFb029Ed7EeCd775C21b53Fa594D5dA2D3febb",
       
       "USDC_WETH_PAIR": "0x8ad599c3A0ff1De082011EFDDc58f1908eb6e6D8",
@@ -17,8 +13,6 @@
       "WETH": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
       
       "MAKER": "0x9f8F72aA9304c8B593d555F12eF6589cC3A579A2",
-      
-      "QUOTER_1INCH": "0x07D91f5fb9Bf7798734C3f606dB065549F6893bb",
 
       "USDC": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
 
@@ -30,12 +24,6 @@
       "factory": "computes/static/abis/IUniswapV3Factory.json",
       
       "router": "computes/static/abis/UniswapV3Router.json",
-      
-      "quoter": "computes/static/abis/Quoter.json",
-      
-      "multicall": "computes/static/abis/UniswapV3Multicall.json",
-      
-      "quoter_1inch": "computes/static/abis/OneInchQuoter.json",
 
       "trade_events": "computes/static/abis/UniswapTradeEvents.json",
 
