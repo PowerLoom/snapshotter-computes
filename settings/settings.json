@@ -2,8 +2,6 @@
   "contract_addresses": {
       "uniswap_v3_factory": "0x1F98431c8aD98523631AE4a59f267346ea31F984",
       
-      "uniswap_v3_router": "0xE592427A0AEce92De3Edee1F18E0157C05861564",
-      
       "DAI_WETH_PAIR": "0xC2eFb029Ed7EeCd775C21b53Fa594D5dA2D3febb",
       
       "USDC_WETH_PAIR": "0x8ad599c3A0ff1De082011EFDDc58f1908eb6e6D8",
@@ -22,8 +20,6 @@
   },
   "uniswap_contract_abis": {
       "factory": "computes/static/abis/IUniswapV3Factory.json",
-      
-      "router": "computes/static/abis/UniswapV3Router.json",
 
       "trade_events": "computes/static/abis/UniswapTradeEvents.json",
 
