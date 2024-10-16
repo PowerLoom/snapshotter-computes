@@ -217,6 +217,7 @@ class EthPricePreloader(GenericPreloader):
         except Exception as e:
             # Log any errors that occur during price fetching
             self._logger.error(f'Error in Eth Price preloader: {e}')
+            raise e
         finally:
             # Ensure Redis connection is closed after operation
             await redis_conn.close()
