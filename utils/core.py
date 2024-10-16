@@ -8,9 +8,8 @@ from snapshotter.utils.rpc import RpcHelper
 from snapshotter.utils.snapshot_utils import get_block_details_in_block_range
 from web3 import Web3
 
-from snapshotter.modules.computes.total_value_locked import calculate_reserves
-from snapshotter.modules.computes.total_value_locked import get_events
-from snapshotter.modules.computes.total_value_locked import get_tick_info
+from snapshotter.modules.computes.utils.total_value_locked import calculate_reserves
+from snapshotter.modules.computes.utils.total_value_locked import get_events
 from snapshotter.modules.computes.utils.constants import UNISWAP_EVENTS_ABI
 from snapshotter.modules.computes.utils.constants import UNISWAP_TRADE_EVENT_SIGS
 from snapshotter.modules.computes.utils.constants import UNISWAPV3_FEE_DIV
@@ -28,6 +27,7 @@ async def get_pair_reserves(
     from_block,
     to_block,
     rpc_helper: RpcHelper,
+    eth_price_dict: dict,
     fetch_timestamp=False,
 ):
     """
@@ -336,6 +336,7 @@ async def get_pair_trade_volume(
     min_chain_height,
     max_chain_height,
     rpc_helper: RpcHelper,
+    eth_price_dict: dict,
     fetch_timestamp=True,
 ):
     """
@@ -518,139 +519,3 @@ async def get_pair_trade_volume(
     epoch_trade_logs.update({'timestamp': max_block_timestamp})
     core_logger.debug(f'epoch_trade_logs: {epoch_trade_logs}')
     return epoch_trade_logs
-
-
-async def get_liquidity_depth(
-    pair_address,
-    from_block,
-    to_block,
-    rpc_helper: RpcHelper,
-    fetch_timestamp=False,
-):
-    """
-    Calculate liquidity depth for a Uniswap pair over a block range.
-
-    Args:
-        pair_address (str): The address of the Uniswap pair contract.
-        from_block (int): The starting block number.
-        to_block (int): The ending block number.
-        rpc_helper (RpcHelper): RPC helper for blockchain interactions.
-        fetch_timestamp (bool): Whether to fetch block timestamps.
-
-    Returns:
-        dict: A dictionary containing liquidity depth data for each block in the range.
-    """
-    liquidity_depth_dict = dict()
-    core_logger.debug(
-        f'Starting liquidity depth query for: {pair_address}',
-    )
-    if fetch_timestamp:
-        try:
-            block_details_dict = await get_block_details_in_block_range(
-                from_block,
-                to_block,
-                rpc_helper=rpc_helper,
-            )
-        except Exception as err:
-            core_logger.opt(exception=True).error(
-                (
-                    'Error attempting to get block details of block-range'
-                    ' {}-{}: {}, retrying again'
-                ),
-                from_block,
-                to_block,
-                err,
-            )
-            raise err
-    else:
-        block_details_dict = dict()
-
-    pair_address = Web3.to_checksum_address(pair_address)
-
-    pair_per_token_metadata = await get_pair_metadata(
-        pair_address=pair_address,
-        rpc_helper=rpc_helper,
-    )
-
-    token0_price_map, token1_price_map = await asyncio.gather(
-        get_token_price_in_block_range(
-            token_metadata=pair_per_token_metadata['token0'],
-            from_block=from_block,
-            to_block=to_block,
-            rpc_helper=rpc_helper,
-            debug_log=False,
-        ),
-        get_token_price_in_block_range(
-            token_metadata=pair_per_token_metadata['token1'],
-            from_block=from_block,
-            to_block=to_block,
-            rpc_helper=rpc_helper,
-            debug_log=False,
-        ),
-    )
-
-    core_logger.debug('grabbed pair per token metadata for liquidity depth')
-    # grab ticks in range and calculate initial liquidity depth
-
-    ticks_list, slot0 = await get_tick_info(
-        rpc_helper=rpc_helper,
-        pair_address=pair_address,
-        from_block=from_block,
-    )
-
-    liquidity_depth_initial = calculate_liquidity_depth(
-        ticks_list,
-        slot0[0],
-        pair_per_token_metadata,
-    )
-
-    for block_num in range(from_block, to_block + 1):
-        liquidity_depth_dict[block_num] = liquidity_depth_initial
-        liquidity_depth_dict[block_num]['prices'] = {
-            'token0': token0_price_map.get(block_num, 0),
-            'token1': token1_price_map.get(block_num, 0),
-        }
-
-    events = await get_events(
-        pair_address=pair_address,
-        rpc=rpc_helper,
-        from_block=from_block,
-        to_block=to_block,
-    )
-
-    core_logger.debug(
-        f'Events fetched for liquidity depth: {events}',
-    )
-    events_by_block = dict()
-    for event in events:
-        events_by_block[event['blockNumber']] = events_by_block.get(
-            event['blockNumber'], [],
-        )
-        events_by_block[event['blockNumber']].append(event)
-
-    for block_num in range(from_block + 1, to_block + 1):
-
-        events = events_by_block.get(block_num, [])
-        for event in events:
-            amount0 = event['args']['amount0']
-            amount1 = event['args']['amount1']
-            if event['name'] == 'Mint':
-                liquidity_depth_dict[block_num]['token0']['amount'] += amount0
-                liquidity_depth_dict[block_num]['token1']['amount'] += amount1
-            else:
-                liquidity_depth_dict[block_num]['token0']['amount'] -= amount0
-                liquidity_depth_dict[block_num]['token1']['amount'] -= amount1
-
-        current_block_details = block_details_dict.get(block_num, None)
-
-        timestamp = (
-            current_block_details.get(
-                'timestamp',
-                None,
-            )
-            if current_block_details
-            else None
-        )
-        liquidity_depth_dict[block_num]['timestamp'] = timestamp
-
-    return liquidity_depth_dict
