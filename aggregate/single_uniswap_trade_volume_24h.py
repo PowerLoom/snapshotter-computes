@@ -10,6 +10,7 @@ from snapshotter.utils.callback_helpers import GenericProcessorAggregate
 from snapshotter.utils.data_utils import get_project_epoch_snapshot_bulk
 from snapshotter.utils.data_utils import get_project_first_epoch
 from snapshotter.utils.data_utils import get_project_last_finalized_epoch
+from snapshotter.utils.data_utils import get_project_finalized_cid
 from snapshotter.utils.data_utils import get_submission_data
 from snapshotter.utils.data_utils import get_tail_epoch_id
 from snapshotter.utils.default_logger import logger
@@ -217,6 +218,10 @@ class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
             # NOTE: Temp change, will revert once validators are live
             project_last_finalized_epoch = await get_project_last_finalized_epoch(
                 redis, protocol_state_contract, anchor_rpc_helper, project_id,
+            )
+
+            project_last_finalized_cid = await get_project_finalized_cid(
+                redis, protocol_state_contract, anchor_rpc_helper, project_last_finalized_epoch, project_id,
             )
 
             # project_last_finalized = await redis.zrevrangebyscore(
