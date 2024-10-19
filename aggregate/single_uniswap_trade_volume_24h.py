@@ -9,6 +9,7 @@ from computes.utils.models.message_models import UniswapTradesSnapshot
 from snapshotter.utils.callback_helpers import GenericProcessorAggregate
 from snapshotter.utils.data_utils import get_project_epoch_snapshot_bulk
 from snapshotter.utils.data_utils import get_project_first_epoch
+from snapshotter.utils.data_utils import get_project_last_finalized_epoch
 from snapshotter.utils.data_utils import get_submission_data
 from snapshotter.utils.data_utils import get_tail_epoch_id
 from snapshotter.utils.default_logger import logger
@@ -213,24 +214,29 @@ class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
             self._logger.info('project_first_epoch is not 0, building aggregate from previous aggregate')
 
             # Get the last finalized data for the project
-            project_last_finalized = await redis.zrevrangebyscore(
-                project_finalized_data_zset(project_id),
-                max='+inf',
-                min='-inf',
-                withscores=True,
-                start=0,
-                num=1,
+            # NOTE: Temp change, will revert once validators are live
+            project_last_finalized_epoch = await get_project_last_finalized_epoch(
+                redis, protocol_state_contract, anchor_rpc_helper, project_id,
             )
 
-            if project_last_finalized:
-                project_last_finalized_cid, project_last_finalized_epoch = project_last_finalized[0]
-                project_last_finalized_epoch = int(project_last_finalized_epoch)
-                project_last_finalized_cid = project_last_finalized_cid.decode('utf-8')
-            else:
-                self._logger.info('project_last_finalized is None, trying to fetch from contract')
-                return await self._calculate_from_scratch(
-                    msg_obj, redis, rpc_helper, anchor_rpc_helper, ipfs_reader, protocol_state_contract, project_id,
-                )
+            # project_last_finalized = await redis.zrevrangebyscore(
+            #     project_finalized_data_zset(project_id),
+            #     max='+inf',
+            #     min='-inf',
+            #     withscores=True,
+            #     start=0,
+            #     num=1,
+            # )
+
+            # if project_last_finalized:
+            #     project_last_finalized_cid, project_last_finalized_epoch = project_last_finalized[0]
+            #     project_last_finalized_epoch = int(project_last_finalized_epoch)
+            #     project_last_finalized_cid = project_last_finalized_cid.decode('utf-8')
+            # else:
+            #     self._logger.info('project_last_finalized is None, trying to fetch from contract')
+            #     return await self._calculate_from_scratch(
+            #         msg_obj, redis, rpc_helper, anchor_rpc_helper, ipfs_reader, protocol_state_contract, project_id,
+            #     )
 
             # Get the tail epoch ID
             tail_epoch_id, extrapolated_flag = await get_tail_epoch_id(
