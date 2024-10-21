@@ -131,7 +131,7 @@ class EthPricePreloader(GenericPreloader):
                 # Calculate prices for each pair
                 dai_price = self.calculate_token_price(dai_eth_pair_reserves_list[block_count], 'DAI', 'WETH')
                 usdc_price = self.calculate_token_price(usdc_eth_pair_reserves_list[block_count], 'USDC', 'WETH')
-                usdt_price = self.calculate_token_price(eth_usdt_pair_reserves_list[block_count], 'USDT', 'WETH', reverse=True)
+                usdt_price = self.calculate_token_price(eth_usdt_pair_reserves_list[block_count], 'WETH', 'USDT', reverse=True)
 
                 # Calculate total ETH liquidity
                 total_eth_liquidity = (
