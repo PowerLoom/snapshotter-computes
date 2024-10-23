@@ -1,8 +1,6 @@
-import json
-
 from web3 import Web3
 
-from snapshotter.modules.computes.preloaders.eth_price.preloader import eth_price_preloader
+from snapshotter.modules.computes.settings.config import settings as worker_settings
 from snapshotter.modules.computes.utils.helpers import get_token_eth_price_dict
 from snapshotter.utils.default_logger import logger
 from snapshotter.utils.rpc import RpcHelper
@@ -14,6 +12,7 @@ async def get_token_price_in_block_range(
     from_block: int,
     to_block: int,
     rpc_helper: RpcHelper,
+    eth_price_dict: dict,
     debug_log: bool = True,
 ) -> dict:
     """
@@ -41,11 +40,10 @@ async def get_token_price_in_block_range(
         if token_address == Web3.to_checksum_address(
             worker_settings.contract_addresses.WETH
         ):
-            token_price_dict = await eth_price_preloader.get_eth_price_usd(
-                from_block=from_block,
-                to_block=to_block,
-                rpc_helper=rpc_helper,
-            )
+            token_price_dict = eth_price_dict
+            token_eth_price_dict = {
+                block_num: 1 for block_num in range(from_block, to_block + 1)
+            }
         else:
             # Get token price in ETH
             token_eth_price_dict = await get_token_eth_price_dict(
@@ -54,15 +52,12 @@ async def get_token_price_in_block_range(
                 from_block=from_block,
                 to_block=to_block,
                 rpc_helper=rpc_helper,
+                eth_price_dict=eth_price_dict,
             )
 
             if token_eth_price_dict:
                 # Get ETH price in USD
-                eth_usd_price_dict = await eth_price_preloader.get_eth_price_usd(
-                    from_block=from_block,
-                    to_block=to_block,
-                    rpc_helper=rpc_helper,
-                )
+                eth_usd_price_dict = eth_price_dict
 
                 if debug_log:
                     pricing_logger.debug(
