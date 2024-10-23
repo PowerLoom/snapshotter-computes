@@ -33,7 +33,6 @@ class TradeVolumeProcessor(GenericProcessor):
             rpc_helper=rpc_helper,
             eth_price_dict=eth_price_dict,
         )
-        self._logger.debug(f'trade volume {data_source_contract_address}, computation end time {time.time()}')
 
         # Set effective trade volume at top level
         total_trades_in_usd = result['Trades'][
