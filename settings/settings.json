@@ -38,20 +38,16 @@
     "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
     "0x956f47f50a910163d8bf957cf5846d573e7f87ca"
   ],
-
-  // TODO: update initial pairs for all uniswap v3 pairs
   "initial_pairs": [
-    "0x21b8065d10f73ee2e260e5b47d3344d3ced7596e"
+    "0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640"
   ],
-
-  // TODO: update metadata for all uniswap v3 pairs
   "metadata_cache": {
-    "0x21b8065d10f73EE2e260e5B47D3344d3Ced7596E": {
+    "0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640": {
       "token0": {
-        "address": "0x66a0f676479Cee1d7373f3DC2e2952778BfF5bd6",
-        "name": "Wise Token",
-        "symbol": "WISE",
-        "decimals": 18
+        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+        "name": "USD Coin",
+        "symbol": "USDC",
+        "decimals": 6
       },
       "token1": {
         "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
@@ -60,9 +56,10 @@
         "decimals": 18
       },
       "pair": {
-        "symbol": "WISE-WETH"
+        "symbol": "USDC-WETH"
       }
     }
   },
   "static_pairs": true
+
 }
