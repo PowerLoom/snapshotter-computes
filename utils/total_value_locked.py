@@ -4,8 +4,10 @@ import json
 from decimal import Decimal
 from decimal import getcontext
 from typing import Union
+from typing import List
+from typing import Dict
 
-from eth_abi import abi
+from eth_abi import decode
 from eth_typing import Address
 from eth_typing.evm import Address
 from eth_typing.evm import ChecksumAddress
@@ -13,42 +15,33 @@ from snapshotter.utils.default_logger import logger
 from snapshotter.utils.rpc import get_event_sig_and_abi
 from snapshotter.utils.rpc import RpcHelper
 
-from computes.utils.constants import helper_contract
-from computes.utils.constants import MAX_TICK
-from computes.utils.constants import MIN_TICK
-from computes.utils.constants import override_address
-from computes.utils.constants import pair_contract_abi
-from computes.utils.constants import UNISWAP_EVENTS_ABI
-from computes.utils.constants import UNISWAP_TRADE_EVENT_SIGS
-from computes.utils.constants import univ3_helper_bytecode
+from snapshotter.modules.computes.utils.constants import helper_contract
+from snapshotter.modules.computes.utils.constants import MAX_TICK
+from snapshotter.modules.computes.utils.constants import MIN_TICK
+from snapshotter.modules.computes.utils.constants import override_address
+from snapshotter.modules.computes.utils.constants import pair_contract_abi
+from snapshotter.modules.computes.utils.constants import UNISWAP_EVENTS_ABI
+from snapshotter.modules.computes.utils.constants import UNISWAP_TRADE_EVENT_SIGS
+from snapshotter.modules.computes.utils.constants import univ3_helper_bytecode
 
 AddressLike = Union[Address, ChecksumAddress]
 getcontext().prec = 36
 tvl_logger = logger.bind(module='PowerLoom|UniswapTotalValueLocked')
 
 
-def transform_tick_bytes_to_list(tick_bytes):
-    """
-    Transform tick data from decoded web3 call result to a list of dictionaries.
-
-    Args:
-        decoded_data: Decoded tick data from web3 call.
-
-    Returns:
-        list: A list of dictionaries containing liquidity_net and idx for each tick.
-    """
-    if len(tick_bytes) == 0:
+def transform_tick_bytes_to_list(tickData: bytes) -> List[Dict[str, int]]:
+    if not tickData:
         return []
 
-    ticks = [
+    bytes_arr = decode(['bytes[]'], tickData)[0]
+    
+    return [
         {
-            'liquidity_net': int.from_bytes(i[:-3], 'big', signed=True),
-            'idx': int.from_bytes(i[-3:], 'big', signed=True),
+            'liquidity_net': int.from_bytes(tick[:16], 'big', signed=True),
+            'idx': int.from_bytes(tick[16:], 'big', signed=True),
         }
-        for i in tick_bytes
+        for tick in bytes_arr
     ]
-
-    return ticks
 
 
 def calculate_tvl_from_ticks(ticks, pair_metadata, sqrt_price):
@@ -273,7 +266,6 @@ async def get_tick_info(
             override_address: {'code': univ3_helper_bytecode},
         }
         current_node = rpc_helper.get_current_node()
-        pair_contract = current_node['web3_client'].eth.contract(address=pair_address, abi=pair_contract_abi)
 
         # Determine step size based on fee
         fee = int(pair_per_token_metadata['pair']['fee'])
@@ -292,25 +284,30 @@ async def get_tick_info(
         # getTicks() is inclusive for start and end ticks
         for idx in range(MIN_TICK, MAX_TICK + 1, step):
             tick_tasks.append(
-                ('getTicks', [pair_address, idx, min(idx + step - 1, MAX_TICK)]),
+                helper_contract.functions.getTicks(
+                    pair_address, idx, min(idx + step - 1, MAX_TICK),
+                ),
             )
 
+        pair_contract = current_node['web3_client'].eth.contract(
+            address=pair_address,
+            abi=pair_contract_abi,
+        )
+
         slot0_tasks = [
-            ('slot0', []),
+            pair_contract.functions.slot0(),
         ]
 
         # Execute RPC calls
         tickDataResponse, slot0Response = await asyncio.gather(
-            rpc_helper.web3_call_with_override(
+            rpc_helper.web3_call(
                 tasks=tick_tasks,
-                contract_addr=helper_contract.address,
-                abi=helper_contract.abi,
+                block=from_block,
                 overrides=overrides,
             ),
             rpc_helper.web3_call(
                 tasks=slot0_tasks,
-                contract_addr=pair_address,
-                abi=pair_contract_abi,
+                block=from_block,
             ),
         )
 
@@ -330,3 +327,4 @@ async def get_tick_info(
             pair_address, from_block, err,
         )
         raise err
+
