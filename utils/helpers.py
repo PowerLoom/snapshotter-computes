@@ -4,6 +4,7 @@ import math
 from snapshotter.utils.default_logger import logger
 from snapshotter.utils.rpc import get_contract_abi_dict
 from snapshotter.utils.rpc import RpcHelper
+from snapshotter.utils.snapshot_utils import sqrtPriceX96ToTokenPrices
 from web3 import Web3
 
 from snapshotter.modules.computes.settings.config import settings as worker_settings
@@ -14,7 +15,6 @@ from snapshotter.modules.computes.utils.constants import pair_contract_abi
 from snapshotter.modules.computes.utils.constants import STABLE_TOKENS_LIST
 from snapshotter.modules.computes.utils.constants import TOKENS_DECIMALS
 from snapshotter.modules.computes.utils.constants import ZER0_ADDRESS
-from snapshotter.modules.computes.preloaders.eth_price.preloader import eth_price_preloader
 
 helper_logger = logger.bind(module='PowerLoom|Uniswap|Helpers')
 
@@ -59,13 +59,16 @@ async def get_pair(
         str: The pair address.
     """
     tasks = [
-        ('getPool', [Web3.to_checksum_address(token0), Web3.to_checksum_address(token1), fee]),
+        factory_contract_obj.functions.getPool(
+            Web3.to_checksum_address(token0),
+            Web3.to_checksum_address(token1),
+            fee,
+        ),
     ]
+
 
     result = await rpc_helper.web3_call(
         tasks=tasks,
-        contract_addr=factory_contract_obj.address,
-        abi=factory_contract_obj.abi,
     )
     pair = result[0]
 
@@ -94,15 +97,19 @@ async def get_pair_metadata(
     """
     try:
         pair_address = Web3.to_checksum_address(pair_address)
+        pair_contract = current_node['web3_client'].eth.contract(
+            address=pair_address,
+            abi=pair_contract_abi,
+        )
+
+        tasks = [
+            pair_contract.functions.token0(),
+            pair_contract.functions.token1(),
+            pair_contract.functions.fee(),
+        ]
 
         token0Addr, token1Addr, fee = await rpc_helper.web3_call(
-            tasks=[
-                ('token0', []),
-                ('token1', []),
-                ('fee', []),
-            ],
-            contract_addr=pair_address,
-            abi=pair_contract_abi,
+            tasks=tasks,
         )
 
         # token0 contract
@@ -129,49 +136,37 @@ async def get_pair_metadata(
             token0_symbol = get_maker_pair_data('symbol')
             maker_token0 = True
         else:
-            token0_tasks.extend([('name', []), ('symbol', [])])
-        token0_tasks.append(('decimals', []))
+            token0_tasks.extend([token0.functions.name(), token0.functions.symbol()])
+        token0_tasks.append(token0.functions.decimals())
 
         if Web3.to_checksum_address(token1Addr) == Web3.to_checksum_address(worker_settings.contract_addresses.MAKER):
             token1_name = get_maker_pair_data('name')
             token1_symbol = get_maker_pair_data('symbol')
             maker_token1 = True
         else:
-            token1_tasks.extend([('name', []), ('symbol', [])])
-        token1_tasks.append(('decimals', []))
+            token1_tasks.extend([token1.functions.name(), token1.functions.symbol()])
+        token1_tasks.append(token1.functions.decimals())
 
         if maker_token1:
             [token0_name, token0_symbol, token0_decimals] = await rpc_helper.web3_call(
                 tasks=token0_tasks,
-                contract_addr=token0.address,
-                abi=token0.abi,
             )
             [token1_decimals] = await rpc_helper.web3_call(
                 token1_tasks,
-                contract_addr=token1.address,
-                abi=token1.abi,
             )
         elif maker_token0:
             [token1_name, token1_symbol, token1_decimals] = await rpc_helper.web3_call(
                 tasks=token1_tasks,
-                contract_addr=token1.address,
-                abi=token1.abi,
             )
             [token0_decimals] = await rpc_helper.web3_call(
                 tasks=token0_tasks,
-                contract_addr=token0.address,
-                abi=token0.abi,
             )
         else:
             [token0_name, token0_symbol, token0_decimals] = await rpc_helper.web3_call(
                 tasks=token0_tasks,
-                contract_addr=token0.address,
-                abi=token0.abi,
             )
             [token1_name, token1_symbol, token1_decimals] = await rpc_helper.web3_call(
                 tasks=token1_tasks,
-                contract_addr=token1.address,
-                abi=token1.abi,
             )
 
         return {
@@ -210,6 +205,7 @@ async def get_token_eth_price_dict(
     from_block,
     to_block,
     rpc_helper: RpcHelper,
+    eth_price_dict: dict,
 ):
     """
     Get a dictionary of token prices in ETH for each block.
@@ -237,6 +233,7 @@ async def get_token_eth_price_dict(
             from_block=from_block,
             to_block=to_block,
             rpc_helper=rpc_helper,
+            eth_price_dict=eth_price_dict,
         )
 
         if token_eth_quote:
@@ -299,9 +296,7 @@ async def get_token_pair_address_with_fees(
         tasks = [
             asyncio.create_task(
                 rpc_helper.web3_call(
-                    tasks=[('liquidity', [])],
-                    contract_addr=pair_contract.address,
-                    abi=pair_contract.abi,
+                    tasks=[pair_contract.functions.liquidity()],
                 )
             ) for pair_contract in pair_contracts
         ]
@@ -372,6 +367,7 @@ async def get_token_eth_quote_from_uniswap(
     from_block,
     to_block,
     rpc_helper: RpcHelper,
+    eth_price_dict: dict,
 ):
     """
     Get the ETH quote for a token from Uniswap.
@@ -422,7 +418,7 @@ async def get_token_eth_quote_from_uniswap(
             )
             sqrtP_list = [slot0[0] for slot0 in response]
             for sqrtP in sqrtP_list:
-                price0, price1 = eth_price_preloader.sqrtPriceX96ToTokenPrices(
+                price0, price1 = sqrtPriceX96ToTokenPrices(
                     sqrtP,
                     token0_decimals,
                     token1_decimals,
@@ -454,11 +450,7 @@ async def get_token_eth_quote_from_uniswap(
                     params=[],
                 )
 
-                eth_usd_price_dict = await eth_price_preloader.get_eth_price_usd(
-                    from_block=from_block,
-                    to_block=to_block,
-                    rpc_helper=rpc_helper,
-                )
+                eth_usd_price_dict = eth_price_dict
 
                 token0_decimals = token_stable_pair_data['token0_decimals']
                 token1_decimals = token_stable_pair_data['token1_decimals']
@@ -470,7 +462,7 @@ async def get_token_eth_quote_from_uniswap(
                 for i in range(len(sqrtP_list)):
                     sqrtP = sqrtP_list[i]
                     eth_price = sqrtP_eth_list[i]
-                    price0, price1 = eth_price_preloader.sqrtPriceX96ToTokenPrices(
+                    price0, price1 = sqrtPriceX96ToTokenPrices(
                         sqrtP,
                         token0_decimals,
                         token1_decimals,
