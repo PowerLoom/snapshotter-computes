@@ -29,14 +29,13 @@ constants_logger = logger.bind(module='PowerLoom|Uniswap|Constants')
 # Bytecode for Uniswap V3 helper contract
 # https://github.com/getjiggy/evm-helpers
 univ3_helper_bytecode_json = read_json_file(
-    'computes/static/bytecode/univ3_helper.json',
+    'snapshotter/modules/computes/static/bytecode/univ3_helper.json',
     constants_logger,
 )
 univ3_helper_bytecode = univ3_helper_bytecode_json['bytecode']
 
 # Initialize RPC helper and get current node
 rpc_helper = RpcHelper()
-rpc_helper.sync_init()
 current_node = rpc_helper.get_current_node()
 
 # Load contract ABIs
@@ -59,7 +58,7 @@ factory_contract_abi = read_json_file(
 
 # Load helper contract ABI
 helper_contract_abi = read_json_file(
-    'computes/static/abis/UniV3Helper.json',
+    'snapshotter/modules/computes/static/abis/UniV3Helper.json',
     constants_logger,
 )
 
