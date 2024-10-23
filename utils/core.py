@@ -28,7 +28,6 @@ async def get_pair_reserves(
     to_block,
     rpc_helper: RpcHelper,
     eth_price_dict: dict,
-    fetch_timestamp=False,
 ):
     """
     Fetch and calculate pair reserves for a given Uniswap pair over a block range.
@@ -48,26 +47,23 @@ async def get_pair_reserves(
     )
     pair_address = Web3.to_checksum_address(pair_address)
 
-    if fetch_timestamp:
-        try:
-            block_details_dict = await get_block_details_in_block_range(
-                from_block,
-                to_block,
-                rpc_helper=rpc_helper,
-            )
-        except Exception as err:
-            core_logger.opt(exception=True).error(
-                (
-                    'Error attempting to get block details of block-range'
-                    ' {}-{}: {}, retrying again'
-                ),
-                from_block,
-                to_block,
-                err,
-            )
-            raise err
-    else:
-        block_details_dict = dict()
+    try:
+        block_details_dict = await get_block_details_in_block_range(
+            from_block,
+            to_block,
+            rpc_helper=rpc_helper,
+        )
+    except Exception as err:
+        core_logger.opt(exception=True).error(
+            (
+                'Error attempting to get block details of block-range'
+                ' {}-{}: {}, retrying again'
+            ),
+            from_block,
+            to_block,
+            err,
+        )
+        raise err
 
     pair_per_token_metadata = await get_pair_metadata(
         pair_address=pair_address,
@@ -84,6 +80,7 @@ async def get_pair_reserves(
             from_block=from_block,
             to_block=to_block,
             rpc_helper=rpc_helper,
+            eth_price_dict=eth_price_dict,
             debug_log=False,
         ),
         get_token_price_in_block_range(
@@ -91,6 +88,7 @@ async def get_pair_reserves(
             from_block=from_block,
             to_block=to_block,
             rpc_helper=rpc_helper,
+            eth_price_dict=eth_price_dict,
             debug_log=False,
         ),
     )
@@ -337,7 +335,6 @@ async def get_pair_trade_volume(
     max_chain_height,
     rpc_helper: RpcHelper,
     eth_price_dict: dict,
-    fetch_timestamp=True,
 ):
     """
     Fetch and calculate trade volume for a Uniswap pair over a block range.
@@ -355,25 +352,22 @@ async def get_pair_trade_volume(
     data_source_contract_address = Web3.to_checksum_address(
         data_source_contract_address,
     )
-    block_details_dict = dict()
-
-    if fetch_timestamp:
-        try:
-            block_details_dict = await get_block_details_in_block_range(
-                from_block=min_chain_height,
-                to_block=max_chain_height,
-                rpc_helper=rpc_helper,
-            )
-        except Exception as err:
-            core_logger.opt(exception=True).error(
-                (
-                    'Error attempting to get block details of to_block {}:'
-                    ' {}, retrying again'
-                ),
-                max_chain_height,
-                err,
-            )
-            raise err
+    try:
+        block_details_dict = await get_block_details_in_block_range(
+            from_block=min_chain_height,
+            to_block=max_chain_height,
+            rpc_helper=rpc_helper,
+        )
+    except Exception as err:
+        core_logger.opt(exception=True).error(
+            (
+                'Error attempting to get block details of to_block {}:'
+                ' {}, retrying again'
+            ),
+            max_chain_height,
+            err,
+        )
+        raise err
 
     pair_per_token_metadata = await get_pair_metadata(
         pair_address=data_source_contract_address,
@@ -385,6 +379,7 @@ async def get_pair_trade_volume(
             from_block=min_chain_height,
             to_block=max_chain_height,
             rpc_helper=rpc_helper,
+            eth_price_dict=eth_price_dict,
             debug_log=False,
         ),
         get_token_price_in_block_range(
@@ -392,6 +387,7 @@ async def get_pair_trade_volume(
             from_block=min_chain_height,
             to_block=max_chain_height,
             rpc_helper=rpc_helper,
+            eth_price_dict=eth_price_dict,
             debug_log=False,
         ),
     )
@@ -517,5 +513,4 @@ async def get_pair_trade_volume(
     max_block_details = block_details_dict.get(max_chain_height, dict())
     max_block_timestamp = max_block_details.get('timestamp', None)
     epoch_trade_logs.update({'timestamp': max_block_timestamp})
-    core_logger.debug(f'epoch_trade_logs: {epoch_trade_logs}')
     return epoch_trade_logs
