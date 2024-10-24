@@ -8,7 +8,7 @@ from snapshotter.utils.file_utils import read_json_file
 from snapshotter.utils.rpc import RpcHelper
 from web3 import Web3
 
-from snapshotter.modules.computes.settings.config import settings as worker_settings
+from computes.settings.config import settings as worker_settings
 
 # Maximum gas limit for static calls
 max_gas_static_call = 30_000_000_000
@@ -29,7 +29,7 @@ constants_logger = logger.bind(module='PowerLoom|Uniswap|Constants')
 # Bytecode for Uniswap V3 helper contract
 # https://github.com/getjiggy/evm-helpers
 univ3_helper_bytecode_json = read_json_file(
-    'snapshotter/modules/computes/static/bytecode/univ3_helper.json',
+    'computes/static/bytecode/univ3_helper.json',
     constants_logger,
 )
 univ3_helper_bytecode = univ3_helper_bytecode_json['bytecode']
@@ -58,7 +58,7 @@ factory_contract_abi = read_json_file(
 
 # Load helper contract ABI
 helper_contract_abi = read_json_file(
-    'snapshotter/modules/computes/static/abis/UniV3Helper.json',
+    'computes/static/abis/UniV3Helper.json',
     constants_logger,
 )
 

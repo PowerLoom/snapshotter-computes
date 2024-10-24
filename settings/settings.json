@@ -1,9 +1,9 @@
 {
   "uniswap_contract_abis": {
-    "factory": "snapshotter/modules/computes/static/abis/IUniswapV3Factory.json",
-    "trade_events": "snapshotter/modules/computes/static/abis/UniswapTradeEvents.json",
-    "erc20": "snapshotter/modules/computes/static/abis/IERC20.json",
-    "pair_contract": "snapshotter/modules/computes/static/abis/UniswapV3Pool.json"
+    "factory": "computes/static/abis/IUniswapV3Factory.json",
+    "trade_events": "computes/static/abis/UniswapTradeEvents.json",
+    "erc20": "computes/static/abis/IERC20.json",
+    "pair_contract": "computes/static/abis/UniswapV3Pool.json"
   },
   "contract_addresses": {
     "uniswap_v3_factory": "0x1F98431c8aD98523631AE4a59f267346ea31F984",
