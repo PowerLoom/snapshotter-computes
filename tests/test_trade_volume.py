@@ -2,9 +2,9 @@ import asyncio
 from web3 import Web3
 from snapshotter.utils.rpc import RpcHelper
 from snapshotter.utils.models.message_models import SnapshotProcessMessage
-from snapshotter.modules.computes.trade_volume import TradeVolumeProcessor
+from computes.trade_volume import TradeVolumeProcessor
 from snapshotter.utils.snapshot_utils import get_eth_price_usd
-from snapshotter.modules.computes.utils.models.message_models import UniswapTradesSnapshot
+from computes.utils.models.message_models import UniswapTradesSnapshot
 
 async def test_trade_volume_compute():
     # Initialize RpcHelper and other necessary objects

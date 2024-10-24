@@ -2,7 +2,7 @@ import asyncio
 from web3 import Web3
 from snapshotter.utils.rpc import RpcHelper
 from snapshotter.utils.models.message_models import SnapshotProcessMessage
-from snapshotter.modules.computes.pair_total_reserves import PairTotalReservesProcessor
+from computes.pair_total_reserves import PairTotalReservesProcessor
 from snapshotter.utils.snapshot_utils import get_eth_price_usd
 
 

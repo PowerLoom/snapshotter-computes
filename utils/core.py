@@ -8,16 +8,16 @@ from snapshotter.utils.rpc import RpcHelper
 from snapshotter.utils.snapshot_utils import get_block_details_in_block_range
 from web3 import Web3
 
-from snapshotter.modules.computes.utils.total_value_locked import calculate_reserves
-from snapshotter.modules.computes.utils.total_value_locked import get_events
-from snapshotter.modules.computes.utils.constants import UNISWAP_EVENTS_ABI
-from snapshotter.modules.computes.utils.constants import UNISWAP_TRADE_EVENT_SIGS
-from snapshotter.modules.computes.utils.constants import UNISWAPV3_FEE_DIV
-from snapshotter.modules.computes.utils.helpers import get_pair_metadata
-from snapshotter.modules.computes.utils.models.data_models import epoch_event_trade_data
-from snapshotter.modules.computes.utils.models.data_models import event_trade_data
-from snapshotter.modules.computes.utils.models.data_models import trade_data
-from snapshotter.modules.computes.utils.pricing import get_token_price_in_block_range
+from computes.utils.total_value_locked import calculate_reserves
+from computes.utils.total_value_locked import get_events
+from computes.utils.constants import UNISWAP_EVENTS_ABI
+from computes.utils.constants import UNISWAP_TRADE_EVENT_SIGS
+from computes.utils.constants import UNISWAPV3_FEE_DIV
+from computes.utils.helpers import get_pair_metadata
+from computes.utils.models.data_models import epoch_event_trade_data
+from computes.utils.models.data_models import event_trade_data
+from computes.utils.models.data_models import trade_data
+from computes.utils.pricing import get_token_price_in_block_range
 
 core_logger = logger.bind(module='PowerLoom|UniswapCore')
 

@@ -1,7 +1,7 @@
 from web3 import Web3
 
-from snapshotter.modules.computes.settings.config import settings as worker_settings
-from snapshotter.modules.computes.utils.helpers import get_token_eth_price_dict
+from computes.settings.config import settings as worker_settings
+from computes.utils.helpers import get_token_eth_price_dict
 from snapshotter.utils.default_logger import logger
 from snapshotter.utils.rpc import RpcHelper
 
