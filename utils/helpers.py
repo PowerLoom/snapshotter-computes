@@ -1,20 +1,20 @@
 import asyncio
 import math
 
+from computes.preloaders.eth_price.preloader import eth_price_preloader
 from snapshotter.utils.default_logger import logger
 from snapshotter.utils.rpc import get_contract_abi_dict
 from snapshotter.utils.rpc import RpcHelper
-from snapshotter.utils.snapshot_utils import sqrtPriceX96ToTokenPrices
 from web3 import Web3
 
-from snapshotter.modules.computes.settings.config import settings as worker_settings
-from snapshotter.modules.computes.utils.constants import current_node
-from snapshotter.modules.computes.utils.constants import erc20_abi
-from snapshotter.modules.computes.utils.constants import factory_contract_obj
-from snapshotter.modules.computes.utils.constants import pair_contract_abi
-from snapshotter.modules.computes.utils.constants import STABLE_TOKENS_LIST
-from snapshotter.modules.computes.utils.constants import TOKENS_DECIMALS
-from snapshotter.modules.computes.utils.constants import ZER0_ADDRESS
+from computes.settings.config import settings as worker_settings
+from computes.utils.constants import current_node
+from computes.utils.constants import erc20_abi
+from computes.utils.constants import factory_contract_obj
+from computes.utils.constants import pair_contract_abi
+from computes.utils.constants import STABLE_TOKENS_LIST
+from computes.utils.constants import TOKENS_DECIMALS
+from computes.utils.constants import ZER0_ADDRESS
 
 helper_logger = logger.bind(module='PowerLoom|Uniswap|Helpers')
 
@@ -422,7 +422,7 @@ async def get_token_eth_quote_from_uniswap(
             )
             sqrtP_list = [slot0[0] for slot0 in response]
             for sqrtP in sqrtP_list:
-                price0, price1 = sqrtPriceX96ToTokenPrices(
+                price0, price1 = eth_price_preloader.sqrtPriceX96ToTokenPrices(
                     sqrtP,
                     token0_decimals,
                     token1_decimals,
@@ -466,7 +466,7 @@ async def get_token_eth_quote_from_uniswap(
                 for i in range(len(sqrtP_list)):
                     sqrtP = sqrtP_list[i]
                     eth_price = sqrtP_eth_list[i]
-                    price0, price1 = sqrtPriceX96ToTokenPrices(
+                    price0, price1 = eth_price_preloader.sqrtPriceX96ToTokenPrices(
                         sqrtP,
                         token0_decimals,
                         token1_decimals,
