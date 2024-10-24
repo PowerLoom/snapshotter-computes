@@ -24,8 +24,17 @@ class TradeVolumeProcessor(GenericProcessor):
         min_chain_height: int,
         max_chain_height: int,
         rpc_helper: RpcHelper,
-        eth_price_dict: dict,
+        preloader_results: dict,
     ):
+        eth_price_dict = preloader_results.get('eth_price', None)
+
+        if not eth_price_dict:
+            self._logger.error(
+                'Eth price dict in TradeVolumeProcessor for contract: {}',
+                data_source_contract_address,
+            )
+            return None
+
         result = await get_pair_trade_volume(
             data_source_contract_address=data_source_contract_address,
             min_chain_height=min_chain_height,
@@ -84,7 +93,7 @@ class TradeVolumeProcessor(GenericProcessor):
         anchor_rpc_helper: RpcHelper,
         ipfs_reader: AsyncIPFSClient,
         protocol_state_contract,
-        eth_price_dict: dict,
+        preloader_results: dict,
     ):
 
         min_chain_height = msg_obj.begin
@@ -102,7 +111,7 @@ class TradeVolumeProcessor(GenericProcessor):
             min_chain_height=min_chain_height,
             max_chain_height=max_chain_height,
             rpc_helper=rpc_helper,
-            eth_price_dict=eth_price_dict,
+            preloader_results=preloader_results,
         )
 
         self._logger.debug(f'trade volume, computation end time {time.time()}')
