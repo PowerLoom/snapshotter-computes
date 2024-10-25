@@ -1,5 +1,5 @@
 """
-This module contains constants and initializations for the Uniswap-related computations.
+This module contains constants and initializations for the Aave-related computations.
 It sets up contract objects, loads ABIs, and defines various constants used throughout the project.
 """
 
@@ -10,105 +10,109 @@ from web3 import Web3
 
 from computes.settings.config import settings as worker_settings
 
-# Maximum gas limit for static calls
-max_gas_static_call = 30_000_000_000
-
-# Uniswap V3 tick range
-MIN_TICK = int(-887272)
-MAX_TICK = -MIN_TICK
-
-# Zero address constant
-ZER0_ADDRESS = str('0x' + '0' * 40)
-
-# Uniswap V3 fee divisor
-UNISWAPV3_FEE_DIV = int(1000000)
-
-# Set up logger for this module
-constants_logger = logger.bind(module='PowerLoom|Uniswap|Constants')
-
-# Bytecode for Uniswap V3 helper contract
-# https://github.com/getjiggy/evm-helpers
-univ3_helper_bytecode_json = read_json_file(
-    'computes/static/bytecode/univ3_helper.json',
-    constants_logger,
-)
-univ3_helper_bytecode = univ3_helper_bytecode_json['bytecode']
+# Initialize logger for the constants module
+constants_logger = logger.bind(module='PowerLoom|Aave|Constants')
 
 # Initialize RPC helper and get current node
 rpc_helper = RpcHelper()
 current_node = rpc_helper.get_current_node()
 
-# Load contract ABIs
-pair_contract_abi = read_json_file(
-    worker_settings.uniswap_contract_abis.pair_contract,
+# Load Aave contract ABIs
+pool_contract_abi = read_json_file(
+    worker_settings.aave_contract_abis.pool_contract,
     constants_logger,
 )
+
+pool_data_provider_abi = read_json_file(
+    worker_settings.aave_contract_abis.pool_data_provider_contract,
+    constants_logger,
+)
+
+ui_pool_data_provider_abi = read_json_file(
+    worker_settings.aave_contract_abis.ui_pool_data_provider,
+    constants_logger,
+)
+
+aave_oracle_abi = read_json_file(
+    worker_settings.aave_contract_abis.aave_oracle,
+    constants_logger,
+)
+
 erc20_abi = read_json_file(
-    worker_settings.uniswap_contract_abis.erc20,
-    constants_logger,
-)
-uniswap_trade_events_abi = read_json_file(
-    worker_settings.uniswap_contract_abis.trade_events,
-    constants_logger,
-)
-factory_contract_abi = read_json_file(
-    worker_settings.uniswap_contract_abis.factory,
+    worker_settings.aave_contract_abis.erc20,
     constants_logger,
 )
 
-# Load helper contract ABI
-helper_contract_abi = read_json_file(
-    'computes/static/abis/UniV3Helper.json',
+a_token_abi = read_json_file(
+    worker_settings.aave_contract_abis.a_token,
     constants_logger,
 )
 
-# Override address for helper contract
-override_address = Web3.to_checksum_address('0x' + '1' * 40)
+stable_debt_token_abi = read_json_file(
+    worker_settings.aave_contract_abis.stable_token,
+    constants_logger,
+)
 
-# Initialize helper contract
-helper_contract = current_node['web3_client'].eth.contract(
-    address=Web3.to_checksum_address(
-        override_address,
-    ), abi=helper_contract_abi,
+vaiable_debt_token_abi = read_json_file(
+    worker_settings.aave_contract_abis.variable_token,
+    constants_logger,
 )
-factory_contract_obj = current_node['web3_client'].eth.contract(
-    address=Web3.to_checksum_address(
-        worker_settings.contract_addresses.uniswap_v3_factory,
-    ),
-    abi=factory_contract_abi,
-)
+
+# Initialize Aave V3 Core contract objects
 pool_contract_obj = current_node['web3_client'].eth.contract(
     address=Web3.to_checksum_address(
-        '0x' + '1' * 40,  # Placeholder address for getting event ABIs
+        worker_settings.contract_addresses.aave_v3_pool,
     ),
-    abi=pair_contract_abi,
+    abi=pool_contract_abi,
 )
 
-# Define Uniswap trade event signatures
-UNISWAP_TRADE_EVENT_SIGS = {
-    'Swap': 'Swap(address,address,int256,int256,uint160,uint128,int24)',
-    'Mint': 'Mint(address,address,int24,int24,uint128,uint256,uint256)',
-    'Burn': 'Burn(address,int24,int24,uint128,uint256,uint256)',
-}
+pool_data_provider_contract_obj = current_node['web3_client'].eth.contract(
+    address=Web3.to_checksum_address(
+        worker_settings.contract_addresses.pool_data_provider,
+    ),
+    abi=pool_data_provider_abi,
+)
 
-# Define Uniswap event ABIs
-UNISWAP_EVENTS_ABI = {
-    'Swap': pool_contract_obj.events.Swap._get_event_abi(),
-    'Mint': pool_contract_obj.events.Mint._get_event_abi(),
-    'Burn': pool_contract_obj.events.Burn._get_event_abi(),
-}
+ui_pool_data_provider_contract_obj = current_node['web3_client'].eth.contract(
+    address=Web3.to_checksum_address(
+        worker_settings.contract_addresses.ui_pool_data_provider,
+    ),
+    abi=ui_pool_data_provider_abi,
+)
 
-# Define token decimals for common tokens
-TOKENS_DECIMALS = {
-    worker_settings.contract_addresses.USDT: 6,
-    worker_settings.contract_addresses.DAI: 18,
-    worker_settings.contract_addresses.USDC: 6,
-    worker_settings.contract_addresses.WETH: 18,
-}
+aave_oracle_contract_obj = current_node['web3_client'].eth.contract(
+    address=Web3.to_checksum_address(
+        worker_settings.contract_addresses.aave_oracle,
+    ),
+    abi=aave_oracle_abi,
+)
 
-# List of stable tokens
-STABLE_TOKENS_LIST = [
-    worker_settings.contract_addresses.USDC,
-    worker_settings.contract_addresses.USDT,
-    worker_settings.contract_addresses.DAI,
-]
+# Define Aave event signatures and ABIs
+AAVE_EVENT_SIGS = {
+    'Withdraw': 'Withdraw(address,address,address,uint256)',
+    'Supply': 'Supply(address,address,address,uint256,uint16)',
+    'Repay': 'Repay(address,address,address,uint256,bool)',
+    'Borrow': 'Borrow(address,address,address,uint256,uint8,uint256,uint16)',
+    'LiquidationCall': 'LiquidationCall(address,address,address,uint256,uint256,address,bool)',
+}
+AAVE_EVENTS_ABI = {
+    'Withdraw': pool_contract_obj.events.Withdraw._get_event_abi(),
+    'Supply': pool_contract_obj.events.Supply._get_event_abi(),
+    'Repay': pool_contract_obj.events.Repay._get_event_abi(),
+    'Borrow': pool_contract_obj.events.Borrow._get_event_abi(),
+    'LiquidationCall': pool_contract_obj.events.LiquidationCall._get_event_abi(),
+}
+AAVE_CORE_EVENTS = ('Withdraw', 'Supply', 'Borrow', 'Repay')
+
+# Aave Base 27 format constants
+RAY = 1000000000000000000000000000
+HALF_RAY = 500000000000000000000000000
+
+SECONDS_IN_YEAR = 31536000
+
+# Decimal base for AAVE price oracle values
+ORACLE_DECIMALS = 8
+
+# Divisor for AAVE rate detail values
+DETAILS_BASIS = 10000
+
