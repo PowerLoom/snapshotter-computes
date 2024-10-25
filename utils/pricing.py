@@ -1,98 +1,136 @@
+from snapshotter.utils.default_logger import logger
+from snapshotter.utils.rpc import get_contract_abi_dict
+from snapshotter.utils.rpc import RpcHelper
 from web3 import Web3
 
 from computes.settings.config import settings as worker_settings
-from computes.utils.helpers import get_token_eth_price_dict
-from snapshotter.utils.default_logger import logger
-from snapshotter.utils.rpc import RpcHelper
+from computes.utils.constants import aave_oracle_abi
+from computes.utils.constants import pool_contract_obj
 
-pricing_logger = logger.bind(module="PowerLoom|Uniswap|Pricing")
+pricing_logger = logger.bind(module='PowerLoom|Aave|Pricing')
 
-async def get_token_price_in_block_range(
-    token_metadata: dict,
-    from_block: int,
-    to_block: int,
+
+async def get_asset_price_in_block_range(
+    asset_metadata,
+    from_block,
+    to_block,
     rpc_helper: RpcHelper,
-    eth_price_dict: dict,
-    debug_log: bool = True,
-) -> dict:
+    debug_log=True,
+):
     """
     Retrieves the price of a token for a given block range.
 
     Args:
-        token_metadata (dict): Metadata of the token including address and decimals.
+        asset_metadata (dict): Metadata of the asset.
         from_block (int): Starting block number.
         to_block (int): Ending block number.
-        rpc_helper (RpcHelper): RPC helper object for blockchain interactions.
-        debug_log (bool, optional): Flag to enable debug logging. Defaults to True.
+        rpc_helper (RpcHelper): RPC helper object.
+        debug_log (bool): Flag to enable debug logging.
 
     Returns:
-        dict: A dictionary mapping block numbers to token prices in USD.
-
-    Raises:
-        Exception: If there's an error during price calculation.
+        dict: A dictionary mapping block numbers to asset prices.
     """
     try:
-        token_price_dict = dict()
-        token_address = Web3.to_checksum_address(token_metadata["address"])
-        token_decimals = int(token_metadata["decimals"])
-
-        # Handle WETH separately
-        if token_address == Web3.to_checksum_address(
-            worker_settings.contract_addresses.WETH
-        ):
-            token_price_dict = eth_price_dict
-            token_eth_price_dict = {
-                block_num: 1 for block_num in range(from_block, to_block + 1)
-            }
-        else:
-            # Get token price in ETH
-            token_eth_price_dict = await get_token_eth_price_dict(
-                token_address=token_address,
-                token_decimals=token_decimals,  
-                from_block=from_block,
-                to_block=to_block,
-                rpc_helper=rpc_helper,
-                eth_price_dict=eth_price_dict,
-            )
-
-            if token_eth_price_dict:
-                # Get ETH price in USD
-                eth_usd_price_dict = eth_price_dict
-
-                if debug_log:
-                    pricing_logger.debug(
-                        f"token_eth_price_dict: {token_eth_price_dict}"
-                    )
-                    pricing_logger.debug(
-                        f"eth_usd_price_dict: {eth_usd_price_dict}"
-                    )
-
-                # Calculate token price in USD
-                for block_num in range(from_block, to_block + 1):
-                    token_price_dict[block_num] = token_eth_price_dict.get(
-                        block_num,
-                        0,
-                    ) * (eth_usd_price_dict.get(block_num, 0))
-            else:
-                # Set price to 0 if no ETH price is available
-                token_price_dict = {
-                    block_num: 0 for block_num in range(from_block, to_block + 1)
-                }
+        asset_price_dict = dict()
+        asset_address = Web3.to_checksum_address(asset_metadata['address'])
         
+        abi_dict = get_contract_abi_dict(
+            abi=aave_oracle_abi,
+        )
+
+        asset_usd_quote = await rpc_helper.batch_eth_call_on_block_range(
+            abi_dict=abi_dict,
+            contract_address=worker_settings.contract_addresses.aave_oracle,
+            from_block=from_block,
+            to_block=to_block,
+            function_name='getAssetPrice',
+            params=[asset_address],
+        )
+
+        # Convert prices to 8 decimal format
+        asset_usd_quote = [(quote[0] * (10 ** -8)) for quote in asset_usd_quote]
+        for i, block_num in enumerate(range(from_block, to_block + 1)):
+            asset_price_dict[block_num] = asset_usd_quote[i]
+
         if debug_log:
             pricing_logger.debug(
-                f"{token_metadata['symbol']}: price is {token_price_dict}"
-                f" | its eth price is {token_eth_price_dict}",
+                f"{asset_metadata['symbol']}: usd price is {asset_price_dict}",
             )
 
-        return token_price_dict
+        return asset_price_dict
 
     except Exception as err:
         pricing_logger.opt(exception=True, lazy=True).trace(
             (
-                "Error while calculating price of token:"
-                f" {token_metadata['symbol']} | {token_metadata['address']}|"
-                " err: {err}"
+                'Error while calculating price of asset:'
+                f" {asset_metadata['symbol']} | {asset_metadata['address']}|"
+                ' err: {err}'
+            ),
+            err=lambda: str(err),
+        )
+        raise err
+
+
+async def get_all_asset_prices(
+    from_block,
+    to_block,
+    rpc_helper: RpcHelper,
+    debug_log=True,
+):
+    """
+    Retrieves prices for all assets in the Aave pool for a given block range.
+
+    Args:
+        from_block (int): Starting block number.
+        to_block (int): Ending block number.
+        rpc_helper (RpcHelper): RPC helper object.
+        debug_log (bool): Flag to enable debug logging.
+
+    Returns:
+        dict: A dictionary mapping block numbers to dictionaries of asset prices.
+    """
+    try:
+        # Fetch asset list from the pool contract
+        [asset_list] = await rpc_helper.web3_call(
+            tasks=[pool_contract_obj.functions.getReservesList()],
+        )
+
+        abi_dict = get_contract_abi_dict(
+            abi=aave_oracle_abi,
+        )
+
+        # get all asset prices in the block range from the Aave Oracle contract
+        # https://docs.aave.com/developers/core-contracts/aaveoracle
+        asset_prices_bulk = await rpc_helper.batch_eth_call_on_block_range(
+            abi_dict=abi_dict,
+            contract_address=worker_settings.contract_addresses.aave_oracle,
+            from_block=from_block,
+            to_block=to_block,
+            function_name='getAssetsPrices',
+            params=[asset_list],
+        )
+
+        if debug_log:
+            pricing_logger.debug(
+                f'Retrieved bulk prices for aave assets: {asset_prices_bulk}',
+            )
+
+        # Organize prices by block number and asset address
+        all_assets_price_dict = {block_num: {} for block_num in range(from_block, to_block + 1)}
+
+        for i, block_num in enumerate(range(from_block, to_block + 1)):
+            matches = zip(asset_list, asset_prices_bulk[i][0])
+
+            for match in matches:
+                all_assets_price_dict[block_num][match[0]] = match[1]
+
+        return all_assets_price_dict
+
+    except Exception as err:
+        pricing_logger.opt(exception=True, lazy=True).trace(
+            (
+                'Error while calculating bulk asset prices:'
+                ' err: {err}'
             ),
             err=lambda: str(err),
         )
