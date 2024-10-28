@@ -1,6 +1,7 @@
 from computes.utils.helpers import get_pool_supply_events
 from snapshotter.utils.callback_helpers import GenericPreloader
 from snapshotter.utils.default_logger import logger
+from snapshotter.utils.models.data_models import PreloaderResult
 from snapshotter.utils.models.message_models import EpochBase
 from snapshotter.utils.rpc import RpcHelper
 
@@ -43,7 +44,7 @@ class AaveBulkVolumeEventsPreloader(GenericPreloader):
                 to_block=max_chain_height,
             )
             return PreloaderResult(
-                keyword='bulk_volume',
+                keyword='bulk_event',
                 result=result,
             )
         except Exception as e:
