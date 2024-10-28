@@ -29,8 +29,9 @@ class AssetSupplyVolumeProcessor(GenericProcessor):
         rpc_helper: RpcHelper,
         preloader_results: dict,
     ):
-        bulk_asset = preloader_results.get('bulk_asset', None)
-        bulk_event = preloader_results.get('bulk_event', None)
+        bulk_asset = preloader_results.get('bulk_asset', {})
+        bulk_event = preloader_results.get('bulk_event', {})
+        block_details_dict = preloader_results.get('block_details', {})
 
         if not bulk_asset or not bulk_event:
             self._logger.error('Bulk asset or event data not found in preloader results')
@@ -43,9 +44,9 @@ class AssetSupplyVolumeProcessor(GenericProcessor):
             from_block=min_chain_height,
             to_block=max_chain_height,
             rpc_helper=rpc_helper,
-            block_details_dict=None,
             all_assets_price_dict=all_assets_price_dict,
             all_assets_events_dict=all_assets_events_dict,
+            block_details_dict=block_details_dict,
         )
 
         max_block_timestamp = result.get('timestamp', int(time.time()))

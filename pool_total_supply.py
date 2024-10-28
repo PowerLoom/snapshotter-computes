@@ -30,9 +30,11 @@ class AssetTotalSupplyProcessor(GenericProcessor):
         preloader_results: dict,
     ):
         
-        aave_asset_data = preloader_results.get('bulk_asset', None)
+        aave_asset_data = preloader_results.get('bulk_asset', {})
         if not aave_asset_data:
             self._logger.error('Aave asset data not found in preloader results')
+
+        block_details_dict = preloader_results.get('block_details', {})
         
         all_assets_data_dict = aave_asset_data[0]
         all_assets_price_dict = aave_asset_data[1]
@@ -63,9 +65,9 @@ class AssetTotalSupplyProcessor(GenericProcessor):
             from_block=min_chain_height,
             to_block=max_chain_height,
             rpc_helper=rpc_helper,
-            block_details_dict=None,
             all_assets_data_dict=all_assets_data_dict,
             all_assets_price_dict=all_assets_price_dict,
+            block_details_dict=block_details_dict,
         )
 
         # Process data for each block in the epoch
