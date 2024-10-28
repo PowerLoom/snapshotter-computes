@@ -2,8 +2,9 @@ import asyncio
 from web3 import Web3
 from snapshotter.utils.rpc import RpcHelper
 from snapshotter.utils.models.message_models import SnapshotProcessMessage
+from snapshotter.utils.snapshot_utils import get_block_details_in_block_range
 from computes.pair_total_reserves import PairTotalReservesProcessor
-from snapshotter.utils.snapshot_utils import get_eth_price_usd
+from computes.preloaders.eth_price.preloader import EthPricePreloader
 
 
 async def test_pair_total_reserves_compute():
@@ -30,7 +31,8 @@ async def test_pair_total_reserves_compute():
     processor = PairTotalReservesProcessor()
     
     # Get ETH price dictionary
-    eth_price_dict = await get_eth_price_usd(start_block, end_block, rpc_helper)
+    eth_price_dict = await EthPricePreloader().get_eth_price_usd(start_block, end_block, rpc_helper)
+    block_details_dict = await get_block_details_in_block_range(start_block, end_block, rpc_helper)
     
     # Call the compute function
     result = await processor.compute(
@@ -39,7 +41,10 @@ async def test_pair_total_reserves_compute():
         anchor_rpc_helper=rpc_helper,  # Using the same RPC helper for simplicity
         ipfs_reader=None,  # You may need to mock this or provide a real IPFS reader
         protocol_state_contract=None,  # You may need to mock this or provide a real contract
-        eth_price_dict=eth_price_dict,
+        preloader_results={
+            'eth_price': eth_price_dict,
+            'block_details': block_details_dict,
+        }
     )
     
     # Assert that we got a result
