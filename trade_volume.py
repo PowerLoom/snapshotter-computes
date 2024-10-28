@@ -7,10 +7,10 @@ from snapshotter.utils.default_logger import logger
 from snapshotter.utils.models.message_models import SnapshotProcessMessage
 from snapshotter.utils.rpc import RpcHelper
 
-from .settings.config import settings as module_settings
-from .utils.core import get_pair_trade_volume
-from .utils.models.message_models import EpochBaseSnapshot
-from .utils.models.message_models import UniswapTradesSnapshot
+from computes.settings.config import settings as module_settings
+from computes.utils.core import get_pair_trade_volume
+from computes.utils.models.message_models import EpochBaseSnapshot
+from computes.utils.models.message_models import UniswapTradesSnapshot
 
 
 class TradeVolumeProcessor(GenericProcessor):
@@ -27,6 +27,7 @@ class TradeVolumeProcessor(GenericProcessor):
         preloader_results: dict,
     ):
         eth_price_dict = preloader_results.get('eth_price', None)
+        block_details_dict = preloader_results.get('block_details', None)
 
         if not eth_price_dict:
             self._logger.error(
@@ -41,6 +42,7 @@ class TradeVolumeProcessor(GenericProcessor):
             max_chain_height=max_chain_height,
             rpc_helper=rpc_helper,
             eth_price_dict=eth_price_dict,
+            block_details_dict=block_details_dict,
         )
 
         # Set effective trade volume at top level
