@@ -1,3 +1,5 @@
+from typing import Optional
+
 from snapshotter.utils.default_logger import logger
 from snapshotter.utils.rpc import RpcHelper
 from snapshotter.utils.snapshot_utils import (
@@ -36,9 +38,9 @@ async def get_asset_supply_and_debt_bulk(
     from_block,
     to_block,
     rpc_helper: RpcHelper,
-    block_details_dict=None,
-    all_assets_data_dict=None,
-    all_assets_price_dict=None,
+    all_assets_data_dict: Optional[dict] = {},
+    all_assets_price_dict: Optional[dict] = {},
+    block_details_dict: Optional[dict] = {}
 ):
     """
     Retrieves the supply and debt data for a specific asset over a range of blocks.
@@ -61,7 +63,7 @@ async def get_asset_supply_and_debt_bulk(
     )
     asset_address = Web3.to_checksum_address(asset_address)
 
-    # Fetch block details if required
+    # Fetch block details if not provided
     if not block_details_dict:
         try:
             block_details_dict = await get_block_details_in_block_range(
@@ -220,9 +222,9 @@ async def get_asset_trade_volume(
     from_block,
     to_block,
     rpc_helper: RpcHelper,
-    block_details_dict=None,
-    all_assets_price_dict=None,
-    all_assets_events_dict=None,  # Renamed from supply_events
+    all_assets_price_dict: Optional[dict] = {},
+    all_assets_events_dict: Optional[dict] = {},
+    block_details_dict: Optional[dict] = {},
 ):
     """
     Retrieves the trade volume data for a specific asset over a range of blocks.
@@ -242,7 +244,7 @@ async def get_asset_trade_volume(
     """
     asset_address = Web3.to_checksum_address(asset_address)
 
-    # Fetch block details if required
+    # Fetch block details if not provided
     if not block_details_dict:
         try:
             block_details_dict = await get_block_details_in_block_range(
@@ -280,8 +282,8 @@ async def get_asset_trade_volume(
             raise err
 
     # Fetch events for all assets in the pool if not provided
-    if not all_assets_events_dict:  # Updated condition
-        all_assets_events_dict = await get_pool_supply_events(  # Updated variable name
+    if not all_assets_events_dict:
+        all_assets_events_dict = await get_pool_supply_events(
             rpc_helper=rpc_helper,
             from_block=from_block,
             to_block=to_block,
@@ -295,7 +297,7 @@ async def get_asset_trade_volume(
             x['args'].get('collateralAsset', '') == asset_address,
             value,
         )
-        for key, value in all_assets_events_dict.items()  # Updated variable name
+        for key, value in all_assets_events_dict.items()
     }
 
     # Initialize data models with empty/0 values
