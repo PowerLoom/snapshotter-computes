@@ -1,6 +1,7 @@
 import asyncio
 import json
 from functools import reduce
+from typing import Optional
 
 from snapshotter.utils.default_logger import logger
 from snapshotter.utils.rpc import get_event_sig_and_abi
@@ -28,6 +29,7 @@ async def get_pair_reserves(
     to_block,
     rpc_helper: RpcHelper,
     eth_price_dict: dict,
+    block_details_dict: Optional[dict] = None,
 ):
     """
     Fetch and calculate pair reserves for a given Uniswap pair over a block range.
@@ -46,24 +48,23 @@ async def get_pair_reserves(
         f'Starting pair total reserves query for: {pair_address}',
     )
     pair_address = Web3.to_checksum_address(pair_address)
-
-    try:
-        block_details_dict = await get_block_details_in_block_range(
-            from_block,
-            to_block,
-            rpc_helper=rpc_helper,
-        )
-    except Exception as err:
-        core_logger.opt(exception=True).error(
-            (
-                'Error attempting to get block details of block-range'
-                ' {}-{}: {}, retrying again'
-            ),
-            from_block,
-            to_block,
-            err,
-        )
-        raise err
+    if block_details_dict is None:
+        try:
+            block_details_dict = await get_block_details_in_block_range(
+                from_block=from_block,
+                to_block=to_block,
+                rpc_helper=rpc_helper,
+            )
+        except Exception as err:
+            core_logger.opt(exception=True).error(
+                (
+                    'Error attempting to get block details of to_block {}:'
+                    ' {}, retrying again'
+                ),
+                to_block,
+                err,
+            )
+            raise err
 
     pair_per_token_metadata = await get_pair_metadata(
         pair_address=pair_address,
@@ -335,6 +336,7 @@ async def get_pair_trade_volume(
     max_chain_height,
     rpc_helper: RpcHelper,
     eth_price_dict: dict,
+    block_details_dict: Optional[dict] = None,
 ):
     """
     Fetch and calculate trade volume for a Uniswap pair over a block range.
@@ -352,22 +354,23 @@ async def get_pair_trade_volume(
     data_source_contract_address = Web3.to_checksum_address(
         data_source_contract_address,
     )
-    try:
-        block_details_dict = await get_block_details_in_block_range(
-            from_block=min_chain_height,
-            to_block=max_chain_height,
-            rpc_helper=rpc_helper,
-        )
-    except Exception as err:
-        core_logger.opt(exception=True).error(
-            (
-                'Error attempting to get block details of to_block {}:'
-                ' {}, retrying again'
-            ),
-            max_chain_height,
-            err,
-        )
-        raise err
+    if block_details_dict is None:
+        try:
+            block_details_dict = await get_block_details_in_block_range(
+                from_block=min_chain_height,
+                to_block=max_chain_height,
+                rpc_helper=rpc_helper,
+            )
+        except Exception as err:
+            core_logger.opt(exception=True).error(
+                (
+                    'Error attempting to get block details of to_block {}:'
+                    ' {}, retrying again'
+                ),
+                max_chain_height,
+                err,
+            )
+            raise err
 
     pair_per_token_metadata = await get_pair_metadata(
         pair_address=data_source_contract_address,
