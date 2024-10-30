@@ -43,16 +43,12 @@
     "0x11b815efb8f581194ae79006d24e0d814b7697f6",
     "0x4585fe77225b41b697c938b018e2ac67ac5a20c0",
     "0xcbcdf9626bc03e24f779434178a73a0b4bad62ed",
-    "0x3416cf6c708da44db2624d63ea0aaef7113527c6",
-    "0x109830a1aaad605bbf02a9dfa7b0b92ec2fb7daa",
     "0x9db9e0e53058c89e5b94e29621a205198648425b",
     "0x7a415b19932c0105c82fdb6b720bb01b0cc2cae3",
     "0x8ad599c3a0ff1de082011efddc58f1908eb6e6d8",
     "0x4e68ccd3e89f51c3074ca5072bbac773960dfa36",
-    "0xbe80225f09645f172b079394312220637c440a63",
     "0xe8c6c9227491c0a8156a0106a0204d881bb7e531",
     "0x60594a405d53811d3bc4766596efd80fd545a270",
-    "0x5777d92f208679db4b9778590fa3cab3ac9e2168",
     "0xc2e9f25be6257c210d7adf0d4cd6e3e881ba25f8",
     "0x9b3423373e6e786c9ac367120533abe4ee398373",
     "0x11950d141ecb863f01007add7d1a342041227b58",
@@ -78,9 +74,6 @@
     "0x4b5ab61593a2401b1075b90c04cbcdd3f87ce011",
     "0x5764a6f2212d502bc5970f9f129ffcd61e5d7563",
     "0x97e7d56a0408570ba1a7852de36350f7713906ec",
-    "0x12d6867fa648d269835cf69b49f125147754b54d",
-    "0x5796d7ad51583ae2c7297652edb7006bcd90519d",
-    "0xc5c134a1f112efa96003f8559dba6fac0ba77692",
     "0x9d96880952b4c80a55099b9c258250f2cc5813ec",
     "0x4a25dbdf9629b1782c3e2c7de3bdce41f1c7f801",
     "0xf47f04a8605be181e525d6391233cba1f7474182",
@@ -155,44 +148,6 @@
         "decimals": 8,
         "name": "Wrapped BTC",
         "symbol": "WBTC"
-      },
-      "token1": {
-        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
-        "decimals": 18,
-        "name": "Wrapped Ether",
-        "symbol": "WETH"
-      }
-    },
-    "0x3416cF6C708Da44DB2624D63ea0AAef7113527C6": {
-      "pair": {
-        "address": "0x3416cF6C708Da44DB2624D63ea0AAef7113527C6",
-        "fee": 100,
-        "symbol": "USDC-USDT|100"
-      },
-      "token0": {
-        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
-        "decimals": 6,
-        "name": "USD Coin",
-        "symbol": "USDC"
-      },
-      "token1": {
-        "address": "0xdAC17F958D2ee523a2206206994597C13D831ec7",
-        "decimals": 6,
-        "name": "Tether USD",
-        "symbol": "USDT"
-      }
-    },
-    "0x109830a1AAaD605BbF02a9dFA7B0B92EC2FB7dAa": {
-      "pair": {
-        "address": "0x109830a1AAaD605BbF02a9dFA7B0B92EC2FB7dAa",
-        "fee": 100,
-        "symbol": "wstETH-WETH|100"
-      },
-      "token0": {
-        "address": "0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0",
-        "decimals": 18,
-        "name": "Wrapped liquid staked Ether 2.0",
-        "symbol": "wstETH"
       },
       "token1": {
         "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
@@ -277,25 +232,6 @@
         "symbol": "USDT"
       }
     },
-    "0xBE80225f09645f172B079394312220637C440A63": {
-      "pair": {
-        "address": "0xBE80225f09645f172B079394312220637C440A63",
-        "fee": 100,
-        "symbol": "ezETH-WETH|100"
-      },
-      "token0": {
-        "address": "0xbf5495Efe5DB9ce00f80364C8B423567e58d2110",
-        "decimals": 18,
-        "name": "Renzo Restaked ETH",
-        "symbol": "ezETH"
-      },
-      "token1": {
-        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
-        "decimals": 18,
-        "name": "Wrapped Ether",
-        "symbol": "WETH"
-      }
-    },
     "0xe8c6c9227491C0a8156A0106A0204d881BB7E531": {
       "pair": {
         "address": "0xe8c6c9227491C0a8156A0106A0204d881BB7E531",
@@ -332,25 +268,6 @@
         "decimals": 18,
         "name": "Wrapped Ether",
         "symbol": "WETH"
-      }
-    },
-    "0x5777d92f208679DB4b9778590Fa3CAB3aC9e2168": {
-      "pair": {
-        "address": "0x5777d92f208679DB4b9778590Fa3CAB3aC9e2168",
-        "fee": 100,
-        "symbol": "DAI-USDC|100"
-      },
-      "token0": {
-        "address": "0x6B175474E89094C44Da98b954EedeAC495271d0F",
-        "decimals": 18,
-        "name": "Dai Stablecoin",
-        "symbol": "DAI"
-      },
-      "token1": {
-        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
-        "decimals": 6,
-        "name": "USD Coin",
-        "symbol": "USDC"
       }
     },
     "0xC2e9F25Be6257c210d7Adf0D4Cd6E3E881ba25f8": {
@@ -826,63 +743,6 @@
         "decimals": 18,
         "name": "Frax",
         "symbol": "FRAX"
-      }
-    },
-    "0x12D6867FA648d269835cf69B49F125147754B54d": {
-      "pair": {
-        "address": "0x12D6867FA648d269835cf69B49F125147754B54d",
-        "fee": 100,
-        "symbol": "USDC-UST|100"
-      },
-      "token0": {
-        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
-        "decimals": 6,
-        "name": "USD Coin",
-        "symbol": "USDC"
-      },
-      "token1": {
-        "address": "0xa693B19d2931d498c5B318dF961919BB4aee87a5",
-        "decimals": 6,
-        "name": "UST",
-        "symbol": "UST"
-      }
-    },
-    "0x5796d7aD51583aE2c7297652edB7006BcD90519d": {
-      "pair": {
-        "address": "0x5796d7aD51583aE2c7297652edB7006BcD90519d",
-        "fee": 100,
-        "symbol": "HKDM-USDM|100"
-      },
-      "token0": {
-        "address": "0x0071F94350573Cd411e40BB409E7ddD927224054",
-        "decimals": 6,
-        "name": "HKD Mapped Token",
-        "symbol": "HKDM"
-      },
-      "token1": {
-        "address": "0xbbAec992fc2d637151dAF40451f160bF85f3C8C1",
-        "decimals": 6,
-        "name": "USD Mapped Token",
-        "symbol": "USDM"
-      }
-    },
-    "0xC5c134A1f112efA96003f8559Dba6fAC0BA77692": {
-      "pair": {
-        "address": "0xC5c134A1f112efA96003f8559Dba6fAC0BA77692",
-        "fee": 100,
-        "symbol": "WHITE-WETH|100"
-      },
-      "token0": {
-        "address": "0x5F0E628B693018f639D10e4A4F59BD4d8B2B6B44",
-        "decimals": 18,
-        "name": "Whiteheart Token",
-        "symbol": "WHITE"
-      },
-      "token1": {
-        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
-        "decimals": 18,
-        "name": "Wrapped Ether",
-        "symbol": "WETH"
       }
     },
     "0x9d96880952B4C80a55099B9c258250F2CC5813EC": {
