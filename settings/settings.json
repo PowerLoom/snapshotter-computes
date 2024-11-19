@@ -47,7 +47,14 @@
     "0xf939e0a03fb07f59a73314e73794be0e57ac1b4e",
     "0x9f8f72aa9304c8b593d555f12ef6589cc3a579a2",
     "0x6c3ea9036406852006290770bedfcaba0e23a0e8",
-    "0xcd5fe23c85820f7b72d0926fc9b05b43e359b7ee"
+    "0xcd5fe23c85820f7b72d0926fc9b05b43e359b7ee",
+    "0xf1C9acDc66974dFB6dEcB12aA385b9cD01190E38",
+    "0x4c9EDD5852cd905f086C759E8383e09bff1E68B3",
+    "0xA35b1B31Ce002FBF2058D22F30f95D405200A15b",
+    "0x9D39A5DE30e57443BfF2A8307A4256c8797A3497",
+    "0x18084fbA666a33d37592fA2633fD49a74DD93a88",
+    "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf",
+    "0xdC035D45d973E3EC169d2276DDab16f1e407384F"
   ],
   "metadata_cache": {
     "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48": {
@@ -223,6 +230,48 @@
       "decimals": 18,
       "symbol": "weETH",
       "name": "Wrapped eETH"
+    },
+    "0xf1C9acDc66974dFB6dEcB12aA385b9cD01190E38": {
+      "address": "0xf1C9acDc66974dFB6dEcB12aA385b9cD01190E38",
+      "decimals": 18,
+      "symbol": "osETH",
+      "name": "Staked ETH"
+    },
+    "0x4c9EDD5852cd905f086C759E8383e09bff1E68B3": {
+      "address": "0x4c9EDD5852cd905f086C759E8383e09bff1E68B3",
+      "decimals": 18,
+      "symbol": "USDe",
+      "name": "USDe"
+    },
+    "0xA35b1B31Ce002FBF2058D22F30f95D405200A15b": {
+      "address": "0xA35b1B31Ce002FBF2058D22F30f95D405200A15b",
+      "decimals": 18,
+      "symbol": "ETHx",
+      "name": "ETHx"
+    },
+    "0x9D39A5DE30e57443BfF2A8307A4256c8797A3497": {
+      "address": "0x9D39A5DE30e57443BfF2A8307A4256c8797A3497",
+      "decimals": 18,
+      "symbol": "sUSDe",
+      "name": "Staked USDe"
+    },
+    "0x18084fbA666a33d37592fA2633fD49a74DD93a88": {
+      "address": "0x18084fbA666a33d37592fA2633fD49a74DD93a88",
+      "decimals": 18,
+      "symbol": "tBTC",
+      "name": "tBTC v2"
+    },
+    "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf": {
+      "address": "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf",
+      "decimals": 8,
+      "symbol": "cbBTC",
+      "name": "Coinbase Wrapped BTC"
+    },
+    "0xdC035D45d973E3EC169d2276DDab16f1e407384F": {
+      "address": "0xdC035D45d973E3EC169d2276DDab16f1e407384F",
+      "decimals": 18,
+      "symbol": "USDS",
+      "name": "USDS Stablecoin"
     }
   }
 }
