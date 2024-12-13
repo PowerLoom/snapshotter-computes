@@ -50,9 +50,6 @@ class AssetDetailsData(BaseModel):
         resFactor: Reserve factor.
         borrowCap: Borrow cap.
         supplyCap: Supply cap.
-        eLtv: Efficiency Loan to Value ratio.
-        eliqThreshold: Efficiency liquidation threshold.
-        eliqBonus: Efficiency liquidation bonus.
     """
 
     ltv: float
@@ -61,9 +58,6 @@ class AssetDetailsData(BaseModel):
     resFactor: float
     borrowCap: int
     supplyCap: int
-    eLtv: float
-    eliqThreshold: float
-    eliqBonus: float
 
 
 class RateDetailsData(BaseModel):
@@ -72,9 +66,6 @@ class RateDetailsData(BaseModel):
     Attributes:
         varRateSlope1: Variable rate slope 1.
         varRateSlope2: Variable rate slope 2.
-        stableRateSlope1: Stable rate slope 1.
-        stableRateSlope2: Stable rate slope 2.
-        baseStableRate: Base stable rate.
         baseVarRate: Base variable rate.
         optimalRate: Optimal rate.
         utilRate: Utilization rate.
@@ -82,9 +73,6 @@ class RateDetailsData(BaseModel):
 
     varRateSlope1: float
     varRateSlope2: float
-    stableRateSlope1: float
-    stableRateSlope2: float
-    baseStableRate: float
     baseVarRate: float
     optimalRate: float
     utilRate: float = 0
@@ -98,12 +86,8 @@ class UiDataProviderReserveData(BaseModel):
         variableBorrowIndex: Current variable borrow index.
         liquidityRate: Current liquidity rate.
         variableBorrowRate: Current variable borrow rate.
-        stableBorrowRate: Current stable borrow rate.
         lastUpdateTimestamp: Timestamp of the last update.
         availableLiquidity: Available liquidity.
-        totalPrincipalStableDebt: Total principal stable debt.
-        averageStableRate: Average stable rate.
-        stableDebtLastUpdateTimestamp: Timestamp of the last stable debt update.
         totalScaledVariableDebt: Total scaled variable debt.
         priceInMarketReferenceCurrency: Price in market reference currency (usually USD).
         accruedToTreasury: Amount accrued to treasury.
@@ -114,12 +98,8 @@ class UiDataProviderReserveData(BaseModel):
     variableBorrowIndex: int
     liquidityRate: int
     variableBorrowRate: int
-    stableBorrowRate: int
     lastUpdateTimestamp: int
     availableLiquidity: int
-    totalPrincipalStableDebt: int
-    averageStableRate: int
-    stableDebtLastUpdateTimestamp: int
     totalScaledVariableDebt: int
     priceInMarketReferenceCurrency: int
     accruedToTreasury: int
@@ -172,12 +152,10 @@ class AssetTotalData(BaseModel):
 
     totalSupply: AaveSupplyData
     availableLiquidity: AaveSupplyData
-    totalStableDebt: AaveDebtData
     totalVariableDebt: AaveDebtData
     liquidityRate: int
     liquidityIndex: int
     variableBorrowRate: int
-    stableBorrowRate: int
     variableBorrowIndex: int
     lastUpdateTimestamp: int
     isolationModeTotalDebt: int
