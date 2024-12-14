@@ -324,32 +324,32 @@ async def get_bulk_asset_data(
                 # full response interface can be found in the following github repo:
                 # https://github.com/aave-dao/aave-v3-origin/blob/3f70474d2a079a270bd8a3cea1b79f5dcfa96ac2/src/contracts/helpers/interfaces/IUiPoolDataProviderV3.sol#L8
                 asset_data = {
-                    'liquidityIndex': data[10],  # liquidityIndex
-                    'variableBorrowIndex': data[11],  # variableBorrowIndex
-                    'liquidityRate': data[12],  # liquidityRate
-                    'variableBorrowRate': data[13],  # variableBorrowRate
-                    'lastUpdateTimestamp': data[14],  # lastUpdateTimestamp
-                    'availableLiquidity': data[20],  # availableLiquidity
-                    'totalScaledVariableDebt': data[21],  # totalScaledVariableDebt
-                    'priceInMarketReferenceCurrency': data[22],  # priceInMarketReferenceCurrency
-                    'accruedToTreasury': data[29],  # accruedToTreasury
-                    'isolationModeTotalDebt': data[31],  # isolationModeTotalDebt
+                    'liquidityIndex': data[12],            # Current liquidity index
+                    'variableBorrowIndex': data[13],       # Current variable borrow index
+                    'liquidityRate': data[14],             # Current liquidity rate
+                    'variableBorrowRate': data[15],        # Current variable borrow rate
+                    'lastUpdateTimestamp': data[16],       # Last update timestamp
+                    'availableLiquidity': data[20],        # Total available liquidity
+                    'totalScaledVariableDebt': data[21],   # Total scaled variable debt
+                    'priceInMarketReferenceCurrency': data[22], # Price in market reference currency
+                    'accruedToTreasury': data[30],         # Amount accrued to treasury
+                    'isolationModeTotalDebt': data[32],    # Total debt in isolation mode
                 }
 
                 asset_details = {
-                    'ltv': data[4],  # baseLTVasCollateral
-                    'liqThreshold': data[5],  # reserveLiquidationThreshold
-                    'liqBonus': data[6],  # reserveLiquidationBonus
-                    'resFactor': data[7],  # reserveFactor
-                    'borrowCap': data[35],  # borrowCap
-                    'supplyCap': data[36],  # supplyCap
+                    'ltv': data[4],                        # Base LTV as collateral
+                    'liqThreshold': data[5],               # Reserve liquidation threshold
+                    'liqBonus': data[6],                   # Reserve liquidation bonus
+                    'resFactor': data[7],                  # Reserve factor
+                    'borrowCap': data[36],                 # Maximum amount that can be borrowed
+                    'supplyCap': data[37],                 # Maximum amount that can be supplied
                 }
 
                 rate_details = {
-                    'varRateSlope1': data[24],  # variableRateSlope1
-                    'varRateSlope2': data[25],  # variableRateSlope2
-                    'baseVarRate': data[26],  # baseVariableBorrowRate
-                    'optimalRate': data[27],  # optimalUsageRatio
+                    'varRateSlope1': data[24],             # Variable rate slope 1
+                    'varRateSlope2': data[25],             # Variable rate slope 2
+                    'baseVarRate': data[26],               # Base variable borrow rate
+                    'optimalRate': data[27],               # Optimal usage ratio
                 }
 
                 data_dict = {
