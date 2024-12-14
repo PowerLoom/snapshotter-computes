@@ -198,12 +198,6 @@ async def get_asset_supply_and_debt_bulk(
             last_update_timestamp=asset_data.lastUpdateTimestamp,
         )
 
-        stable_interest = calculate_compound_interest_rate(
-            rate=asset_data.averageStableRate,
-            current_timestamp=timestamp,
-            last_update_timestamp=asset_data.stableDebtLastUpdateTimestamp,
-        )
-
         # Calculate current debt values
         total_variable_debt = calculate_current_from_scaled(
             scaled_value=asset_data.totalScaledVariableDebt,
@@ -211,15 +205,12 @@ async def get_asset_supply_and_debt_bulk(
             interest_rate=variable_interest,
         )
 
-        # stable debt is not scaled, so we can directly apply the interest rate to the stable debt
-        total_stable_debt = rayMul(asset_data.totalPrincipalStableDebt, stable_interest)
 
         # Calculate total supply and USD values
-        total_supply = asset_data.availableLiquidity + total_variable_debt + total_stable_debt
+        total_supply = asset_data.availableLiquidity + total_variable_debt
         asset_usd_price = asset_data.priceInMarketReferenceCurrency * (10 ** -ORACLE_DECIMALS)
         total_supply_usd = (total_supply * asset_usd_price) / (10 ** int(asset_metadata['decimals']))
         total_variable_debt_usd = (total_variable_debt * asset_usd_price) / (10 ** int(asset_metadata['decimals']))
-        total_stable_debt_usd = (total_stable_debt * asset_usd_price) / (10 ** int(asset_metadata['decimals']))
         available_liquidity_usd = (asset_data.availableLiquidity * asset_usd_price) / \
             (10 ** int(asset_metadata['decimals']))
 
@@ -228,18 +219,15 @@ async def get_asset_supply_and_debt_bulk(
         asset_details.liqThreshold = (asset_details.liqThreshold / DETAILS_BASIS) * 100
         asset_details.resFactor = (asset_details.resFactor / DETAILS_BASIS) * 100
         asset_details.liqBonus = ((asset_details.liqBonus / DETAILS_BASIS) * 100) - 100
-        asset_details.eLtv = (asset_details.eLtv / DETAILS_BASIS) * 100
-        asset_details.eliqThreshold = (asset_details.eliqThreshold / DETAILS_BASIS) * 100
-        asset_details.eliqBonus = ((asset_details.eliqBonus / DETAILS_BASIS) * 100) - 100
+        # asset_details.eLtv = (asset_details.eLtv / DETAILS_BASIS) * 100
+        # asset_details.eliqThreshold = (asset_details.eliqThreshold / DETAILS_BASIS) * 100
+        # asset_details.eliqBonus = ((asset_details.eliqBonus / DETAILS_BASIS) * 100) - 100
 
         # Normalize rate detail rates, rates and slopes are return in RAY format
         asset_rate_details.utilRate = total_variable_debt / total_supply
         asset_rate_details.varRateSlope1 = convert_from_ray(asset_rate_details.varRateSlope1)
         asset_rate_details.varRateSlope2 = convert_from_ray(asset_rate_details.varRateSlope2)
         asset_rate_details.baseVarRate = convert_from_ray(asset_rate_details.baseVarRate)
-        asset_rate_details.stableRateSlope1 = convert_from_ray(asset_rate_details.stableRateSlope1)
-        asset_rate_details.stableRateSlope2 = convert_from_ray(asset_rate_details.stableRateSlope2)
-        asset_rate_details.baseStableRate = convert_from_ray(asset_rate_details.baseStableRate)
         asset_rate_details.optimalRate = convert_from_ray(asset_rate_details.optimalRate)
 
         # Create AssetTotalData object with all calculated values
@@ -252,10 +240,6 @@ async def get_asset_supply_and_debt_bulk(
                 token_supply=asset_data.availableLiquidity,
                 usd_supply=available_liquidity_usd,
             ),
-            totalStableDebt=AaveDebtData(
-                token_debt=total_stable_debt,
-                usd_debt=total_stable_debt_usd,
-            ),
             totalVariableDebt=AaveDebtData(
                 token_debt=total_variable_debt,
                 usd_debt=total_variable_debt_usd,
@@ -263,7 +247,6 @@ async def get_asset_supply_and_debt_bulk(
             liquidityRate=asset_data.liquidityRate,
             liquidityIndex=asset_data.liquidityIndex,
             variableBorrowRate=asset_data.variableBorrowRate,
-            stableBorrowRate=asset_data.stableBorrowRate,
             variableBorrowIndex=asset_data.variableBorrowIndex,
             lastUpdateTimestamp=asset_data.lastUpdateTimestamp,
             isolationModeTotalDebt=asset_data.isolationModeTotalDebt,
