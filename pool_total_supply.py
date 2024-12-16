@@ -49,10 +49,8 @@ class AssetTotalSupplyProcessor(GenericProcessorSnapshot):
         epoch_asset_snapshot_map_liquidity_rate = dict()
         epoch_asset_snapshot_map_liquidity_index = dict()
 
-        epoch_asset_snapshot_map_total_stable_debt = dict()
         epoch_asset_snapshot_map_total_variable_debt = dict()
         epoch_asset_snapshot_map_variable_borrow_rate = dict()
-        epoch_asset_snapshot_map_stable_borrow_rate = dict()
         epoch_asset_snapshot_map_variable_borrow_index = dict()
         epoch_asset_snapshot_map_variable_borrow_rate = dict()
 
@@ -91,18 +89,12 @@ class AssetTotalSupplyProcessor(GenericProcessorSnapshot):
             epoch_asset_snapshot_map_liquidity_index[
                 f'block{block_num}'
             ] = block_asset_supply_debt.liquidityIndex
-            epoch_asset_snapshot_map_total_stable_debt[
-                f'block{block_num}'
-            ] = block_asset_supply_debt.totalStableDebt
             epoch_asset_snapshot_map_total_variable_debt[
                 f'block{block_num}'
             ] = block_asset_supply_debt.totalVariableDebt
             epoch_asset_snapshot_map_variable_borrow_rate[
                 f'block{block_num}'
             ] = block_asset_supply_debt.variableBorrowRate
-            epoch_asset_snapshot_map_stable_borrow_rate[
-                f'block{block_num}'
-            ] = block_asset_supply_debt.stableBorrowRate
             epoch_asset_snapshot_map_variable_borrow_index[
                 f'block{block_num}'
             ] = block_asset_supply_debt.variableBorrowIndex
@@ -146,9 +138,7 @@ class AssetTotalSupplyProcessor(GenericProcessorSnapshot):
                 'liquidityRate': epoch_asset_snapshot_map_liquidity_rate,
                 'liquidityIndex': epoch_asset_snapshot_map_liquidity_index,
                 'totalVariableDebt': epoch_asset_snapshot_map_total_variable_debt,
-                'totalStableDebt': epoch_asset_snapshot_map_total_stable_debt,
                 'variableBorrowRate': epoch_asset_snapshot_map_variable_borrow_rate,
-                'stableBorrowRate': epoch_asset_snapshot_map_stable_borrow_rate,
                 'variableBorrowIndex': epoch_asset_snapshot_map_variable_borrow_index,
                 'lastUpdateTimestamp': epoch_asset_snapshot_map_last_update_timestamp,
                 'isolationModeTotalDebt': epoch_asset_snapshot_map_isolated_debt,
