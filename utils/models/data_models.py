@@ -13,12 +13,9 @@ class DataProviderReserveData():
         unbacked: Amount of unbacked assets.
         accruedToTreasuryScaled: Scaled amount accrued to treasury.
         totalAToken: Total amount of aTokens.
-        totalStableDebt: Total amount of stable debt.
         totalVariableDebt: Total amount of variable debt.
         liquidityRate: Current liquidity rate.
         variableBorrowRate: Current variable borrow rate.
-        stableBorrowRate: Current stable borrow rate.
-        averageStableBorrowRate: Average stable borrow rate.
         liquidityIndex: Current liquidity index.
         variableBorrowIndex: Current variable borrow index.
         lastUpdateTimestamp: Timestamp of the last update.
@@ -28,12 +25,9 @@ class DataProviderReserveData():
     unbacked: int
     accruedToTreasuryScaled: int
     totalAToken: int
-    totalStableDebt: int
     totalVariableDebt: int
     liquidityRate: int
     variableBorrowRate: int
-    stableBorrowRate: int
-    averageStableBorrowRate: int
     liquidityIndex: int
     variableBorrowIndex: int
     lastUpdateTimestamp: int
@@ -136,12 +130,10 @@ class AssetTotalData(BaseModel):
     Attributes:
         totalSupply: Total supply data.
         availableLiquidity: Available liquidity data.
-        totalStableDebt: Total stable debt data.
         totalVariableDebt: Total variable debt data.
         liquidityRate: Current liquidity rate.
         liquidityIndex: Current liquidity index.
         variableBorrowRate: Current variable borrow rate.
-        stableBorrowRate: Current stable borrow rate.
         variableBorrowIndex: Current variable borrow index.
         lastUpdateTimestamp: Timestamp of the last update.
         isolationModeTotalDebt: Total debt in isolation mode.
