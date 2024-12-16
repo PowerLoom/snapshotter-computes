@@ -232,6 +232,18 @@ def get_maker_pair_data(prop):
         return 'Maker'
 
 
+def get_tuple_type_string(components):
+    types = []
+    for component in components:
+        if component['type'] == 'tuple':
+            # Recursively handle nested tuples
+            nested_types = get_tuple_type_string(component['components'])
+            types.append(f"({nested_types})")
+        else:
+            types.append(component['type'])
+    return ','.join(types)
+
+
 async def get_bulk_asset_data(
     redis_conn: aioredis.Redis,
     rpc_helper: RpcHelper,
@@ -278,20 +290,25 @@ async def get_bulk_asset_data(
         # PoolAddressProvider contract serves as a registry for the Aave protocol's core contracts
         # to be consumed by the Aave UI and the protocol's contracts
         param = Web3.to_checksum_address(worker_settings.contract_addresses.pool_address_provider)
-        function = ui_pool_data_provider_contract_obj.functions.getReservesData(param)
+        reserve_data_function = ui_pool_data_provider_contract_obj.functions.getReservesData(param)
+        e_mode_category_function = ui_pool_data_provider_contract_obj.functions.getEModes(param)
 
         # Generate types for abi decoding
-        output_type = [
-            str(
-                tuple(
-                    component['type']
-                    for component in output['components']
-                ),
-            ).replace(' ', '').replace("'", '')
-            for output in function.abi['outputs']
+        reserve_data_output_type = [
+            f"({get_tuple_type_string(output['components'])})"
+            for output in reserve_data_function.abi['outputs']
         ]
 
-        type_string = output_type[0]+'[]'
+        e_mode_category_output_type = [
+            f"({get_tuple_type_string(output['components'])})"
+            for output in e_mode_category_function.abi['outputs']
+        ]
+
+        reserve_data_type_string = reserve_data_output_type[0]+'[]'
+        e_mode_category_type_string = e_mode_category_output_type[0]+'[]'
+
+        print(e_mode_category_type_string)
+        print(reserve_data_type_string)
 
         abi_dict = get_contract_abi_dict(
             abi=ui_pool_data_provider_contract_obj.abi,
@@ -308,14 +325,28 @@ async def get_bulk_asset_data(
             params=[param],
         )
 
+        e_mode_data_bulk = await rpc_helper.batch_eth_call_on_block_range_hex_data(
+            abi_dict=abi_dict,
+            contract_address=worker_settings.contract_addresses.ui_pool_data_provider,
+            from_block=from_block,
+            to_block=to_block,
+            function_name='getEModes',
+            params=[param],
+        )
+
         all_assets_data_dict = {asset: {} for asset in asset_set}
         all_assets_price_dict = {block_num: {} for block_num in range(from_block, to_block + 1)}
 
         # Iterate over the bulk asset data response and decode the data
         for i, block_num in enumerate(range(from_block, to_block + 1)):
             decoded_assets_data = abi.decode(
-                (type_string, output_type[1]), asset_data_bulk[i],
+                (reserve_data_type_string, reserve_data_output_type[1]), asset_data_bulk[i],
             )
+
+            decoded_e_mode_category = abi.decode(
+                [e_mode_category_type_string], e_mode_data_bulk[i],
+            )
+            decoded_e_mode_category = decoded_e_mode_category[0]
 
             # Each data point in the response array represents a single asset
             for data in decoded_assets_data[0]:
