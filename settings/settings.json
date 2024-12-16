@@ -4,7 +4,6 @@
         "pool_data_provider_contract": "computes/static/abis/AaveProtocolDataProvider.json",
         "erc20": "computes/static/abis/IERC20.json",
         "a_token": "computes/static/abis/AToken.json",
-        "stable_token": "computes/static/abis/StableDebtToken.json",
         "variable_token": "computes/static/abis/VariableDebtToken.json",
         "aave_oracle": "computes/static/abis/AaveOracle.json",
         "ui_pool_data_provider": "computes/static/abis/UiPoolDataProvider.json"
