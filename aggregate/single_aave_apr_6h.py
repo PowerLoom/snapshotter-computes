@@ -54,10 +54,6 @@ class AggreagateSingleAprProcessor(GenericProcessorAggregate):
             len(current_snapshot.variableBorrowRate.values())
         current_variable_avg /= RAY
 
-        current_stable_avg = sum(current_snapshot.stableBorrowRate.values()) / \
-            len(current_snapshot.stableBorrowRate.values())
-        current_stable_avg /= RAY
-
         current_util_avg = sum(
             [details.utilRate for details in current_snapshot.rateDetails.values()],
         ) / len(current_snapshot.rateDetails.values())
@@ -67,8 +63,6 @@ class AggreagateSingleAprProcessor(GenericProcessorAggregate):
             previous_aggregate_snapshot.avgLiquidityRate, current_liq_avg, sample_size)
         previous_aggregate_snapshot.avgVariableRate = self._update_rolling_average(
             previous_aggregate_snapshot.avgVariableRate, current_variable_avg, sample_size)
-        previous_aggregate_snapshot.avgStableRate = self._update_rolling_average(
-            previous_aggregate_snapshot.avgStableRate, current_stable_avg, sample_size)
         previous_aggregate_snapshot.avgUtilizationRate = self._update_rolling_average(
             previous_aggregate_snapshot.avgUtilizationRate, current_util_avg, sample_size)
 
@@ -101,10 +95,6 @@ class AggreagateSingleAprProcessor(GenericProcessorAggregate):
             len(current_snapshot.variableBorrowRate.values())
         current_variable_avg /= RAY
 
-        current_stable_avg = sum(current_snapshot.stableBorrowRate.values()) / \
-            len(current_snapshot.stableBorrowRate.values())
-        current_stable_avg /= RAY
-
         current_util_avg = sum(
             [details.utilRate for details in current_snapshot.rateDetails.values()],
         ) / len(current_snapshot.rateDetails.values())
@@ -114,8 +104,6 @@ class AggreagateSingleAprProcessor(GenericProcessorAggregate):
             previous_aggregate_snapshot.avgLiquidityRate, -current_liq_avg, sample_size - 1)
         previous_aggregate_snapshot.avgVariableRate = self._update_rolling_average(
             previous_aggregate_snapshot.avgVariableRate, -current_variable_avg, sample_size - 1)
-        previous_aggregate_snapshot.avgStableRate = self._update_rolling_average(
-            previous_aggregate_snapshot.avgStableRate, -current_stable_avg, sample_size - 1)
         previous_aggregate_snapshot.avgUtilizationRate = self._update_rolling_average(
             previous_aggregate_snapshot.avgUtilizationRate, -current_util_avg, sample_size - 1)
 
