@@ -373,7 +373,10 @@ async def get_bulk_asset_data(
                     'liqBonus': data[6],                   # Reserve liquidation bonus
                     'resFactor': data[7],                  # Reserve factor
                     'borrowCap': data[36],                 # Maximum amount that can be borrowed
-                    'supplyCap': data[37],                 # Maximum amount that can be supplied
+                    'supplyCap': data[37],
+                    'eLtv': 0,
+                    'eliqThreshold': 0,
+                    'eliqBonus': 0,
                 }
 
                 rate_details = {
@@ -381,9 +384,6 @@ async def get_bulk_asset_data(
                     'varRateSlope2': data[25],             # Variable rate slope 2
                     'baseVarRate': data[26],               # Base variable borrow rate
                     'optimalRate': data[27],
-                    'eLtv': 0,
-                    'eliqThreshold': 0,
-                    'eliqBonus': 0,
                 }
 
                 data_dict = {
