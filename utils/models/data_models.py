@@ -52,6 +52,9 @@ class AssetDetailsData(BaseModel):
     resFactor: float
     borrowCap: int
     supplyCap: int
+    eLtv: int
+    eliqThreshold: int
+    eliqBonus: int
 
 
 class RateDetailsData(BaseModel):
@@ -154,6 +157,21 @@ class AssetTotalData(BaseModel):
     assetDetails: AssetDetailsData
     rateDetails: RateDetailsData
     timestamp: int = None
+
+
+class AssetEModeData(BaseModel):
+    """Model representing asset e-mode data.
+
+    Attributes:
+        collateralEnabled: Collateral enabled flag.
+        borrowEnabled: Borrow enabled flag.
+    """
+    eLtv: int = 0
+    eliqThreshold: int = 0
+    eliqBonus: int = 0
+    collateralEnabled: bool = False
+    borrowEnabled: bool = False
+    label: str = None
 
 
 class volumeData(BaseModel):

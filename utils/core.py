@@ -219,9 +219,9 @@ async def get_asset_supply_and_debt_bulk(
         asset_details.liqThreshold = (asset_details.liqThreshold / DETAILS_BASIS) * 100
         asset_details.resFactor = (asset_details.resFactor / DETAILS_BASIS) * 100
         asset_details.liqBonus = ((asset_details.liqBonus / DETAILS_BASIS) * 100) - 100
-        # asset_details.eLtv = (asset_details.eLtv / DETAILS_BASIS) * 100
-        # asset_details.eliqThreshold = (asset_details.eliqThreshold / DETAILS_BASIS) * 100
-        # asset_details.eliqBonus = ((asset_details.eliqBonus / DETAILS_BASIS) * 100) - 100
+        asset_details.eLtv = (asset_details.eLtv / DETAILS_BASIS) * 100
+        asset_details.eliqThreshold = (asset_details.eliqThreshold / DETAILS_BASIS) * 100
+        asset_details.eliqBonus = ((asset_details.eliqBonus / DETAILS_BASIS) * 100) - 100
 
         # Normalize rate detail rates, rates and slopes are return in RAY format
         asset_rate_details.utilRate = total_variable_debt / total_supply
