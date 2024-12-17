@@ -25,9 +25,12 @@ class DataProviderReserveData():
     unbacked: int
     accruedToTreasuryScaled: int
     totalAToken: int
+    totalStableDebt: int
     totalVariableDebt: int
     liquidityRate: int
     variableBorrowRate: int
+    stableBorrowRate: int
+    averageStableBorrowRate: int
     liquidityIndex: int
     variableBorrowIndex: int
     lastUpdateTimestamp: int
