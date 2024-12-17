@@ -29,6 +29,7 @@ from computes.utils.constants import pool_contract_obj
 from computes.utils.constants import RAY
 from computes.utils.constants import SECONDS_IN_YEAR
 from computes.utils.constants import ui_pool_data_provider_contract_obj
+from computes.utils.models.data_models import AssetEModeData
 
 
 helper_logger = logger.bind(module='PowerLoom|Aave|Helpers')
@@ -232,18 +233,6 @@ def get_maker_pair_data(prop):
         return 'Maker'
 
 
-def get_tuple_type_string(components):
-    types = []
-    for component in components:
-        if component['type'] == 'tuple':
-            # Recursively handle nested tuples
-            nested_types = get_tuple_type_string(component['components'])
-            types.append(f"({nested_types})")
-        else:
-            types.append(component['type'])
-    return ','.join(types)
-
-
 async def get_bulk_asset_data(
     redis_conn: aioredis.Redis,
     rpc_helper: RpcHelper,
@@ -307,9 +296,6 @@ async def get_bulk_asset_data(
         reserve_data_type_string = reserve_data_output_type[0]+'[]'
         e_mode_category_type_string = e_mode_category_output_type[0]+'[]'
 
-        print(e_mode_category_type_string)
-        print(reserve_data_type_string)
-
         abi_dict = get_contract_abi_dict(
             abi=ui_pool_data_provider_contract_obj.abi,
         )
@@ -349,8 +335,22 @@ async def get_bulk_asset_data(
             decoded_e_mode_category = decoded_e_mode_category[0]
 
             # Each data point in the response array represents a single asset
-            for data in decoded_assets_data[0]:
+            for i, data in enumerate(decoded_assets_data[0]):
                 asset = Web3.to_checksum_address(data[0])
+
+                asset_e_mode_data = []
+                for e_mode in decoded_e_mode_category:
+                    e_mode_data = AssetEModeData()
+                    if is_reserve_enabled_on_bitmap(e_mode[1][3], i):
+                        e_mode_data.collateralEnabled = True
+                        e_mode_data.eLtv = e_mode[1][0]
+                        e_mode_data.eliqThreshold = e_mode[1][1]
+                        e_mode_data.eliqBonus = e_mode[1][2]
+                    if is_reserve_enabled_on_bitmap(e_mode[1][5], i):
+                        e_mode_data.borrowEnabled = True
+                    if e_mode_data.collateralEnabled or e_mode_data.borrowEnabled:
+                        e_mode_data.label = e_mode[1][4]
+                        asset_e_mode_data.append(e_mode_data)
 
                 # full response interface can be found in the following github repo:
                 # https://github.com/aave-dao/aave-v3-origin/blob/3f70474d2a079a270bd8a3cea1b79f5dcfa96ac2/src/contracts/helpers/interfaces/IUiPoolDataProviderV3.sol#L8
@@ -380,7 +380,10 @@ async def get_bulk_asset_data(
                     'varRateSlope1': data[24],             # Variable rate slope 1
                     'varRateSlope2': data[25],             # Variable rate slope 2
                     'baseVarRate': data[26],               # Base variable borrow rate
-                    'optimalRate': data[27],               # Optimal usage ratio
+                    'optimalRate': data[27],
+                    'eLtv': 0,
+                    'eliqThreshold': 0,
+                    'eliqBonus': 0,
                 }
 
                 data_dict = {
@@ -388,6 +391,14 @@ async def get_bulk_asset_data(
                     'asset_details': asset_details,
                     'rate_details': rate_details,
                 }
+
+                # TODO: This is a temporary fix to get the e-mode data for the asset
+                # This should be updated to support multiple e-mode categories for the asset when the dashboard is updated
+                if asset_e_mode_data:
+                    e_mode_data = asset_e_mode_data[0]
+                    asset_details['eLtv'] = e_mode_data.eLtv
+                    asset_details['liqThreshold'] = e_mode_data.eliqThreshold
+                    asset_details['liqBonus'] = e_mode_data.eliqBonus
 
                 # Account for new assets being added after the initial asset list is retrieved
                 if asset in asset_set:
@@ -620,3 +631,37 @@ def truncate(number, decimals=5):
 
     factor = 10.0 ** decimals
     return math.trunc(number * factor) / factor
+
+
+def get_tuple_type_string(components):
+    types = []
+    for component in components:
+        if component['type'] == 'tuple':
+            # Recursively handle nested tuples
+            nested_types = get_tuple_type_string(component['components'])
+            types.append(f"({nested_types})")
+        else:
+            types.append(component['type'])
+    return ','.join(types)
+
+
+def is_reserve_enabled_on_bitmap(bitmap: int, reserve_index: int) -> bool:
+    """
+    Checks if a reserve is enabled by checking the bit at reserve_index in bitmap.
+    
+    Args:
+        bitmap (int): The bitmap containing reserve states
+        reserve_index (int): The index of the reserve to check
+        
+    Returns:
+        bool: True if the reserve is enabled, False otherwise
+        
+    Raises:
+        ValueError: If reserve_index is >= 128 (MAX_RESERVES_COUNT)
+    """
+    MAX_RESERVES_COUNT = 128  # This matches Aave's MAX_RESERVES_COUNT
+    
+    if reserve_index >= MAX_RESERVES_COUNT:
+        raise ValueError("Invalid reserve index")
+        
+    return ((bitmap >> reserve_index) & 1) != 0
