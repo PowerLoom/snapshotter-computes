@@ -343,14 +343,14 @@ async def get_bulk_asset_data(
                     e_mode_data = AssetEModeData()
                     if is_reserve_enabled_on_bitmap(e_mode[1][3], i):
                         e_mode_data.collateralEnabled = True
-                        e_mode_data.eLtv = e_mode[1][0]
-                        e_mode_data.eliqThreshold = e_mode[1][1]
-                        e_mode_data.eliqBonus = e_mode[1][2]
                     if is_reserve_enabled_on_bitmap(e_mode[1][5], i):
                         e_mode_data.borrowEnabled = True
                     if e_mode_data.collateralEnabled or e_mode_data.borrowEnabled:
+                        e_mode_data.eLtv = e_mode[1][0]
+                        e_mode_data.eliqThreshold = e_mode[1][1]
+                        e_mode_data.eliqBonus = e_mode[1][2]
                         e_mode_data.label = e_mode[1][4]
-                        asset_e_mode_data.append(e_mode_data)
+                        asset_e_mode_data.append(e_mode_data.dict())
 
                 # full response interface can be found in the following github repo:
                 # https://github.com/aave-dao/aave-v3-origin/blob/3f70474d2a079a270bd8a3cea1b79f5dcfa96ac2/src/contracts/helpers/interfaces/IUiPoolDataProviderV3.sol#L8
@@ -374,9 +374,7 @@ async def get_bulk_asset_data(
                     'resFactor': data[7],                  # Reserve factor
                     'borrowCap': data[36],                 # Maximum amount that can be borrowed
                     'supplyCap': data[37],
-                    'eLtv': 0,
-                    'eliqThreshold': 0,
-                    'eliqBonus': 0,
+                    'eModeData': asset_e_mode_data,
                 }
 
                 rate_details = {
@@ -391,14 +389,6 @@ async def get_bulk_asset_data(
                     'asset_details': asset_details,
                     'rate_details': rate_details,
                 }
-
-                # TODO: This is a temporary fix to get the e-mode data for the asset
-                # This should be updated to support multiple e-mode categories for the asset when the dashboard is updated
-                if asset_e_mode_data:
-                    e_mode_data = asset_e_mode_data[0]
-                    asset_details['eLtv'] = e_mode_data.eLtv
-                    asset_details['liqThreshold'] = e_mode_data.eliqThreshold
-                    asset_details['liqBonus'] = e_mode_data.eliqBonus
 
                 # Account for new assets being added after the initial asset list is retrieved
                 if asset in asset_set:
