@@ -7,7 +7,6 @@ class AaveContractAbis(BaseModel):
     pool_data_provider_contract: str
     erc20: str
     a_token: str
-    stable_token: str
     variable_token: str
     aave_oracle: str
     ui_pool_data_provider: str
