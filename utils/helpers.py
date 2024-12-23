@@ -2,8 +2,10 @@ import asyncio
 import json
 import math
 
+from asyncio import gather
 from redis import asyncio as aioredis
 from snapshotter.utils.default_logger import logger
+from snapshotter.utils.redis.redis_keys import source_chain_epoch_size_key
 from snapshotter.utils.rpc import get_contract_abi_dict
 from snapshotter.utils.rpc import RpcHelper
 from web3 import Web3
@@ -367,11 +369,24 @@ async def get_token_eth_price_dict(
                 for height, price in token_eth_price_dict.items()
             }
 
-            await redis_conn.zadd(
-                name=uniswap_cached_block_height_token_eth_price.format(
-                    Web3.to_checksum_address(token_address),
+            source_chain_epoch_size = int(
+                await redis_conn.get(source_chain_epoch_size_key()),
+            )
+
+            await gather(
+                redis_conn.zadd(
+                    name=uniswap_cached_block_height_token_eth_price.format(
+                        Web3.to_checksum_address(token_address),
+                    ),
+                    mapping=redis_cache_mapping,  # timestamp so zset do not ignore same height on multiple heights
                 ),
-                mapping=redis_cache_mapping,  # timestamp so zset do not ignore same height on multiple heights
+                redis_conn.zremrangebyscore(
+                    name=uniswap_cached_block_height_token_eth_price.format(
+                        Web3.to_checksum_address(token_address),
+                    ),
+                    min=0,
+                    max=int(from_block) - source_chain_epoch_size * 4,
+                ),
             )
 
             return token_eth_price_dict

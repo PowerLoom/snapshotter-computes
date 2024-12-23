@@ -1,5 +1,6 @@
 import json
 
+from asyncio import gather
 from redis import asyncio as aioredis
 from web3 import Web3
 
@@ -8,6 +9,7 @@ from computes.utils.helpers import get_token_eth_price_dict
 from computes.redis_keys import uniswap_pair_cached_block_height_token_price
 from computes.settings.config import settings as worker_settings
 from snapshotter.utils.default_logger import logger
+from snapshotter.utils.redis.redis_keys import source_chain_epoch_size_key
 from snapshotter.utils.rpc import RpcHelper
 
 
@@ -130,11 +132,24 @@ async def get_token_price_in_block_range(
                 for height, price in token_price_dict.items()
             }
 
-            await redis_conn.zadd(
-                name=uniswap_pair_cached_block_height_token_price.format(
-                    Web3.to_checksum_address(token_metadata["address"]),
+            source_chain_epoch_size = int(
+                await redis_conn.get(source_chain_epoch_size_key()),
+            )
+
+            await gather(
+                redis_conn.zadd(
+                    name=uniswap_pair_cached_block_height_token_price.format(
+                        Web3.to_checksum_address(token_metadata["address"]),
+                    ),
+                    mapping=redis_cache_mapping,
                 ),
-                mapping=redis_cache_mapping,
+                redis_conn.zremrangebyscore(
+                    name=uniswap_pair_cached_block_height_token_price.format(
+                        Web3.to_checksum_address(token_metadata["address"]),
+                    ),
+                    min=0,
+                    max=int(from_block) - source_chain_epoch_size * 4,
+                ),
             )
 
         return token_price_dict
