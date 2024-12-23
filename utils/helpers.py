@@ -14,12 +14,22 @@ from computes.utils.constants import pool_contract_obj
 from computes.utils.constants import RAY
 from computes.utils.constants import SECONDS_IN_YEAR
 from computes.utils.constants import ui_pool_data_provider_contract_obj
+from snapshotter.settings.config import settings
 from snapshotter.utils.default_logger import logger
+from snapshotter.utils.models.message_models import SnapshotProcessMessage
 from snapshotter.utils.rpc import get_contract_abi_dict
 from snapshotter.utils.rpc import get_event_sig_and_abi
 from snapshotter.utils.rpc import RpcHelper
 
 helper_logger = logger.bind(module='PowerLoom|Aave|Helpers')
+
+def gen_data_source_idx_to_compute(msg_obj: SnapshotProcessMessage):
+    monitored_pairs = worker_settings.initial_pools
+    current_epoch = msg_obj.epochId
+    snapshotter_int_value = int(settings.instance_id.lower(), 16)
+    current_day = msg_obj.day
+
+    return (current_epoch + snapshotter_int_value + settings.slot_id + current_day) % len(monitored_pairs)
 
 async def get_asset_metadata(
     asset_address: str,

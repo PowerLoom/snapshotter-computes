@@ -1,7 +1,5 @@
 import time
 
-from eth_utils import keccak
-from snapshotter.settings.config import settings
 from snapshotter.utils.callback_helpers import GenericProcessor
 from snapshotter.utils.default_logger import logger
 from snapshotter.utils.models.message_models import SnapshotProcessMessage
@@ -10,6 +8,7 @@ from ipfs_client.main import AsyncIPFSClient
 
 from computes.settings.config import settings as module_settings
 from computes.utils.core import get_asset_trade_volume
+from computes.utils.helpers import gen_data_source_idx_to_compute
 from computes.utils.models.message_models import AaveSupplyVolumeSnapshot, EpochBaseSnapshot
 
 
@@ -69,13 +68,6 @@ class AssetSupplyVolumeProcessor(GenericProcessor):
 
         return supply_volume_snapshot
 
-    def _gen_pair_idx_to_compute(self, msg_obj: SnapshotProcessMessage):
-        monitored_pairs = module_settings.initial_pools
-        current_epoch = msg_obj.epochId
-        snapshotter_hash = keccak(int(settings.instance_id.lower(), 16))
-        current_day = msg_obj.day
-        return (current_epoch + int.from_bytes(snapshotter_hash, 'big') + settings.slot_id + current_day) % len(monitored_pairs)
-
     async def compute(
         self,
         msg_obj: SnapshotProcessMessage,
@@ -91,8 +83,8 @@ class AssetSupplyVolumeProcessor(GenericProcessor):
         monitored_pools = module_settings.initial_pools
         self._logger.debug(f'pool supply volume computation init time {time.time()}')
 
-        pair_idx = self._gen_pair_idx_to_compute(msg_obj)
-        data_source_contract_address = monitored_pools[pair_idx]
+        data_source_idx = gen_data_source_idx_to_compute(msg_obj)
+        data_source_contract_address = monitored_pools[data_source_idx]
 
         snapshot = await self._compute_single(
             data_source_contract_address=data_source_contract_address,
