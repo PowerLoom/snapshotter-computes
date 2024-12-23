@@ -4,6 +4,7 @@ from decimal import localcontext
 from eth_abi import abi
 from web3 import Web3
 
+from computes.utils.models.data_models import AssetEModeData
 from computes.settings.config import settings as worker_settings
 from computes.utils.constants import AAVE_EVENT_SIGS
 from computes.utils.constants import AAVE_EVENTS_ABI
@@ -191,19 +192,22 @@ async def get_bulk_asset_data(
         asset_set = set(asset_list)
 
         param = Web3.to_checksum_address(worker_settings.contract_addresses.pool_address_provider)
-        function = ui_pool_data_provider_contract_obj.functions.getReservesData(param)
+        reserve_data_function = ui_pool_data_provider_contract_obj.functions.getReservesData(param)
+        e_mode_category_function = ui_pool_data_provider_contract_obj.functions.getEModes(param)
 
-        output_type = [
-            str(
-                tuple(
-                    component['type']
-                    for component in output['components']
-                ),
-            ).replace(' ', '').replace("'", '')
-            for output in function.abi['outputs']
+        # Generate types for abi decoding
+        reserve_data_output_type = [
+            f"({get_tuple_type_string(output['components'])})"
+            for output in reserve_data_function.abi['outputs']
         ]
 
-        type_string = output_type[0]+'[]'
+        e_mode_category_output_type = [
+            f"({get_tuple_type_string(output['components'])})"
+            for output in e_mode_category_function.abi['outputs']
+        ]
+
+        reserve_data_type_string = reserve_data_output_type[0]+'[]'
+        e_mode_category_type_string = e_mode_category_output_type[0]+'[]'
 
         abi_dict = get_contract_abi_dict(
             abi=ui_pool_data_provider_contract_obj.abi,
@@ -220,36 +224,59 @@ async def get_bulk_asset_data(
             params=[param],
         )
 
+        e_mode_data_bulk = await rpc_helper.batch_eth_call_on_block_range_hex_data(
+            abi_dict=abi_dict,
+            contract_address=worker_settings.contract_addresses.ui_pool_data_provider,
+            from_block=from_block,
+            to_block=to_block,
+            function_name='getEModes',
+            params=[param],
+        )
+
         all_assets_data_dict = {asset: {} for asset in asset_set}
         all_assets_price_dict = {block_num: {} for block_num in range(from_block, to_block + 1)}
 
         # Iterate over the bulk asset data response and decode the data
         for i, block_num in enumerate(range(from_block, to_block + 1)):
             decoded_assets_data = abi.decode(
-                (type_string, output_type[1]), asset_data_bulk[i],
+                (reserve_data_type_string, reserve_data_output_type[1]), asset_data_bulk[i],
             )
 
-            # Each data point in the response array represents a single asset
-            for data in decoded_assets_data[0]:
+            decoded_e_mode_category = abi.decode(
+                [e_mode_category_type_string], e_mode_data_bulk[i],
+            )[0]
+
+            # Process each asset
+            for i, data in enumerate(decoded_assets_data[0]):
                 asset = Web3.to_checksum_address(data[0])
 
-                # full response interface can be found in the following github repo:
-                # https://github.com/aave/aave-v3-periphery/blob/master/contracts/misc/interfaces/IUiPoolDataProviderV3.sol#L17
+                # Process e-mode data for the asset
+                asset_e_mode_data = []
+                for e_mode in decoded_e_mode_category:
+                    e_mode_data = AssetEModeData()
+                    if is_reserve_enabled_on_bitmap(e_mode[1][3], i):
+                        e_mode_data.collateralEnabled = True
+                    if is_reserve_enabled_on_bitmap(e_mode[1][5], i):
+                        e_mode_data.borrowEnabled = True
+                    if e_mode_data.collateralEnabled or e_mode_data.borrowEnabled:
+                        e_mode_data.eLtv = e_mode[1][0]
+                        e_mode_data.eliqThreshold = e_mode[1][1]
+                        e_mode_data.eliqBonus = e_mode[1][2]
+                        e_mode_data.label = e_mode[1][4]
+                        asset_e_mode_data.append(e_mode_data.dict())
+
+                # Updated indices based on full node implementation
                 asset_data = {
-                    'liquidityIndex': data[13],
-                    'variableBorrowIndex': data[14],
-                    'liquidityRate': data[15],
-                    'variableBorrowRate': data[16],
-                    'stableBorrowRate': data[17],
-                    'lastUpdateTimestamp': data[18],
-                    'availableLiquidity': data[23],
-                    'totalPrincipalStableDebt': data[24],
-                    'averageStableRate': data[25],
-                    'stableDebtLastUpdateTimestamp': data[26],
-                    'totalScaledVariableDebt': data[27],
-                    'priceInMarketReferenceCurrency': data[28],
-                    'accruedToTreasury': data[39],
-                    'isolationModeTotalDebt': data[41],
+                    'liquidityIndex': data[12],
+                    'variableBorrowIndex': data[13],
+                    'liquidityRate': data[14],
+                    'variableBorrowRate': data[15],
+                    'lastUpdateTimestamp': data[16],
+                    'availableLiquidity': data[20],
+                    'totalScaledVariableDebt': data[21],
+                    'priceInMarketReferenceCurrency': data[22],
+                    'accruedToTreasury': data[30],
+                    'isolationModeTotalDebt': data[32],
                 }
 
                 asset_details = {
@@ -257,22 +284,24 @@ async def get_bulk_asset_data(
                     'liqThreshold': data[5],
                     'liqBonus': data[6],
                     'resFactor': data[7],
-                    'borrowCap': data[46],
-                    'supplyCap': data[47],
-                    'eLtv': data[48],
-                    'eliqThreshold': data[49],
-                    'eliqBonus': data[50],
+                    'borrowCap': data[36],
+                    'supplyCap': data[37],
+                    'eModeData': asset_e_mode_data,
                 }
 
                 rate_details = {
-                    'varRateSlope1': data[30],
-                    'varRateSlope2': data[31],
-                    'stableRateSlope1': data[32],
-                    'stableRateSlope2': data[33],
-                    'baseStableRate': data[34],
-                    'baseVarRate': data[35],
-                    'optimalRate': data[36],
+                    'varRateSlope1': data[24],
+                    'varRateSlope2': data[25],
+                    'baseVarRate': data[26],
+                    'optimalRate': data[27],
                 }
+
+                # Update asset details with e-mode data if available
+                if asset_e_mode_data:
+                    e_mode_data = asset_e_mode_data[0]
+                    asset_details['eLtv'] = e_mode_data['eLtv']
+                    asset_details['eliqThreshold'] = e_mode_data['eliqThreshold']
+                    asset_details['eliqBonus'] = e_mode_data['eliqBonus']
 
                 data_dict = {
                     'asset_data': asset_data,
@@ -395,3 +424,35 @@ def convert_from_ray(value: int) -> float:
         ctx.prec = 16
         conv = Decimal(str(value)) / Decimal(RAY)
         return float(conv)
+    
+def get_tuple_type_string(components):
+    types = []
+    for component in components:
+        if component['type'] == 'tuple':
+            # Recursively handle nested tuples
+            nested_types = get_tuple_type_string(component['components'])
+            types.append(f"({nested_types})")
+        else:
+            types.append(component['type'])
+    return ','.join(types)
+
+def is_reserve_enabled_on_bitmap(bitmap: int, reserve_index: int) -> bool:
+    """
+    Checks if a reserve is enabled by checking the bit at reserve_index in bitmap.
+    
+    Args:
+        bitmap (int): The bitmap containing reserve states
+        reserve_index (int): The index of the reserve to check
+        
+    Returns:
+        bool: True if the reserve is enabled, False otherwise
+        
+    Raises:
+        ValueError: If reserve_index is >= 128 (MAX_RESERVES_COUNT)
+    """
+    MAX_RESERVES_COUNT = 128  # This matches Aave's MAX_RESERVES_COUNT
+    
+    if reserve_index >= MAX_RESERVES_COUNT:
+        raise ValueError("Invalid reserve index")
+        
+    return ((bitmap >> reserve_index) & 1) != 0
