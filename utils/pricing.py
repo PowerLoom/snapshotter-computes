@@ -346,9 +346,18 @@ async def get_token_price_in_block_range(
                 for height, price in token_price_dict.items()
             }
 
-            await redis_conn.zadd(
-                name=uniswap_pair_cached_block_height_token_price.format(token_address),
-                mapping=redis_cache_mapping,
+            source_chain_epoch_size = int(await redis_conn.get(source_chain_epoch_size_key()))
+
+            await asyncio.gather(
+                redis_conn.zadd(
+                    name=uniswap_pair_cached_block_height_token_price.format(token_address),
+                    mapping=redis_cache_mapping,
+                ),
+                redis_conn.zremrangebyscore(
+                    name=uniswap_pair_cached_block_height_token_price.format(token_address),
+                    min=0,
+                    max=int(from_block) - source_chain_epoch_size * 4,
+                ),
             )
 
         return token_price_dict
