@@ -101,12 +101,25 @@ async def get_asset_price_in_block_range(
                 for height, price in asset_price_dict.items()
             }
 
-            await redis_conn.zadd(
-                name=aave_cached_block_height_asset_price.format(
-                    Web3.to_checksum_address(asset_metadata['address']),
+
+            source_chain_epoch_size = await redis_conn.get(source_chain_epoch_size_key())
+            source_chain_epoch_size = int(source_chain_epoch_size)
+
+            await gather(
+                redis_conn.zadd(
+                    name=aave_cached_block_height_asset_price.format(
+                        Web3.to_checksum_address(asset_metadata['address']),
+                    ),
+                    mapping=redis_cache_mapping,
                 ),
-                mapping=redis_cache_mapping,
-            )
+                redis_conn.zremrangebyscore(
+                    name=aave_cached_block_height_asset_price.format(
+                        Web3.to_checksum_address(asset_metadata['address']),
+                    ),
+                    min=0,
+                    max=from_block - source_chain_epoch_size * 3,
+            ),
+        )
 
         return asset_price_dict
 
