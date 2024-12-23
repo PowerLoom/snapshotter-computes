@@ -10,46 +10,6 @@ uniswap_pair_contract_tokens_data = (
     "uniswap:pairContract:" + settings.namespace + ":{}:PairContractTokensData"
 )
 
-# Maps tokens to their corresponding Uniswap pair contract addresses
-uinswap_token_pair_contract_mapping = (
-    "uniswap:tokens:" + settings.namespace + ":PairContractAddress"
-)
-
-# Sorted set of Uniswap V3 summarized snapshots
-uniswap_V3_summarized_snapshots_zset = (
-    "uniswap:V3PairsSummarySnapshot:" + settings.namespace + ":snapshotsZset"
-)
-
-# Stores a Uniswap V3 snapshot at a specific block height
-uniswap_V3_snapshot_at_blockheight = (
-    "uniswap:V3PairsSummarySnapshot:" + settings.namespace + ":snapshot:{}"
-)  # block_height
-
-# Sorted set of Uniswap V3 daily stats snapshots
-uniswap_V3_daily_stats_snapshot_zset = (
-    "uniswap:V3DailyStatsSnapshot:" + settings.namespace + ":snapshotsZset"
-)
-
-# Stores Uniswap V3 daily stats at a specific block height
-uniswap_V3_daily_stats_at_blockheight = (
-    "uniswap:V3DailyStatsSnapshot:" + settings.namespace + ":snapshot:{}"
-)  # block_height
-
-# Sorted set of Uniswap V3 tokens snapshots
-uniswap_V3_tokens_snapshot_zset = (
-    "uniswap:V3TokensSummarySnapshot:" + settings.namespace + ":snapshotsZset"
-)
-
-# Stores Uniswap V3 tokens data at a specific block height
-uniswap_V3_tokens_at_blockheight = (
-    "uniswap:V3TokensSummarySnapshot:" + settings.namespace + ":{}"
-)  # block_height
-
-# Caches recent logs for a specific Uniswap pair contract
-uniswap_pair_cached_recent_logs = (
-    "uniswap:pairContract:" + settings.namespace + ":{}:recentLogs"
-)
-
 # Maps tokens to their corresponding Uniswap pairs
 uniswap_tokens_pair_map = (
     "uniswap:pairContract:" + settings.namespace + ":tokensPairMap"
@@ -63,11 +23,6 @@ uniswap_ticks_pair_map = (
 # Caches token prices at specific block heights for Uniswap pairs
 uniswap_pair_cached_block_height_token_price = (
     "uniswap:pairContract:" + settings.namespace + ":{}:cachedPairBlockHeightTokenPrice"
-)
-
-# Caches derived ETH values at specific block heights for Uniswap tokens
-uniswap_token_derived_eth_cached_block_height = (
-    "uniswap:token:" + settings.namespace + ":{}:cachedDerivedEthBlockHeight"
 )
 
 # Caches token-ETH prices at specific block heights (for multi-protocol use)
