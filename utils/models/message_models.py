@@ -40,9 +40,7 @@ class AavePoolTotalAssetSnapshot(SnapshotBase):
         liquidityRate: Liquidity rate for each block
         liquidityIndex: Liquidity index for each block
         totalVariableDebt: Total variable debt for each block
-        totalStableDebt: Total stable debt for each block
         variableBorrowRate: Variable borrow rate for each block
-        stableBorrowRate: Stable borrow rate for each block
         variableBorrowIndex: Variable borrow index for each block
         lastUpdateTimestamp: Last update timestamp for each block
         isolationModeTotalDebt: Isolation mode total debt for each block
@@ -57,9 +55,7 @@ class AavePoolTotalAssetSnapshot(SnapshotBase):
     liquidityRate: Dict[str, int]
     liquidityIndex: Dict[str, int]
     totalVariableDebt: Dict[str, AaveDebtData]
-    totalStableDebt: Dict[str, AaveDebtData]
     variableBorrowRate: Dict[str, int]
-    stableBorrowRate: Dict[str, int]
     variableBorrowIndex: Dict[str, int]
     lastUpdateTimestamp: Dict[str, int]
     isolationModeTotalDebt: Dict[str, int]
