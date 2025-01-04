@@ -2,7 +2,9 @@ import asyncio
 import math
 
 from computes.preloaders.eth_price.preloader import eth_price_preloader
+from snapshotter.settings.config import settings
 from snapshotter.utils.default_logger import logger
+from snapshotter.utils.models.message_models import SnapshotProcessMessage
 from snapshotter.utils.rpc import get_contract_abi_dict
 from snapshotter.utils.rpc import RpcHelper
 from web3 import Web3
@@ -17,6 +19,14 @@ from computes.utils.constants import TOKENS_DECIMALS
 from computes.utils.constants import ZER0_ADDRESS
 
 helper_logger = logger.bind(module='PowerLoom|Uniswap|Helpers')
+
+
+def gen_data_source_idx_to_compute(msg_obj: SnapshotProcessMessage):
+    monitored_pairs = worker_settings.initial_pairs
+    current_epoch = msg_obj.epochId
+    snapshotter_int_value = int(settings.instance_id.lower(), 16)
+    current_day = msg_obj.day
+    return (current_epoch + snapshotter_int_value + settings.slot_id + current_day) % len(monitored_pairs)
 
 
 def get_maker_pair_data(prop):

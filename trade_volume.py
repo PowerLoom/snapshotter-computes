@@ -1,7 +1,6 @@
 import time
 
 from ipfs_client.main import AsyncIPFSClient
-from snapshotter.settings.config import settings
 from snapshotter.utils.callback_helpers import GenericProcessor
 from snapshotter.utils.default_logger import logger
 from snapshotter.utils.models.message_models import SnapshotProcessMessage
@@ -9,6 +8,7 @@ from snapshotter.utils.rpc import RpcHelper
 
 from computes.settings.config import settings as module_settings
 from computes.utils.core import get_pair_trade_volume
+from computes.utils.helpers import gen_data_source_idx_to_compute
 from computes.utils.models.message_models import EpochBaseSnapshot
 from computes.utils.models.message_models import UniswapTradesSnapshot
 
@@ -80,14 +80,6 @@ class TradeVolumeProcessor(GenericProcessor):
 
         return trade_volume_snapshot
 
-    def _gen_pair_idx_to_compute(self, msg_obj: SnapshotProcessMessage):
-        monitored_pairs = module_settings.initial_pairs
-        current_epoch = msg_obj.epochId
-        snapshotter_hash = hash(int(settings.instance_id.lower(), 16))
-        current_day = msg_obj.day
-
-        return (current_epoch + snapshotter_hash + settings.slot_id + current_day) % len(monitored_pairs)
-
     async def compute(
         self,
         msg_obj: SnapshotProcessMessage,
@@ -105,8 +97,8 @@ class TradeVolumeProcessor(GenericProcessor):
 
         self._logger.debug(f'trade volume, computation init time {time.time()}')
 
-        pair_idx = self._gen_pair_idx_to_compute(msg_obj)
-        data_source_contract_address = monitored_pairs[pair_idx]
+        data_source_idx = gen_data_source_idx_to_compute(msg_obj)
+        data_source_contract_address = monitored_pairs[data_source_idx]
 
         snapshot = await self._compute_single(
             data_source_contract_address=data_source_contract_address,
