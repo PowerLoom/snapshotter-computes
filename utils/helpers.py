@@ -179,7 +179,7 @@ async def get_pool_supply_events(
 
             for block_num in range(from_block, to_block + 1):
                 block_events = filter(lambda x: x['blockNumber'] == block_num, events)
-                event_dict[block_num] = [dict(event) for event in block_events]
+                event_dict[block_num] = [json.loads(Web3.to_json(event)) for event in block_events]
 
             if len(event_dict) > 0:
                 # Cache the fetched events
