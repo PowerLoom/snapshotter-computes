@@ -1,4 +1,4 @@
-import asyncio
+import json
 from decimal import Decimal
 from decimal import localcontext
 from eth_abi import abi
@@ -135,7 +135,7 @@ async def get_pool_supply_events(
 
         for block_num in range(from_block, to_block + 1):
             block_events = filter(lambda x: x['blockNumber'] == block_num, events)
-            event_dict[block_num] = [dict(event) for event in block_events]
+            event_dict[block_num] = [json.loads(Web3.to_json(event)) for event in block_events]
 
         return event_dict
 
