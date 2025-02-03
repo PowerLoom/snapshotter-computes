@@ -44,11 +44,6 @@ a_token_abi = read_json_file(
     constants_logger,
 )
 
-stable_debt_token_abi = read_json_file(
-    worker_settings.aave_contract_abis.stable_token,
-    constants_logger,
-)
-
 vaiable_debt_token_abi = read_json_file(
     worker_settings.aave_contract_abis.variable_token,
     constants_logger,

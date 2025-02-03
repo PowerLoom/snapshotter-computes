@@ -44,8 +44,6 @@ class AggreagateSingleAprProcessor(GenericProcessorAggregate):
             previous_aggregate_snapshot.avgLiquidityRate, current_snapshot.avgLiquidityRate, sample_size)
         previous_aggregate_snapshot.avgVariableRate = self._update_rolling_average(
             previous_aggregate_snapshot.avgVariableRate, current_snapshot.avgVariableRate, sample_size)
-        previous_aggregate_snapshot.avgStableRate = self._update_rolling_average(
-            previous_aggregate_snapshot.avgStableRate, current_snapshot.avgStableRate, sample_size)
         previous_aggregate_snapshot.avgUtilizationRate = self._update_rolling_average(
             previous_aggregate_snapshot.avgUtilizationRate, current_snapshot.avgUtilizationRate, sample_size)
 

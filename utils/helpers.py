@@ -29,6 +29,7 @@ from computes.utils.constants import pool_contract_obj
 from computes.utils.constants import RAY
 from computes.utils.constants import SECONDS_IN_YEAR
 from computes.utils.constants import ui_pool_data_provider_contract_obj
+from computes.utils.models.data_models import AssetEModeData
 
 
 helper_logger = logger.bind(module='PowerLoom|Aave|Helpers')
@@ -178,7 +179,7 @@ async def get_pool_supply_events(
 
             for block_num in range(from_block, to_block + 1):
                 block_events = filter(lambda x: x['blockNumber'] == block_num, events)
-                event_dict[block_num] = [dict(event) for event in block_events]
+                event_dict[block_num] = [json.loads(Web3.to_json(event)) for event in block_events]
 
             if len(event_dict) > 0:
                 # Cache the fetched events
@@ -278,20 +279,22 @@ async def get_bulk_asset_data(
         # PoolAddressProvider contract serves as a registry for the Aave protocol's core contracts
         # to be consumed by the Aave UI and the protocol's contracts
         param = Web3.to_checksum_address(worker_settings.contract_addresses.pool_address_provider)
-        function = ui_pool_data_provider_contract_obj.functions.getReservesData(param)
+        reserve_data_function = ui_pool_data_provider_contract_obj.functions.getReservesData(param)
+        e_mode_category_function = ui_pool_data_provider_contract_obj.functions.getEModes(param)
 
         # Generate types for abi decoding
-        output_type = [
-            str(
-                tuple(
-                    component['type']
-                    for component in output['components']
-                ),
-            ).replace(' ', '').replace("'", '')
-            for output in function.abi['outputs']
+        reserve_data_output_type = [
+            f"({get_tuple_type_string(output['components'])})"
+            for output in reserve_data_function.abi['outputs']
         ]
 
-        type_string = output_type[0]+'[]'
+        e_mode_category_output_type = [
+            f"({get_tuple_type_string(output['components'])})"
+            for output in e_mode_category_function.abi['outputs']
+        ]
+
+        reserve_data_type_string = reserve_data_output_type[0]+'[]'
+        e_mode_category_type_string = e_mode_category_output_type[0]+'[]'
 
         abi_dict = get_contract_abi_dict(
             abi=ui_pool_data_provider_contract_obj.abi,
@@ -308,58 +311,77 @@ async def get_bulk_asset_data(
             params=[param],
         )
 
+        e_mode_data_bulk = await rpc_helper.batch_eth_call_on_block_range_hex_data(
+            abi_dict=abi_dict,
+            contract_address=worker_settings.contract_addresses.ui_pool_data_provider,
+            from_block=from_block,
+            to_block=to_block,
+            function_name='getEModes',
+            params=[param],
+        )
+
         all_assets_data_dict = {asset: {} for asset in asset_set}
         all_assets_price_dict = {block_num: {} for block_num in range(from_block, to_block + 1)}
 
         # Iterate over the bulk asset data response and decode the data
         for i, block_num in enumerate(range(from_block, to_block + 1)):
             decoded_assets_data = abi.decode(
-                (type_string, output_type[1]), asset_data_bulk[i],
+                (reserve_data_type_string, reserve_data_output_type[1]), asset_data_bulk[i],
             )
 
+            decoded_e_mode_category = abi.decode(
+                [e_mode_category_type_string], e_mode_data_bulk[i],
+            )
+            decoded_e_mode_category = decoded_e_mode_category[0]
+
             # Each data point in the response array represents a single asset
-            for data in decoded_assets_data[0]:
+            for i, data in enumerate(decoded_assets_data[0]):
                 asset = Web3.to_checksum_address(data[0])
 
+                asset_e_mode_data = []
+                for e_mode in decoded_e_mode_category:
+                    e_mode_data = AssetEModeData()
+                    if is_reserve_enabled_on_bitmap(e_mode[1][3], i):
+                        e_mode_data.collateralEnabled = True
+                    if is_reserve_enabled_on_bitmap(e_mode[1][5], i):
+                        e_mode_data.borrowEnabled = True
+                    if e_mode_data.collateralEnabled or e_mode_data.borrowEnabled:
+                        e_mode_data.eLtv = e_mode[1][0]
+                        e_mode_data.eliqThreshold = e_mode[1][1]
+                        e_mode_data.eliqBonus = e_mode[1][2]
+                        e_mode_data.label = e_mode[1][4]
+                        asset_e_mode_data.append(e_mode_data.dict())
+
                 # full response interface can be found in the following github repo:
-                # https://github.com/aave/aave-v3-periphery/blob/master/contracts/misc/interfaces/IUiPoolDataProviderV3.sol#L17
+                # https://github.com/aave-dao/aave-v3-origin/blob/3f70474d2a079a270bd8a3cea1b79f5dcfa96ac2/src/contracts/helpers/interfaces/IUiPoolDataProviderV3.sol#L8
                 asset_data = {
-                    'liquidityIndex': data[13],
-                    'variableBorrowIndex': data[14],
-                    'liquidityRate': data[15],
-                    'variableBorrowRate': data[16],
-                    'stableBorrowRate': data[17],
-                    'lastUpdateTimestamp': data[18],
-                    'availableLiquidity': data[23],
-                    'totalPrincipalStableDebt': data[24],
-                    'averageStableRate': data[25],
-                    'stableDebtLastUpdateTimestamp': data[26],
-                    'totalScaledVariableDebt': data[27],
-                    'priceInMarketReferenceCurrency': data[28],
-                    'accruedToTreasury': data[39],
-                    'isolationModeTotalDebt': data[41],
+                    'liquidityIndex': data[12],            # Current liquidity index
+                    'variableBorrowIndex': data[13],       # Current variable borrow index
+                    'liquidityRate': data[14],             # Current liquidity rate
+                    'variableBorrowRate': data[15],        # Current variable borrow rate
+                    'lastUpdateTimestamp': data[16],       # Last update timestamp
+                    'availableLiquidity': data[20],        # Total available liquidity
+                    'totalScaledVariableDebt': data[21],   # Total scaled variable debt
+                    'priceInMarketReferenceCurrency': data[22], # Price in market reference currency
+                    'accruedToTreasury': data[30],         # Amount accrued to treasury
+                    'isolationModeTotalDebt': data[32],    # Total debt in isolation mode
                 }
 
                 asset_details = {
-                    'ltv': data[4],
-                    'liqThreshold': data[5],
-                    'liqBonus': data[6],
-                    'resFactor': data[7],
-                    'borrowCap': data[46],
-                    'supplyCap': data[47],
-                    'eLtv': data[48],
-                    'eliqThreshold': data[49],
-                    'eliqBonus': data[50],
+                    'ltv': data[4],                        # Base LTV as collateral
+                    'liqThreshold': data[5],               # Reserve liquidation threshold
+                    'liqBonus': data[6],                   # Reserve liquidation bonus
+                    'resFactor': data[7],                  # Reserve factor
+                    'borrowCap': data[36],                 # Maximum amount that can be borrowed
+                    'supplyCap': data[37],
+                    'eModeData': asset_e_mode_data,
                 }
 
                 rate_details = {
-                    'varRateSlope1': data[30],
-                    'varRateSlope2': data[31],
-                    'stableRateSlope1': data[32],
-                    'stableRateSlope2': data[33],
-                    'baseStableRate': data[34],
-                    'baseVarRate': data[35],
-                    'optimalRate': data[36],
+                    'varRateSlope1': data[24],             # Variable rate slope 1
+                    'varRateSlope2': data[25],             # Variable rate slope 2
+                    'baseVarRate': data[26],               # Base variable borrow rate
+                    'optimalRate': data[27],
                 }
 
                 data_dict = {
@@ -599,3 +621,37 @@ def truncate(number, decimals=5):
 
     factor = 10.0 ** decimals
     return math.trunc(number * factor) / factor
+
+
+def get_tuple_type_string(components):
+    types = []
+    for component in components:
+        if component['type'] == 'tuple':
+            # Recursively handle nested tuples
+            nested_types = get_tuple_type_string(component['components'])
+            types.append(f"({nested_types})")
+        else:
+            types.append(component['type'])
+    return ','.join(types)
+
+
+def is_reserve_enabled_on_bitmap(bitmap: int, reserve_index: int) -> bool:
+    """
+    Checks if a reserve is enabled by checking the bit at reserve_index in bitmap.
+    
+    Args:
+        bitmap (int): The bitmap containing reserve states
+        reserve_index (int): The index of the reserve to check
+        
+    Returns:
+        bool: True if the reserve is enabled, False otherwise
+        
+    Raises:
+        ValueError: If reserve_index is >= 128 (MAX_RESERVES_COUNT)
+    """
+    MAX_RESERVES_COUNT = 128  # This matches Aave's MAX_RESERVES_COUNT
+    
+    if reserve_index >= MAX_RESERVES_COUNT:
+        raise ValueError("Invalid reserve index")
+        
+    return ((bitmap >> reserve_index) & 1) != 0

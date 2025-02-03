@@ -20,10 +20,11 @@ async def test_total_supply_and_debt_calc():
         '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
     )
 
-    from_block = 19033030
+    from_block = 21397290
 
     to_block = from_block + 9
     rpc_helper = RpcHelper()
+    await rpc_helper.init()
     aioredis_pool = RedisPoolCache()
 
     await aioredis_pool.populate()
@@ -70,14 +71,12 @@ async def test_total_supply_and_debt_calc():
 
         # Only debt is computed manually for the bulk version
         target_variable_debt = chain_data[i].totalVariableDebt
+        print("Target Variable Debt: ", target_variable_debt)
         computed_variable_debt = asset_supply_debt_total[block_num].totalVariableDebt.token_debt
-
-        target_stable_debt = chain_data[i].totalStableDebt
-        computed_stable_debt = asset_supply_debt_total[block_num].totalStableDebt.token_debt
+        print("Computed Variable Debt: ", computed_variable_debt)
 
         # # may be +/- 1 due to rounding
         assert abs(target_variable_debt - computed_variable_debt) <= 2, 'Variable debt results do not match chain data'
-        assert abs(target_stable_debt - computed_stable_debt) <= 2, 'Stable debt results do not match chain data'
 
     print('PASSED')
 
