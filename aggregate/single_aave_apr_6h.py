@@ -29,6 +29,38 @@ class AggreagateSingleAprProcessor(GenericProcessorAggregate):
     def __init__(self) -> None:
         self._logger = logger.bind(module='AggregateSingleAprProcessor')
 
+    def _add_to_rolling_average(self, current_avg: float, new_value: float, sample_size: int) -> float:
+        """
+        Add a new value to a rolling average.
+
+        Args:
+            current_avg (float): The current average.
+            new_value (float): The new value to add to the average.
+            sample_size (int): The current sample size.
+
+        Returns:
+            float: The updated rolling average.
+        """
+        updated_avg = (current_avg * sample_size + new_value) / (sample_size + 1)
+        return truncate(updated_avg, 5)
+
+    def _remove_from_rolling_average(self, current_avg: float, value_to_remove: float, sample_size: int) -> float:
+        """
+        Remove a value from a rolling average.
+
+        Args:
+            current_avg (float): The current average.
+            value_to_remove (float): The value to remove from the average.
+            sample_size (int): The current sample size.
+
+        Returns:
+            float: The updated rolling average.
+        """
+        if sample_size <= 1:
+            return 0.0
+        updated_avg = (current_avg * sample_size - value_to_remove) / (sample_size - 1)
+        return truncate(updated_avg, 5)
+
     def _add_aggregate_snapshot(
         self,
         previous_aggregate_snapshot: AaveAprAggregateSnapshot,
@@ -59,11 +91,11 @@ class AggreagateSingleAprProcessor(GenericProcessorAggregate):
         ) / len(current_snapshot.rateDetails.values())
 
         # Increment rolling averages
-        previous_aggregate_snapshot.avgLiquidityRate = self._update_rolling_average(
+        previous_aggregate_snapshot.avgLiquidityRate = self._add_to_rolling_average(
             previous_aggregate_snapshot.avgLiquidityRate, current_liq_avg, sample_size)
-        previous_aggregate_snapshot.avgVariableRate = self._update_rolling_average(
+        previous_aggregate_snapshot.avgVariableRate = self._add_to_rolling_average(
             previous_aggregate_snapshot.avgVariableRate, current_variable_avg, sample_size)
-        previous_aggregate_snapshot.avgUtilizationRate = self._update_rolling_average(
+        previous_aggregate_snapshot.avgUtilizationRate = self._add_to_rolling_average(
             previous_aggregate_snapshot.avgUtilizationRate, current_util_avg, sample_size)
 
         sample_size += 1
@@ -100,31 +132,16 @@ class AggreagateSingleAprProcessor(GenericProcessorAggregate):
         ) / len(current_snapshot.rateDetails.values())
 
         # Decrement rolling averages
-        previous_aggregate_snapshot.avgLiquidityRate = self._update_rolling_average(
-            previous_aggregate_snapshot.avgLiquidityRate, -current_liq_avg, sample_size - 1)
-        previous_aggregate_snapshot.avgVariableRate = self._update_rolling_average(
-            previous_aggregate_snapshot.avgVariableRate, -current_variable_avg, sample_size - 1)
-        previous_aggregate_snapshot.avgUtilizationRate = self._update_rolling_average(
-            previous_aggregate_snapshot.avgUtilizationRate, -current_util_avg, sample_size - 1)
+        previous_aggregate_snapshot.avgLiquidityRate = self._remove_from_rolling_average(
+            previous_aggregate_snapshot.avgLiquidityRate, current_liq_avg, sample_size)
+        previous_aggregate_snapshot.avgVariableRate = self._remove_from_rolling_average(
+            previous_aggregate_snapshot.avgVariableRate, current_variable_avg, sample_size)
+        previous_aggregate_snapshot.avgUtilizationRate = self._remove_from_rolling_average(
+            previous_aggregate_snapshot.avgUtilizationRate, current_util_avg, sample_size)
 
         sample_size -= 1
 
         return previous_aggregate_snapshot, sample_size
-
-    def _update_rolling_average(self, current_avg: float, new_value: float, sample_size: int) -> float:
-        """
-        Update a rolling average with a new value.
-
-        Args:
-            current_avg (float): The current average.
-            new_value (float): The new value to add to the average.
-            sample_size (int): The current sample size.
-
-        Returns:
-            float: The updated rolling average.
-        """
-        updated_avg = (current_avg * sample_size + new_value) / (sample_size + 1)
-        return truncate(updated_avg, 5)
 
     async def _calculate_from_scratch(
         self,
