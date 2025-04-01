@@ -5,7 +5,6 @@ import httpx
 from redis import asyncio as aioredis
 
 from ..utils.core import get_pair_reserves
-from snapshotter.utils.redis.rate_limiter import load_rate_limiter_scripts
 from snapshotter.utils.redis.redis_conn import provide_async_redis_conn_insta
 
 
@@ -26,13 +25,10 @@ async def fetch_liquidityUSD_rpc(
     Returns:
         float: The total liquidity in USD for the pair.
     """
-    # Load rate limiting scripts
-    rate_limiting_lua_scripts = await load_rate_limiter_scripts(redis_conn)
     
     # Fetch pair reserves data
     data = await get_pair_reserves(
         loop,
-        rate_limiting_lua_scripts,
         pair_address,
         block_num,
         block_num,
