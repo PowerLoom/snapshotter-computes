@@ -9,7 +9,7 @@ from computes.settings.config import enabled_projects
 from computes.settings.config import settings
 from computes.settings.config import settings as worker_settings
 from computes.utils.helpers import get_pair_metadata
-from snapshotter.utils.redis.rate_limiter import load_rate_limiter_scripts
+from snapshotter.auth.helpers.rate_limiter import load_rate_limiter_scripts
 from snapshotter.utils.redis.redis_conn import provide_async_redis_conn_insta
 
 w3 = Web3(Web3.HTTPProvider(settings.rpc.full_nodes[0].url))

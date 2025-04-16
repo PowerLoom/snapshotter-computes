@@ -5,7 +5,7 @@ import httpx
 from redis import asyncio as aioredis
 
 from computes.utils.core import get_pair_reserves
-from snapshotter.utils.redis.rate_limiter import load_rate_limiter_scripts
+from snapshotter.auth.helpers.rate_limiter import load_rate_limiter_scripts
 from snapshotter.utils.redis.redis_conn import provide_async_redis_conn_insta
 
 
