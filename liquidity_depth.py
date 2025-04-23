@@ -5,8 +5,8 @@ from typing import Union
 
 from redis import asyncio as aioredis
 
-from computes.utils.core import get_liquidity_depth, get_pair_reserves
-from computes.utils.models.message_models import LiquidityDepthSnapshot, UniswapPairTotalReservesSnapshot
+from computes.utils.core import get_liquidity_depth
+from computes.utils.models.message_models import LiquidityDepthSnapshot
 from snapshotter.utils.callback_helpers import SnapshotProcessMessage
 from snapshotter.utils.default_logger import logger
 from snapshotter.utils.rpc import RpcHelper
@@ -36,8 +36,7 @@ class LiquidityDepthProcessor(SnapshotProcessMessage):
             from_block=min_chain_height,
             to_block=max_chain_height,
             redis_conn=redis_conn,
-            rpc_helper=rpc_helper,
-            fetch_timestamp=True,
+            rpc_helper=rpc_helper
         )
         
         liquidity_depth_snapshot: LiquidityDepthSnapshot = LiquidityDepthSnapshot(ticks_by_block=liquidity_depth_dict)

@@ -32,8 +32,7 @@ async def get_pair_reserves(
     from_block,
     to_block,
     redis_conn: aioredis.Redis,
-    rpc_helper: RpcHelper,
-    fetch_timestamp=False,
+    rpc_helper: RpcHelper
 ):
     """
     Fetch and calculate pair reserves for a given Uniswap pair over a block range.
@@ -54,27 +53,24 @@ async def get_pair_reserves(
     )
     pair_address = Web3.to_checksum_address(pair_address)
 
-    if fetch_timestamp:
-        try:
-            block_details_dict = await get_block_details_in_block_range(
-                from_block,
-                to_block,
-                redis_conn=redis_conn,
-                rpc_helper=rpc_helper,
-            )
-        except Exception as err:
-            core_logger.opt(exception=True).error(
-                (
-                    'Error attempting to get block details of block-range'
-                    ' {}-{}: {}, retrying again'
-                ),
-                from_block,
-                to_block,
-                err,
-            )
-            raise err
-    else:
-        block_details_dict = dict()
+    try:
+        block_details_dict = await get_block_details_in_block_range(
+            from_block,
+            to_block,
+            redis_conn=redis_conn,
+            rpc_helper=rpc_helper,
+        )
+    except Exception as err:
+        core_logger.opt(exception=True).error(
+            (
+                'Error attempting to get block details of block-range'
+                ' {}-{}: {}, retrying again'
+            ),
+            from_block,
+            to_block,
+            err,
+        )
+        raise err
 
     pair_per_token_metadata = await get_pair_metadata(
         pair_address=pair_address,

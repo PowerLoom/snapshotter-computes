@@ -9,7 +9,6 @@ from computes.settings.config import enabled_projects
 from computes.settings.config import settings
 from computes.settings.config import settings as worker_settings
 from computes.utils.helpers import get_pair_metadata
-from snapshotter.auth.helpers.rate_limiter import load_rate_limiter_scripts
 from snapshotter.utils.redis.redis_conn import provide_async_redis_conn_insta
 
 w3 = Web3(Web3.HTTPProvider(settings.rpc.full_nodes[0].url))
@@ -397,11 +396,9 @@ async def get_all_pairs_token_price(loop, redis_conn: aioredis.Redis = None):
         ),
         abi=router_contract_abi,
     )
-    rate_limiting_lua_scripts = await load_rate_limiter_scripts(redis_conn)
 
     for contract in all_contracts:
         pair_per_token_metadata = await get_pair_metadata(
-            rate_limit_lua_script_shas=rate_limiting_lua_scripts,
             pair_address=contract,
             loop=loop,
             redis_conn=redis_conn,
@@ -443,9 +440,7 @@ async def get_pair_tokens_price(pair, loop, redis_conn: aioredis.Redis = None):
     )
 
     pair_address = Web3.to_checksum_address(pair)
-    rate_limiting_lua_scripts = await load_rate_limiter_scripts(redis_conn)
     pair_per_token_metadata = await get_pair_metadata(
-        rate_limit_lua_script_shas=rate_limiting_lua_scripts,
         pair_address=pair_address,
         loop=loop,
         redis_conn=redis_conn,
