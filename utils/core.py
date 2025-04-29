@@ -52,7 +52,7 @@ async def get_pair_reserves(
         f'Starting pair total reserves query for: {pair_address}',
     )
     pair_address = Web3.to_checksum_address(pair_address)
-
+    # TODO: fetch block details from expected cache entries
     try:
         block_details_dict = await get_block_details_in_block_range(
             from_block,
@@ -71,7 +71,7 @@ async def get_pair_reserves(
             err,
         )
         raise err
-
+    # TODO: fetch metadata from latest cache entries for uniswap v3
     pair_per_token_metadata = await get_pair_metadata(
         pair_address=pair_address,
         redis_conn=redis_conn,
@@ -135,7 +135,7 @@ async def get_pair_reserves(
     )
 
     # grab mint/burn events in range
-
+    # TODO: fetch events from expected cache entries
     events = await get_events(
         pair_address=pair_address,
         rpc=rpc_helper,
@@ -224,7 +224,7 @@ async def get_pair_reserves(
         redis_cache_mapping = {
             json.dumps({'blockHeight': to_block, 'token0_reserves': end_block['token0TokenAmt'], 'token1_reserves': end_block['token1TokenAmt']}): int(to_block),
         }
-
+        # TODO: lets pipeline this
         await asyncio.gather(
             redis_conn.zadd(
                 name=uniswap_pair_cached_block_height_reserves.format(
