@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Dict, List, Tuple
 from typing import Optional
 from typing import Union
 
@@ -31,8 +31,8 @@ class EthPriceProcessor(GenericProcessorSnapshot):
         anchor_rpc_helper: RpcHelper,
         ipfs_reader: AsyncIPFSClient,
         protocol_state_contract,
-        task_type: str = None,
-    ) -> Optional[Dict[str, Union[int, float]]]:
+        task_type: str,
+    ) -> Optional[List[Tuple[str, UniswapEthPriceSnapshot]]]:
         """
         Compute the total reserves for a Uniswap pair within the given epoch.
 
