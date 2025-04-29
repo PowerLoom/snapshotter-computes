@@ -13,6 +13,7 @@ from snapshotter.utils.rpc import RpcHelper
 
 from computes.utils.models.message_models import EpochBaseSnapshot
 from computes.utils.models.message_models import UniswapPairTotalReservesSnapshot
+from ipfs_client.main import AsyncIPFSClient
 
 
 class PairTotalReservesProcessor(GenericProcessorSnapshot):
@@ -28,6 +29,10 @@ class PairTotalReservesProcessor(GenericProcessorSnapshot):
         epoch: SnapshotProcessMessage,
         redis_conn: aioredis.Redis,
         rpc_helper: RpcHelper,
+        anchor_rpc_helper: RpcHelper,
+        ipfs_reader: AsyncIPFSClient,
+        protocol_state_contract,
+        task_type: str = None,
     ) -> Optional[Dict[str, Union[int, float]]]:
         """
         Compute the total reserves for a Uniswap pair within the given epoch.

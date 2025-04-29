@@ -12,6 +12,7 @@ from computes.utils.models.message_models import EpochBaseSnapshot
 from computes.utils.models.message_models import UniswapEthPriceSnapshot
 from computes.redis_keys import uniswap_eth_usd_price_zset
 from snapshotter.settings.config import settings
+from ipfs_client.main import AsyncIPFSClient
 
 
 class EthPriceProcessor(GenericProcessorSnapshot):
@@ -27,6 +28,9 @@ class EthPriceProcessor(GenericProcessorSnapshot):
         epoch: SnapshotProcessMessage,
         redis_conn: aioredis.Redis,
         rpc_helper: RpcHelper,
+        anchor_rpc_helper: RpcHelper,
+        ipfs_reader: AsyncIPFSClient,
+        protocol_state_contract,
         task_type: str = None,
     ) -> Optional[Dict[str, Union[int, float]]]:
         """
