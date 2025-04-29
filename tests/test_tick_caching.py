@@ -1,11 +1,13 @@
 from web3 import Web3
 import asyncio
 
+from rpc_helper.rpc import RpcHelper
+
 from computes.total_value_locked import calculate_reserves
 from computes.utils.helpers import get_pair_metadata
 from computes.redis_keys import uniswap_cached_tick_data_block_height
+from snapshotter.settings.config import settings
 from snapshotter.utils.redis.redis_conn import RedisPoolCache
-from snapshotter.utils.rpc import RpcHelper
 
 
 async def test_tick_cache():
@@ -14,7 +16,7 @@ async def test_tick_cache():
         "0x7858E59e0C01EA06Df3aF3D20aC7B0003275D4Bf"
     )
     from_block = 18766112
-    rpc_helper = RpcHelper()
+    rpc_helper = RpcHelper(settings.rpc)
     aioredis_pool = RedisPoolCache()
 
     await aioredis_pool.populate()
