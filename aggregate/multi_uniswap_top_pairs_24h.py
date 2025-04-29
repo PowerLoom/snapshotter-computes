@@ -9,7 +9,7 @@ from computes.utils.models.message_models import UniswapTradesAggregateSnapshot
 from snapshotter.utils.callback_helpers import GenericProcessorAggregate
 from snapshotter.utils.data_utils import get_submission_data_bulk
 from snapshotter.utils.default_logger import logger
-from snapshotter.utils.models.message_models import PowerloomCalculateAggregateMessage
+from snapshotter.utils.models.message_models import CalculateAggregateMessage
 from snapshotter.utils.rpc import RpcHelper
 
 
@@ -26,7 +26,7 @@ class AggregateTopPairsProcessor(GenericProcessorAggregate):
 
     async def compute(
         self,
-        msg_obj: PowerloomCalculateAggregateMessage,
+        msg_obj: CalculateAggregateMessage,
         redis: aioredis.Redis,
         rpc_helper: RpcHelper,
         anchor_rpc_helper: RpcHelper,
@@ -38,7 +38,7 @@ class AggregateTopPairsProcessor(GenericProcessorAggregate):
         Compute the 24-hour top pairs trade volume and reserves data.
 
         Args:
-            msg_obj (PowerloomCalculateAggregateMessage): The message object containing calculation details.
+            msg_obj (CalculateAggregateMessage): The message object containing calculation details.
             redis (aioredis.Redis): Redis connection for caching.
             rpc_helper (RpcHelper): RPC helper for blockchain interactions.
             anchor_rpc_helper (RpcHelper): Anchor RPC helper.

@@ -1,6 +1,6 @@
 import asyncio
 
-from snapshotter.utils.models.message_models import PowerloomSnapshotProcessMessage
+from snapshotter.utils.models.message_models import SnapshotProcessMessage
 from snapshotter.utils.redis.redis_conn import RedisPoolCache
 from snapshotter.utils.redis.redis_keys import source_chain_epoch_size_key
 from snapshotter.utils.rpc import RpcHelper
@@ -13,7 +13,7 @@ async def test_trade_volume_processor():
     # Mock your parameters
     from_block = 19635752
     to_block = from_block + 9
-    snapshot_process_message = PowerloomSnapshotProcessMessage(
+    snapshot_process_message = SnapshotProcessMessage(
         data_source='0x99132b53aB44694eeB372E87bceD3929e4ab8456',
         begin=from_block,
         end=to_block,

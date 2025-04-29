@@ -31,6 +31,14 @@ class UniswapPairTotalReservesSnapshot(SnapshotBase):
     token1Prices: Dict[str, float]       # Prices of token1
 
 
+class UniswapEthPriceSnapshot(BaseModel):
+    """
+    Snapshot of ETH price for a Uniswap pair.
+    """
+    chainHeightRange: EpochBaseSnapshot  # Range of blocks for this snapshot
+    ethPrice: Dict[str, float]  # Block number to corresponding ETH price
+
+
 class LiquidityDepthSnapshot(SnapshotBase):
     """Snapshot of liquidity depth for a Uniswap pair."""
     ticks_by_block: Dict[str, dict]

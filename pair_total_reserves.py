@@ -6,7 +6,7 @@ from typing import Union
 from redis import asyncio as aioredis
 
 from computes.utils.core import get_pair_reserves
-from snapshotter.utils.models.message_models import PowerloomSnapshotProcessMessage
+from snapshotter.utils.models.message_models import SnapshotProcessMessage
 from snapshotter.utils.callback_helpers import GenericProcessorSnapshot
 from snapshotter.utils.default_logger import logger
 from snapshotter.utils.rpc import RpcHelper
@@ -25,7 +25,7 @@ class PairTotalReservesProcessor(GenericProcessorSnapshot):
 
     async def compute(
         self,
-        epoch: PowerloomSnapshotProcessMessage,
+        epoch: SnapshotProcessMessage,
         redis_conn: aioredis.Redis,
         rpc_helper: RpcHelper,
     ) -> Optional[Dict[str, Union[int, float]]]:
@@ -33,7 +33,7 @@ class PairTotalReservesProcessor(GenericProcessorSnapshot):
         Compute the total reserves for a Uniswap pair within the given epoch.
 
         Args:
-            epoch (PowerloomSnapshotProcessMessage): The epoch information.
+            epoch (SnapshotProcessMessage): The epoch information.
             redis_conn (aioredis.Redis): Redis connection object.
             rpc_helper (RpcHelper): RPC helper object for blockchain interactions.
 
