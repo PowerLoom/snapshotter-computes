@@ -1,5 +1,6 @@
 from ipfs_client.main import AsyncIPFSClient
 from redis import asyncio as aioredis
+from rpc_helper.rpc import RpcHelper
 
 from computes.utils.models.message_models import UniswapPairTotalReservesSnapshot
 from computes.utils.models.message_models import UniswapStatsSnapshot
@@ -10,7 +11,6 @@ from snapshotter.utils.data_utils import get_submission_data_bulk
 from snapshotter.utils.data_utils import get_tail_epoch_id
 from snapshotter.utils.default_logger import logger
 from snapshotter.utils.models.message_models import PowerloomCalculateAggregateMessage
-from snapshotter.utils.rpc import RpcHelper
 
 
 class AggregateStatsProcessor(GenericProcessorAggregate):

@@ -3,6 +3,8 @@ import json
 
 from ipfs_client.main import AsyncIPFSClient
 from redis import asyncio as aioredis
+from rpc_helper.rpc import RpcHelper
+
 from computes.utils.helpers import truncate
 from computes.utils.models.message_models import UniswapTradesAggregateSnapshot
 from computes.utils.models.message_models import UniswapTradesSnapshot
@@ -15,7 +17,6 @@ from snapshotter.utils.default_logger import logger
 from snapshotter.utils.models.message_models import PowerloomSnapshotSubmittedMessage
 from snapshotter.utils.redis.redis_keys import project_finalized_data_zset
 from snapshotter.utils.redis.redis_keys import submitted_base_snapshots_key
-from snapshotter.utils.rpc import RpcHelper
 
 
 class AggregateTradeVolumeProcessor(GenericProcessorAggregate):

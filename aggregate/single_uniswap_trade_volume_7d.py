@@ -3,6 +3,8 @@ import asyncio
 import pydantic
 from ipfs_client.main import AsyncIPFSClient
 from redis import asyncio as aioredis
+from rpc_helper.rpc import RpcHelper
+
 from computes.utils.helpers import truncate
 from computes.utils.models.message_models import UniswapTradesAggregateSnapshot
 from snapshotter.utils.callback_helpers import GenericProcessorAggregate
@@ -11,7 +13,6 @@ from snapshotter.utils.data_utils import get_submission_data
 from snapshotter.utils.data_utils import get_tail_epoch_id
 from snapshotter.utils.default_logger import logger
 from snapshotter.utils.models.message_models import PowerloomSnapshotSubmittedMessage
-from snapshotter.utils.rpc import RpcHelper
 
 
 class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
