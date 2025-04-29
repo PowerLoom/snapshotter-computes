@@ -3,9 +3,10 @@ This module contains constants and initializations for the Uniswap-related compu
 It sets up contract objects, loads ABIs, and defines various constants used throughout the project.
 """
 
+from snapshotter.settings.config import settings
 from snapshotter.utils.default_logger import logger
 from snapshotter.utils.file_utils import read_json_file
-from snapshotter.utils.rpc import RpcHelper
+from rpc_helper.rpc import RpcHelper
 from web3 import Web3
 import asyncio
 import threading
@@ -37,7 +38,7 @@ univ3_helper_bytecode = univ3_helper_bytecode_json['bytecode']
 
 # Initialize RPC helper and get current node
 # Initialize RPC helper and get current node
-rpc_helper = RpcHelper()
+rpc_helper = RpcHelper(settings.rpc)
 _rpc_initialized = False
 _rpc_init_lock = threading.Lock() # Lock to prevent race conditions if imported concurrently
 

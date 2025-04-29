@@ -4,8 +4,8 @@ from functools import reduce
 
 from redis import asyncio as aioredis
 from snapshotter.utils.default_logger import logger
-from snapshotter.utils.rpc import get_event_sig_and_abi
-from snapshotter.utils.rpc import RpcHelper
+from rpc_helper.rpc import get_event_sig_and_abi
+from rpc_helper.rpc import RpcHelper
 from snapshotter.utils.snapshot_utils import get_block_details_in_block_range
 from web3 import Web3
 
