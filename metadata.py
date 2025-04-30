@@ -8,7 +8,7 @@ import json
 from snapshotter.utils.models.message_models import SnapshotProcessMessage
 from snapshotter.utils.callback_helpers import GenericProcessorSnapshot
 from snapshotter.utils.default_logger import logger
-from snapshotter.utils.rpc import RpcHelper
+from rpc_helper.rpc import RpcHelper
 from computes.utils.models.message_models import UniswapPoolMetadata
 from snapshotter.settings.config import settings
 from ipfs_client.main import AsyncIPFSClient
