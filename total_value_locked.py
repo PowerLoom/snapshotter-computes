@@ -10,8 +10,8 @@ from eth_typing import Address
 from eth_typing.evm import Address
 from eth_typing.evm import ChecksumAddress
 from snapshotter.utils.default_logger import logger
-from snapshotter.utils.rpc import get_event_sig_and_abi
-from snapshotter.utils.rpc import RpcHelper
+from rpc_helper.rpc import get_event_sig_and_abi
+from rpc_helper.rpc import RpcHelper
 
 from computes.utils.constants import helper_contract
 from computes.utils.constants import MAX_TICK

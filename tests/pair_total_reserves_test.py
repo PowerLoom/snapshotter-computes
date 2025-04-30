@@ -1,9 +1,11 @@
 import asyncio
 
+from rpc_helper.rpc import RpcHelper
+
+from snapshotter.settings.config import settings
 from snapshotter.utils.models.message_models import SnapshotProcessMessage
 from snapshotter.utils.redis.redis_conn import RedisPoolCache
 from snapshotter.utils.redis.redis_keys import source_chain_epoch_size_key
-from snapshotter.utils.rpc import RpcHelper
 
 from computes.pair_total_reserves import PairTotalReservesProcessor
 from computes.utils.models.message_models import UniswapPairTotalReservesSnapshot
@@ -21,7 +23,7 @@ async def test_pair_reserves_processor():
     )
 
     processor = PairTotalReservesProcessor()
-    rpc_helper = RpcHelper()
+    rpc_helper = RpcHelper(settings.rpc)
     aioredis_pool = RedisPoolCache()
     await aioredis_pool.populate()
     redis_conn = aioredis_pool._aioredis_pool

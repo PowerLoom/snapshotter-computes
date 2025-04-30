@@ -2,12 +2,13 @@ from redis import asyncio as aioredis
 import json
 import asyncio
 
+from rpc_helper.rpc import RpcHelper
+from rpc_helper.rpc import get_contract_abi_dict
+
 from snapshotter.utils.callback_helpers import GenericPreloader
 from snapshotter.utils.default_logger import logger
 from snapshotter.utils.models.message_models import EpochBase
-from snapshotter.utils.rpc import RpcHelper
 from snapshotter.utils.file_utils import read_json_file
-from snapshotter.utils.rpc import get_contract_abi_dict
 from computes.redis_keys import uniswap_eth_usd_price_zset
 from snapshotter.utils.redis.redis_keys import source_chain_epoch_size_key
 from computes.settings.config import settings as worker_settings

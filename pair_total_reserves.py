@@ -4,12 +4,12 @@ from typing import Optional
 from typing import Union
 
 from redis import asyncio as aioredis
+from rpc_helper.rpc import RpcHelper
 
 from computes.utils.core import get_pair_reserves
 from snapshotter.utils.models.message_models import SnapshotProcessMessage
 from snapshotter.utils.callback_helpers import GenericProcessorSnapshot
 from snapshotter.utils.default_logger import logger
-from snapshotter.utils.rpc import RpcHelper
 
 from computes.utils.models.message_models import EpochBaseSnapshot
 from computes.utils.models.message_models import UniswapPairTotalReservesSnapshot
