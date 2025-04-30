@@ -1,16 +1,17 @@
 import pytest
 import functools
+from rpc_helper.rpc import RpcHelper
 from web3 import Web3
 
+from snapshotter.settings.config import settings
 from computes.utils.constants import univ3_helper_bytecode, override_address, helper_contract
 from computes.utils.constants import MAX_TICK, MIN_TICK
 from computes.total_value_locked import transform_tick_bytes_to_list
-from snapshotter.utils.rpc import RpcHelper
 
 @pytest.mark.asyncio
 async def test_web3_call_with_override():
     # Initialize RpcHelper
-    rpc_helper = RpcHelper()
+    rpc_helper = RpcHelper(settings.rpc)
     await rpc_helper.init()
 
     # Create overrides dictionary

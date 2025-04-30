@@ -2,12 +2,13 @@ import os
 from web3 import Web3
 import asyncio
 
+from rpc_helper.rpc import RpcHelper
+
 from computes.utils.constants import erc20_abi
 from computes.total_value_locked import _load_abi, calculate_reserves, calculate_tvl_from_ticks, get_tick_info
 from computes.utils.helpers import get_pair_metadata
 from snapshotter.settings.config import settings
 from snapshotter.utils.redis.redis_conn import RedisPoolCache
-from snapshotter.utils.rpc import RpcHelper
 from gql import Client, gql
 from gql.transport.aiohttp import AIOHTTPTransport
 
@@ -22,7 +23,7 @@ async def test_calculate_reserves():
     )
     from_block = 18931130
 
-    rpc_helper = RpcHelper()
+    rpc_helper = RpcHelper(settings.rpc)
     aioredis_pool = RedisPoolCache()
     query = """{
     pool(id: "0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640", block: {number: 18931130}) {

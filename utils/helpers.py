@@ -6,8 +6,8 @@ from asyncio import gather
 from redis import asyncio as aioredis
 from snapshotter.utils.default_logger import logger
 from snapshotter.utils.redis.redis_keys import source_chain_epoch_size_key
-from snapshotter.utils.rpc import get_contract_abi_dict
-from snapshotter.utils.rpc import RpcHelper
+from rpc_helper.rpc import get_contract_abi_dict
+from rpc_helper.rpc import RpcHelper
 from web3 import Web3
 
 from computes.redis_keys import uniswap_cached_block_height_token_eth_price

@@ -1,9 +1,10 @@
 import pytest
 from pytest_asyncio import fixture as async_fixture
+from rpc_helper.rpc import RpcHelper
+
 from computes.preloaders.eth_price.preloader import EthPricePreloader
 from snapshotter.utils.redis.redis_keys import source_chain_epoch_size_key
 from computes.redis_keys import uniswap_eth_usd_price_zset
-from snapshotter.utils.rpc import RpcHelper
 from snapshotter.settings.config import settings
 from fakeredis import FakeAsyncRedis
 
