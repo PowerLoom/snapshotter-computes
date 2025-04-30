@@ -12,7 +12,7 @@ from snapshotter.utils.rpc import RpcHelper
 from computes.utils.models.message_models import UniswapPoolMetadata
 from snapshotter.settings.config import settings
 from ipfs_client.main import AsyncIPFSClient
-from snapshotter.utils.data_utils import get_project_first_epoch
+from snapshotter.utils.data_utils import get_project_first_epoch, get_project_last_finalized_epoch, get_project_finalized_cid
 from web3 import Web3
 
 
