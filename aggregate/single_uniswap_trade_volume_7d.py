@@ -12,7 +12,7 @@ from snapshotter.utils.data_utils import get_project_epoch_snapshot
 from snapshotter.utils.data_utils import get_submission_data
 from snapshotter.utils.data_utils import get_tail_epoch_id
 from snapshotter.utils.default_logger import logger
-from snapshotter.utils.models.message_models import PowerloomSnapshotSubmittedMessage
+from snapshotter.utils.models.message_models import SnapshotSubmittedMessage
 
 
 class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
@@ -65,7 +65,7 @@ class AggregateTradeVolumeProcessor(GenericProcessorAggregate):
 
     async def compute(
         self,
-        msg_obj: PowerloomSnapshotSubmittedMessage,
+        msg_obj: SnapshotSubmittedMessage,
         redis: aioredis.Redis,
         rpc_helper: RpcHelper,
         anchor_rpc_helper: RpcHelper,

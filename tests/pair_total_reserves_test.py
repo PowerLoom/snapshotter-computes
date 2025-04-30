@@ -3,7 +3,7 @@ import asyncio
 from rpc_helper.rpc import RpcHelper
 
 from snapshotter.settings.config import settings
-from snapshotter.utils.models.message_models import PowerloomSnapshotProcessMessage
+from snapshotter.utils.models.message_models import SnapshotProcessMessage
 from snapshotter.utils.redis.redis_conn import RedisPoolCache
 from snapshotter.utils.redis.redis_keys import source_chain_epoch_size_key
 
@@ -15,7 +15,7 @@ async def test_pair_reserves_processor():
     # Mock your parameters
     from_block = 19820300
     to_block = from_block + 9
-    snapshot_process_message = PowerloomSnapshotProcessMessage(
+    snapshot_process_message = SnapshotProcessMessage(
         data_source='0x5796d7ad51583ae2c7297652edb7006bcd90519d',
         begin=from_block,
         end=to_block,

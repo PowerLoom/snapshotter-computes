@@ -10,7 +10,7 @@ from snapshotter.utils.data_utils import get_project_epoch_snapshot
 from snapshotter.utils.data_utils import get_submission_data_bulk
 from snapshotter.utils.data_utils import get_tail_epoch_id
 from snapshotter.utils.default_logger import logger
-from snapshotter.utils.models.message_models import PowerloomCalculateAggregateMessage
+from snapshotter.utils.models.message_models import CalculateAggregateMessage
 
 
 class AggregateStatsProcessor(GenericProcessorAggregate):
@@ -23,7 +23,7 @@ class AggregateStatsProcessor(GenericProcessorAggregate):
 
     async def compute(
         self,
-        msg_obj: PowerloomCalculateAggregateMessage,
+        msg_obj: CalculateAggregateMessage,
         redis: aioredis.Redis,
         rpc_helper: RpcHelper,
         anchor_rpc_helper: RpcHelper,
@@ -35,7 +35,7 @@ class AggregateStatsProcessor(GenericProcessorAggregate):
         Compute aggregated Uniswap statistics based on the provided message and data sources.
 
         Args:
-            msg_obj (PowerloomCalculateAggregateMessage): The message object containing calculation details.
+            msg_obj (CalculateAggregateMessage): The message object containing calculation details.
             redis (aioredis.Redis): Redis client for caching and data retrieval.
             rpc_helper (RpcHelper): RPC helper for blockchain interactions.
             anchor_rpc_helper (RpcHelper): Anchor RPC helper for protocol chain interactions.
