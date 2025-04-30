@@ -7,7 +7,7 @@ import json
 from snapshotter.utils.models.message_models import SnapshotProcessMessage
 from snapshotter.utils.callback_helpers import GenericProcessorSnapshot
 from snapshotter.utils.default_logger import logger
-from snapshotter.utils.rpc import RpcHelper
+from rpc_helper.rpc import RpcHelper
 from computes.utils.models.message_models import EpochBaseSnapshot
 from computes.utils.models.message_models import UniswapEthPriceSnapshot
 from computes.redis_keys import uniswap_eth_usd_price_zset

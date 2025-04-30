@@ -9,16 +9,18 @@ from snapshotter.utils.models.message_models import SnapshotProcessMessage
 from snapshotter.utils.callback_helpers import GenericProcessorSnapshot
 from snapshotter.utils.default_logger import logger
 from rpc_helper.rpc import RpcHelper
-from computes.utils.models.message_models import UniswapPoolMetadata
 from snapshotter.settings.config import settings
 from ipfs_client.main import AsyncIPFSClient
-from snapshotter.utils.data_utils import get_project_first_epoch, get_project_last_finalized_epoch, get_project_finalized_cid
+from computes.utils.models.message_models import UniswapTokenPoolsSnapshot
+from snapshotter.utils.data_utils import get_project_first_epoch
+from snapshotter.utils.data_utils import get_project_last_finalized_epoch
+from snapshotter.utils.data_utils import get_project_epoch_snapshot
 from web3 import Web3
 
 
-class MetadataProcessor(GenericProcessorSnapshot):
+class TokenPoolsProcessor(GenericProcessorSnapshot):
     """
-    Processor for calculating and snapshotting total reserves for Uniswap pairs.
+    Processor for calculating and snapshotting token pools for Uniswap pairs.
     """
 
     def __init__(self) -> None:
@@ -32,9 +34,10 @@ class MetadataProcessor(GenericProcessorSnapshot):
         redis_conn: aioredis.Redis,
         protocol_state_contract,
         anchor_rpc_helper: RpcHelper,
+        ipfs_reader: AsyncIPFSClient,
     ):
         """
-        Process a single pool asynchronously.
+        Process a single token asynchronously.
 
         Args:
             pool_address (str): The pool address to process
@@ -47,11 +50,13 @@ class MetadataProcessor(GenericProcessorSnapshot):
             tuple: A tuple containing project_id and pool metadata snapshot if available
         """
         try:
-            project_id = task_type.format(poolAddress=pool_address, Namespace=settings.namespace)
-            
-            # aggregate project first epoch
+            snapshots = []
+            metadata_project_id = "metadata:{poolAddress}:{Namespace}".format(
+                poolAddress=pool_address,
+                Namespace=settings.namespace,
+            )
             project_first_epoch = await get_project_first_epoch(
-                redis_conn, protocol_state_contract, anchor_rpc_helper, project_id,
+                redis_conn, protocol_state_contract, anchor_rpc_helper, metadata_project_id,
             )
 
             if not project_first_epoch:
@@ -61,9 +66,52 @@ class MetadataProcessor(GenericProcessorSnapshot):
 
                 if cached_data:
                     data = json.loads(cached_data)
-                    return (project_id, UniswapPoolMetadata(**data))
+                else:
+                    return None
+            else:
+                data = await get_project_epoch_snapshot(
+                    redis_conn, protocol_state_contract, anchor_rpc_helper, ipfs_reader, project_first_epoch, metadata_project_id
+                )
+
+            if not data:
+                return None
             
-            return None
+            token_addresses = [data["token0"]["address"], data["token1"]["address"]]
+            token_addresses = [Web3.to_checksum_address(token_address) for token_address in token_addresses]
+
+            for token_address in token_addresses:
+                project_id = task_type.format(tokenAddress=token_address, Namespace=settings.namespace)
+
+                # get the last finalized epoch
+                last_finalized_epoch = await get_project_last_finalized_epoch(
+                    redis_conn, protocol_state_contract, anchor_rpc_helper, project_id,
+                )
+
+                if not last_finalized_epoch:
+                    snapshot = UniswapTokenPoolsSnapshot(
+                        pools={}
+                    )
+                    snapshot.pools[pool_address] = data
+                else:
+                    # get the snapshot for the last finalized epoch
+                    snapshot = await get_project_epoch_snapshot(
+                        redis_conn, protocol_state_contract, anchor_rpc_helper, ipfs_reader, last_finalized_epoch, project_id,
+                    )
+                    if snapshot:
+                        snapshot = UniswapTokenPoolsSnapshot(**snapshot)
+                        if pool_address not in snapshot.pools:
+                            snapshot.pools[pool_address] = data
+                        else:
+                            return None
+                    else:
+                        snapshot = UniswapTokenPoolsSnapshot(
+                            pools={}
+                        )
+                        snapshot.pools[pool_address] = data
+
+                    snapshots.append((project_id, snapshot))
+
+            return snapshots
         except Exception as e:
             self._logger.opt(exception=e).error(f"Error processing pool {pool_address}")
             # Silently ignore any exceptions
@@ -116,14 +164,16 @@ class MetadataProcessor(GenericProcessorSnapshot):
                 redis_conn=redis_conn,
                 protocol_state_contract=protocol_state_contract,
                 anchor_rpc_helper=anchor_rpc_helper,
+                ipfs_reader=ipfs_reader,
             )
             pool_tasks.append(task)
         
         # Gather results from all tasks, with return_exceptions=False
         # This will make asyncio.gather() ignore failed tasks and continue with the rest
+        snapshots = []
         results = await asyncio.gather(*pool_tasks, return_exceptions=False)
-        
-        # Filter out None results and add valid snapshots
-        snapshots = [result for result in results if result is not None]
-        
+        for result in results:
+            if result:
+                snapshots.extend(result)
+
         return snapshots

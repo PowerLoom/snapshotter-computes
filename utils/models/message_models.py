@@ -60,6 +60,13 @@ class UniswapPoolMetadata(BaseModel):
     factory: str  # Factory address for the pair
 
 
+class UniswapTokenPoolsSnapshot(BaseModel):
+    """
+    Snapshot of token pools for a Uniswap pair.
+    """
+    pools: Dict[str, UniswapPoolMetadata]  # Dictionary mapping token addresses to pool metadata
+
+
 class LiquidityDepthSnapshot(SnapshotBase):
     """Snapshot of liquidity depth for a Uniswap pair."""
     ticks_by_block: Dict[str, dict]
