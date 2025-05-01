@@ -11,7 +11,7 @@ from snapshotter.utils.default_logger import logger
 from rpc_helper.rpc import RpcHelper
 from snapshotter.settings.config import settings
 from ipfs_client.main import AsyncIPFSClient
-from computes.utils.models.message_models import UniswapTokenPoolsSnapshot
+from computes.utils.models.message_models import UniswapPoolMetadata, UniswapTokenPoolsSnapshot
 from snapshotter.utils.data_utils import get_project_first_epoch
 from snapshotter.utils.data_utils import get_project_last_finalized_epoch
 from snapshotter.utils.data_utils import get_project_epoch_snapshot
@@ -89,9 +89,8 @@ class TokenPoolsProcessor(GenericProcessorSnapshot):
 
                 if not last_finalized_epoch:
                     snapshot = UniswapTokenPoolsSnapshot(
-                        pools={}
+                        pools={pool_address: UniswapPoolMetadata(**data)}
                     )
-                    snapshot.pools[pool_address] = data
                 else:
                     # get the snapshot for the last finalized epoch
                     snapshot = await get_project_epoch_snapshot(
@@ -100,14 +99,14 @@ class TokenPoolsProcessor(GenericProcessorSnapshot):
                     if snapshot:
                         snapshot = UniswapTokenPoolsSnapshot(**snapshot)
                         if pool_address not in snapshot.pools:
-                            snapshot.pools[pool_address] = data
+                            snapshot.pools[pool_address] = UniswapPoolMetadata(**data)
                         else:
                             return None
                     else:
                         snapshot = UniswapTokenPoolsSnapshot(
                             pools={}
                         )
-                        snapshot.pools[pool_address] = data
+                        snapshot.pools[pool_address] = UniswapPoolMetadata(**data)
 
                     snapshots.append((project_id, snapshot))
 
@@ -125,8 +124,8 @@ class TokenPoolsProcessor(GenericProcessorSnapshot):
         anchor_rpc_helper: RpcHelper,
         ipfs_reader: AsyncIPFSClient,
         protocol_state_contract,
-        task_type: str = None,
-    ) -> Optional[Dict[str, Union[int, float]]]:
+        task_type: str,
+    ) -> Optional[UniswapTokenPoolsSnapshot]:
         """
         Compute the metadata for a Uniswap pair within the given epoch.
 
