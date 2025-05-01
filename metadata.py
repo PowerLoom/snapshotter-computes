@@ -12,7 +12,7 @@ from rpc_helper.rpc import RpcHelper
 from computes.utils.models.message_models import UniswapPoolMetadata
 from snapshotter.settings.config import settings
 from ipfs_client.main import AsyncIPFSClient
-from snapshotter.utils.data_utils import get_project_first_epoch, get_project_last_finalized_epoch, get_project_finalized_cid
+from snapshotter.utils.data_utils import get_project_epoch_snapshot, get_project_first_epoch, get_project_last_finalized_epoch, get_project_finalized_cid
 from web3 import Web3
 
 
@@ -23,6 +23,43 @@ class MetadataProcessor(GenericProcessorSnapshot):
 
     def __init__(self) -> None:
         self._logger = logger.bind(module="MetadataProcessor")
+    
+    async def get_pool_metadata(
+        self, 
+        pool_address: str, 
+        redis_conn: aioredis.Redis, 
+        anchor_rpc_helper: RpcHelper,
+        ipfs_reader: AsyncIPFSClient,
+        protocol_state_contract,
+        task_type: str = 'metadata:{poolAddress}:{Namespace}',
+    ) -> Optional[UniswapPoolMetadata]:
+        # get last finalized epoch of metadata snapshot
+        metadata_project_id = task_type.format(poolAddress=pool_address, Namespace=settings.namespace)
+        last_finalized_epoch = await get_project_last_finalized_epoch(
+            redis_conn, protocol_state_contract, anchor_rpc_helper, metadata_project_id
+        )
+        if not last_finalized_epoch:
+            # check redis cache first
+            cache_key = f'pool_metadata:{pool_address}'
+            cached_data = await redis_conn.get(cache_key)
+            if cached_data:
+                return UniswapPoolMetadata(**json.loads(cached_data))
+            else:
+                self._logger.error(f"No last finalized epoch nor cache entry found for pool {pool_address} while processing metadata")
+                return None
+        else:
+            # get finalized cid
+            finalized_cid = await get_project_finalized_cid(redis_conn, protocol_state_contract, anchor_rpc_helper, metadata_project_id, last_finalized_epoch)
+            if not finalized_cid:
+                self._logger.error(f"No finalized cid found for pool {pool_address} against epoch {last_finalized_epoch} while processing metadata")
+                return None
+            data = await get_project_epoch_snapshot(
+                redis_conn, protocol_state_contract, anchor_rpc_helper, ipfs_reader, last_finalized_epoch, metadata_project_id
+            )
+            if not data:
+                self._logger.error(f"No snapshot data found for pool {pool_address} against epoch {last_finalized_epoch} while processing metadata")
+                return None
+            return UniswapPoolMetadata(**data)
 
     async def _process_pool(
         self,
