@@ -57,7 +57,7 @@ class EthPriceProcessor(GenericProcessorSnapshot):
         )
         # If all prices are cached, return them
         price_dict = {
-            json.loads(price.decode('utf-8'))['blockHeight']:
+            str(json.loads(price.decode('utf-8'))['blockHeight']):
             json.loads(price.decode('utf-8'))['price']
             for price in cached_price_dict
         }
