@@ -325,23 +325,22 @@ async def get_token_eth_price_dict(
     token_address = Web3.to_checksum_address(token_address)
     # check if cache exists
     token_eth_price_dict = dict()
-    cached_token_price_dict = await redis_conn.zrangebyscore(
+    cached_token_price_in_eth_json_list = await redis_conn.zrangebyscore(
         name=uniswap_cached_block_height_token_eth_price.format(token_address),
         min=from_block,
         max=to_block,
+        withscores=False
     )
-    if len(cached_token_price_dict) > 0:
+    if cached_token_price_in_eth_json_list and len(cached_token_price_in_eth_json_list) == to_block - (from_block - 1):
+        price_entry_list = [json.loads(price_entry_json.decode("utf-8")) for price_entry_json in cached_token_price_in_eth_json_list]
         token_eth_price_dict = {
-            int(json.loads(price)['blockHeight']): json.loads(price)['price']
-            for price in cached_token_price_dict
+            int(price_entry['blockHeight']): price_entry['price']
+            for price_entry in price_entry_list
         }
 
         return token_eth_price_dict
-
-    # get token price function takes care of its own rate limit
-    # TODO repetitious refactor
+    
     try:
-
         token_eth_quote = await get_token_eth_quote_from_uniswap(
             token_address=token_address,
             token_decimals=token_decimals,
@@ -372,22 +371,21 @@ async def get_token_eth_price_dict(
             source_chain_epoch_size = int(
                 await redis_conn.get(source_chain_epoch_size_key()),
             )
-
-            await gather(
-                redis_conn.zadd(
-                    name=uniswap_cached_block_height_token_eth_price.format(
+            pipeline = redis_conn.pipeline()
+            pipeline.zadd(
+                name=uniswap_cached_block_height_token_eth_price.format(
                         Web3.to_checksum_address(token_address),
                     ),
-                    mapping=redis_cache_mapping,  # timestamp so zset do not ignore same height on multiple heights
-                ),
-                redis_conn.zremrangebyscore(
-                    name=uniswap_cached_block_height_token_eth_price.format(
-                        Web3.to_checksum_address(token_address),
+                mapping=redis_cache_mapping,  # timestamp so zset do not ignore same height on multiple heights
+            )
+            pipeline.zremrangebyscore(
+                name=uniswap_cached_block_height_token_eth_price.format(
+                    Web3.to_checksum_address(token_address),
                     ),
                     min=0,
-                    max=int(from_block) - source_chain_epoch_size * 4,
-                ),
+                max=int(from_block) - source_chain_epoch_size * 4,
             )
+            await pipeline.execute()
 
             return token_eth_price_dict
 

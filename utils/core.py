@@ -3,11 +3,13 @@ import json
 from functools import reduce
 
 from redis import asyncio as aioredis
+from computes.metadata import MetadataProcessor
 from snapshotter.utils.default_logger import logger
 from rpc_helper.rpc import get_event_sig_and_abi
 from rpc_helper.rpc import RpcHelper
 from snapshotter.utils.snapshot_utils import get_block_details_in_block_range
 from web3 import Web3
+from ipfs_client.main import AsyncIPFSClient
 
 from computes.redis_keys import uniswap_pair_cached_block_height_reserves
 from computes.total_value_locked import calculate_reserves
@@ -32,7 +34,9 @@ async def get_pair_reserves(
     from_block,
     to_block,
     redis_conn: aioredis.Redis,
-    rpc_helper: RpcHelper
+    rpc_helper: RpcHelper,
+    ipfs_reader: AsyncIPFSClient,
+    protocol_state_contract,
 ):
     """
     Fetch and calculate pair reserves for a given Uniswap pair over a block range.
@@ -52,7 +56,6 @@ async def get_pair_reserves(
         f'Starting pair total reserves query for: {pair_address}',
     )
     pair_address = Web3.to_checksum_address(pair_address)
-    # TODO: fetch block details from expected cache entries
     try:
         block_details_dict = await get_block_details_in_block_range(
             from_block,
@@ -71,20 +74,30 @@ async def get_pair_reserves(
             err,
         )
         raise err
-    # TODO: fetch metadata from latest cache entries for uniswap v3
-    pair_per_token_metadata = await get_pair_metadata(
-        pair_address=pair_address,
-        redis_conn=redis_conn,
-        rpc_helper=rpc_helper,
-    )
-
     core_logger.debug(
         ('total pair reserves fetched block details for epoch for:' f' {pair_address}'),
     )
+    # TODO: fetch metadata from latest cache entries for uniswap v3
+    metadata_processor = MetadataProcessor()
+    pair_per_token_metadata = await metadata_processor.get_pool_metadata(
+        pool_address=pair_address,
+        redis_conn=redis_conn,
+        anchor_rpc_helper=rpc_helper,
+        ipfs_reader=ipfs_reader,
+        protocol_state_contract=protocol_state_contract,
+    )
+
+    if not pair_per_token_metadata:
+        core_logger.error(
+            (
+                'Error attempting to get pair metadata for:' f' {pair_address}'
+            ),
+        )
+        raise Exception(f'Error attempting to get pair metadata for: {pair_address}')
 
     token0_price_map, token1_price_map = await asyncio.gather(
         get_token_price_in_block_range(
-            token_metadata=pair_per_token_metadata['token0'],
+            token_metadata=pair_per_token_metadata.token0.dict(),
             from_block=from_block,
             to_block=to_block,
             redis_conn=redis_conn,
@@ -93,7 +106,7 @@ async def get_pair_reserves(
 
         ),
         get_token_price_in_block_range(
-            token_metadata=pair_per_token_metadata['token1'],
+            token_metadata=pair_per_token_metadata.token1.dict(),
             from_block=from_block,
             to_block=to_block,
             redis_conn=redis_conn,

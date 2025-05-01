@@ -32,8 +32,8 @@ class PairTotalReservesProcessor(GenericProcessorSnapshot):
         anchor_rpc_helper: RpcHelper,
         ipfs_reader: AsyncIPFSClient,
         protocol_state_contract,
-        task_type: str = None,
-    ) -> Optional[Dict[str, Union[int, float]]]:
+        task_type: str,
+    ) -> Optional[UniswapPairTotalReservesSnapshot]:
         """
         Compute the total reserves for a Uniswap pair within the given epoch.
 
@@ -69,13 +69,21 @@ class PairTotalReservesProcessor(GenericProcessorSnapshot):
             from_block=min_chain_height,
             to_block=max_chain_height,
             redis_conn=redis_conn,
-            rpc_helper=rpc_helper
+            rpc_helper=rpc_helper,
+            ipfs_reader=ipfs_reader,
+            protocol_state_contract=protocol_state_contract,
         )
 
         # Process reserve data for each block in the epoch
         for block_num in range(min_chain_height, max_chain_height + 1):
             block_pair_total_reserves = pair_reserve_total.get(block_num)
-
+            if not block_pair_total_reserves:
+                self._logger.error(
+                    (
+                        "No pair reserves data found for block {}"
+                    ),
+                )
+                continue
             # Store reserve and price data for each token
             epoch_reserves_snapshot_map_token0[
                 f"block{block_num}"

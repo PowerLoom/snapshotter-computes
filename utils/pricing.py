@@ -46,31 +46,25 @@ async def get_token_price_in_block_range(
         token_decimals = int(token_metadata["decimals"])
 
         # Check if cache exists for the given block range
-        cached_price_dict = await redis_conn.zrangebyscore(
+        cached_price_entry_json_list = await redis_conn.zrangebyscore(
             name=uniswap_pair_cached_block_height_token_price.format(
                 token_address,
             ),
             min=int(from_block),
             max=int(to_block),
+            withscores=False
         )
         
-        # If cache is complete, return the cached prices
-        if cached_price_dict and len(cached_price_dict) == to_block - (from_block - 1):
-            price_dict = {
-                json.loads(
-                    price.decode(
-                        "utf-8",
-                    ),
-                )["blockHeight"]: json.loads(
-                    price.decode("utf-8")
-                )["price"]
-                for price in cached_price_dict
+        if cached_price_entry_json_list and len(cached_price_entry_json_list) == to_block - (from_block - 1):
+            price_entry_list = [json.loads(price_entry_json.decode("utf-8")) for price_entry_json in cached_price_entry_json_list]
+            token_price_dict = {
+                price_entry["blockHeight"]: price_entry["price"]
+                for price_entry in price_entry_list
             }
+            return token_price_dict
 
         # Handle WETH separately
-        if token_address == Web3.to_checksum_address(
-            worker_settings.contract_addresses.WETH
-        ):
+        if token_address == Web3.to_checksum_address(worker_settings.contract_addresses.WETH):
             token_price_dict = await eth_price_preloader.get_eth_price_usd(
                 from_block=from_block,
                 to_block=to_block,
@@ -131,27 +125,29 @@ async def get_token_price_in_block_range(
                 )
                 for height, price in token_price_dict.items()
             }
-
-            source_chain_epoch_size = int(
-                await redis_conn.get(source_chain_epoch_size_key()),
-            )
-
-            await gather(
-                redis_conn.zadd(
-                    name=uniswap_pair_cached_block_height_token_price.format(
+            source_chain_epoch_size = await redis_conn.get(source_chain_epoch_size_key())
+            if source_chain_epoch_size:
+                source_chain_epoch_size = int(source_chain_epoch_size)
+            else:
+                pricing_logger.error(
+                    f"source_chain_epoch_size is not set"
+                )
+                raise Exception("source_chain_epoch_size is not set")
+            pipeline = redis_conn.pipeline()
+            pipeline.zadd(
+                name=uniswap_pair_cached_block_height_token_price.format(
                         Web3.to_checksum_address(token_metadata["address"]),
                     ),
-                    mapping=redis_cache_mapping,
-                ),
-                redis_conn.zremrangebyscore(
-                    name=uniswap_pair_cached_block_height_token_price.format(
-                        Web3.to_checksum_address(token_metadata["address"]),
-                    ),
-                    min=0,
-                    max=int(from_block) - source_chain_epoch_size * 4,
-                ),
+                mapping=redis_cache_mapping,
             )
-
+            pipeline.zremrangebyscore(
+                name=uniswap_pair_cached_block_height_token_price.format(
+                    Web3.to_checksum_address(token_metadata["address"]),
+                ),
+                min=0,
+                max=int(from_block) - source_chain_epoch_size * 4,
+            )
+            await pipeline.execute()
         return token_price_dict
 
     except Exception as err:
