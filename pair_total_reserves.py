@@ -124,6 +124,7 @@ class PairTotalReservesProcessor(GenericProcessorSnapshot):
                 redis_conn=redis_conn,
                 rpc_helper=rpc_helper,
                 ipfs_reader=ipfs_reader,
+                anchor_rpc_helper=anchor_rpc_helper,
                 protocol_state_contract=protocol_state_contract,
                 block_details_dict=block_details_dict,  # Pass the pre-fetched block details
             )

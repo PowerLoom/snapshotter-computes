@@ -36,6 +36,7 @@ async def get_pair_reserves(
     to_block,
     redis_conn: aioredis.Redis,
     rpc_helper: RpcHelper,
+    anchor_rpc_helper: RpcHelper,
     ipfs_reader: AsyncIPFSClient,
     protocol_state_contract,
     block_details_dict: dict = dict(),
@@ -96,7 +97,7 @@ async def get_pair_reserves(
     pair_per_token_metadata = await metadata_processor.get_pool_metadata(
         pool_address=pair_address,
         redis_conn=redis_conn,
-        anchor_rpc_helper=rpc_helper,
+        anchor_rpc_helper=anchor_rpc_helper,
         ipfs_reader=ipfs_reader,
         protocol_state_contract=protocol_state_contract,
     )
