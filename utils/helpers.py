@@ -366,10 +366,9 @@ async def get_pair_metadata(
     except Exception as err:
         # this will be retried in next cycle
         helper_logger.opt(exception=True).error(
-            (
-                f'RPC error while fetcing metadata for pair {pair_address},'
-                f' error_msg:{err}'
-            ),
+            'RPC error while fetcing metadata for pair {}, error_msg:{}',
+            pair_address,
+            err
         )
         raise err
 
@@ -472,7 +471,7 @@ async def get_token_eth_price_dict(
 
     except Exception as e:
         # TODO BETTER ERROR HANDLING
-        helper_logger.debug(f'error while fetching token price for {token_address}, error_msg:{e}')
+        helper_logger.debug('error while fetching token price for {}, error_msg:{}', token_address, e)
         raise e
 
 
@@ -786,7 +785,7 @@ async def get_token_eth_quote_from_uniswap(
             else:
                 return [(0,) for _ in range(from_block, to_block + 1)]
     except Exception as e:
-        helper_logger.debug(f'error while fetching token price for {token_address}, error_msg:{e}')
+        helper_logger.debug('error while fetching token price for {}, error_msg:{}', token_address, e)
         raise e
 
 

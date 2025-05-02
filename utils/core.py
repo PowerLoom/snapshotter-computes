@@ -1,6 +1,7 @@
 import asyncio
 import json
 from functools import reduce
+import time
 from typing import Dict, List
 
 from redis import asyncio as aioredis
@@ -59,7 +60,8 @@ async def get_pair_reserves(
         "[Epoch {}-{}] Pool {} | Starting pair reserves computation | Wall time: {}",
         from_block,
         to_block,
-        pair_address
+        pair_address,
+        time.time()
     )
 
     pair_address = Web3.to_checksum_address(pair_address)
@@ -241,10 +243,10 @@ async def get_pair_reserves(
         }
 
     core_logger.debug(
-        (
-            'Calculated pair total reserves for epoch-range:'
-            f' {from_block} - {to_block} | pair_contract: {pair_address}'
-        ),
+        'Calculated pair total reserves for epoch-range: {} - {} | pair_contract: {}',
+        from_block,
+        to_block,
+        pair_address
     )
 
     # here we store the final block in the epoch reserves in redis so they may be used as
