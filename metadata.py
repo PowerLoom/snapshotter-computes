@@ -49,7 +49,13 @@ class MetadataProcessor(GenericProcessorSnapshot):
                 return None
         else:
             # get finalized cid
-            finalized_cid = await get_project_finalized_cid(redis_conn, protocol_state_contract, anchor_rpc_helper, metadata_project_id, last_finalized_epoch)
+            finalized_cid = await get_project_finalized_cid(
+                redis_conn=redis_conn,
+                state_contract_obj=protocol_state_contract,
+                rpc_helper=anchor_rpc_helper,
+                epoch_id=last_finalized_epoch,
+                project_id=metadata_project_id,
+            )
             if not finalized_cid:
                 self._logger.error(f"No finalized cid found for pool {pool_address} against epoch {last_finalized_epoch} while processing metadata")
                 return None
