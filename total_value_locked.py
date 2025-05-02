@@ -53,7 +53,7 @@ def transform_tick_bytes_to_list(tick_bytes):
     return ticks
 
 
-def calculate_tvl_from_ticks(ticks, pair_metadata, sqrt_price):
+def calculate_tvl_from_ticks(ticks, pair_metadata: UniswapPoolMetadata, sqrt_price):
     """
     Calculate the Total Value Locked (TVL) from tick data.
 
@@ -75,7 +75,7 @@ def calculate_tvl_from_ticks(ticks, pair_metadata, sqrt_price):
     if len(ticks) == 0:
         return (0, 0)
 
-    int_fee = int(pair_metadata['pair']['fee'])
+    int_fee = int(pair_metadata.fee)
 
     # Set tick spacing based on fee
     if int_fee == 3000:
