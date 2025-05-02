@@ -35,14 +35,19 @@ class MetadataProcessor(GenericProcessorSnapshot):
     ) -> Optional[UniswapPoolMetadata]:
         # get last finalized epoch of metadata snapshot
         metadata_project_id = task_type.format(poolAddress=pool_address, Namespace=settings.namespace)
-        last_finalized_epoch = await get_project_last_finalized_epoch(
-            redis_conn, protocol_state_contract, anchor_rpc_helper, metadata_project_id
-        )
+        try:
+            last_finalized_epoch = await get_project_last_finalized_epoch(
+                redis_conn, protocol_state_contract, anchor_rpc_helper, metadata_project_id
+            )
+        except Exception as e:
+            self._logger.opt(exception=e).error(f"Error getting last finalized epoch for pool {pool_address} while processing metadata")
+            last_finalized_epoch = None
         if not last_finalized_epoch:
             # check redis cache first
             cache_key = f'pool_metadata:{pool_address}'
             cached_data = await redis_conn.get(cache_key)
             if cached_data:
+                self._logger.info(f"Found cached metadata for pool {pool_address}")
                 return UniswapPoolMetadata(**json.loads(cached_data))
             else:
                 self._logger.error(f"No last finalized epoch nor cache entry found for pool {pool_address} while processing metadata")
