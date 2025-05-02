@@ -88,6 +88,7 @@ class PairTotalReservesProcessor(GenericProcessorSnapshot):
             max_chain_height,
             len(active_pool_addresses)
         )
+        active_pool_addresses = map(lambda x: x.decode('utf-8'), active_pool_addresses)
         
         # for each Uniswap V3 pool, fetch reserves of token0 and token1 within them
         for pool_address in active_pool_addresses:
