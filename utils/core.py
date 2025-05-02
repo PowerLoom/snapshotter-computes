@@ -65,19 +65,19 @@ async def get_pair_reserves(
         )
     except Exception as err:
         core_logger.opt(exception=True).error(
-            (
-                'Error attempting to get block details of block-range'
-                ' {}-{}: {}, retrying again'
-            ),
+            'Error attempting to get block details of block-range'
+            ' {}-{}: {}',
             from_block,
             to_block,
             err,
         )
         raise err
     core_logger.debug(
-        ('total pair reserves fetched block details for epoch for:' f' {pair_address}'),
+        'Pair reserves compute: fetched block details against epoch block range {} - {} and pool address: {}',
+        from_block,
+        to_block,
+        pair_address,
     )
-    # TODO: fetch metadata from latest cache entries for uniswap v3
     metadata_processor = MetadataProcessor()
     pair_per_token_metadata = await metadata_processor.get_pool_metadata(
         pool_address=pair_address,
@@ -117,7 +117,10 @@ async def get_pair_reserves(
     )
 
     core_logger.debug(
-        f'Total reserves fetched token prices for: {pair_address}',
+        'Pair reserves compute: fetched token0 and token1 prices for pool {} against epoch block range {} - {}',
+        pair_address,
+        from_block,
+        to_block,
     )
 
     # attempt to fetch previous epoch end block reserves from redis
@@ -144,7 +147,10 @@ async def get_pair_reserves(
         )
 
     core_logger.debug(
-        f'Total reserves fetched tick data for {pair_address} of {initial_reserves} for block {from_block}',
+        'Pair reserves compute: fetched tick data for pool¯ {} of {} for block {}',
+        pair_address,
+        initial_reserves,
+        from_block,
     )
 
     # grab mint/burn events in range

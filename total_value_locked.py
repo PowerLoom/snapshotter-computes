@@ -171,20 +171,17 @@ async def get_events(
 ):
     """
     Fetch events for a given pair address within a block range.
-
-    Args:
-        pair_address (str): The address of the token pair.
-        rpc (RpcHelper): An instance of RpcHelper for making RPC calls.
-        from_block: The starting block number.
-        to_block: The ending block number.
-        redis_con: Redis connection object.
-
-    Returns:
-        list: A list of events for the specified pair and block range.
     """
     event_sig, event_abi = get_event_sig_and_abi(
         UNISWAP_TRADE_EVENT_SIGS,
         UNISWAP_EVENTS_ABI,
+    )
+
+    tvl_logger.debug(
+        "[Epoch {}-{}] Pool {} | Fetching trade events",
+        from_block,
+        to_block,
+        pair_address
     )
 
     events = await rpc.get_events_logs(
@@ -193,6 +190,14 @@ async def get_events(
         from_block=from_block,
         topics=[event_sig],
         event_abi=event_abi,
+    )
+
+    tvl_logger.debug(
+        "[Epoch {}-{}] Pool {} | Found {} trade events",
+        from_block,
+        to_block,
+        pair_address,
+        len(events)
     )
 
     return events
@@ -221,18 +226,13 @@ async def calculate_reserves(
     redis_conn,
 ):
     """
-    Calculate the reserves for a given pair address.
-
-    Args:
-        pair_address (str): The address of the token pair.
-        from_block: The block number to calculate reserves from.
-        pair_per_token_metadata (dict): Metadata for the token pair.
-        rpc_helper (RpcHelper): An instance of RpcHelper for making RPC calls.
-        redis_conn: Redis connection object.
-
-    Returns:
-        list: A list containing the reserves of token0 and token1.
+    Calculate reserves for a given pair address.
     """
+    tvl_logger.debug(
+        "[Epoch {}] Pool {} | Calculating reserves",
+        from_block,
+        pair_address
+    )
     ticks_list, slot0 = await get_tick_info(
         rpc_helper=rpc_helper,
         pair_address=pair_address,
@@ -253,28 +253,20 @@ async def calculate_reserves(
 
 
 async def get_tick_info(
-        rpc_helper: RpcHelper,
-        pair_address: str,
-        from_block,
-        redis_conn,
-        pair_per_token_metadata,
+    rpc_helper: RpcHelper,
+    pair_address: str,
+    from_block,
+    redis_conn,
+    pair_per_token_metadata,
 ):
     """
-    Fetch tick information for a given pair address.
-
-    Args:
-        rpc_helper (RpcHelper): An instance of RpcHelper for making RPC calls.
-        pair_address (str): The address of the token pair.
-        from_block: The block number to fetch tick info from.
-        redis_conn: Redis connection object.
-        pair_per_token_metadata (dict): Metadata for the token pair.
-
-    Returns:
-        tuple: A tuple containing the list of ticks and slot0 data.
-
-    Raises:
-        Exception: If there's an error fetching tick data.
+    Get tick information for a given pair address.
     """
+    tvl_logger.debug(
+        "[Epoch {}] Pool {} | Fetching tick information",
+        from_block,
+        pair_address
+    )
     try:
         overrides = {
             override_address: {'code': univ3_helper_bytecode},

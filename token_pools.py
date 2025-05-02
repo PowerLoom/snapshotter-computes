@@ -24,7 +24,7 @@ class TokenPoolsProcessor(GenericProcessorSnapshot):
     """
 
     def __init__(self) -> None:
-        self._logger = logger.bind(module="MetadataProcessor")
+        self._logger = logger.bind(module="TokenPoolsProcessor")
 
     async def _process_pool(
         self,
@@ -67,6 +67,12 @@ class TokenPoolsProcessor(GenericProcessorSnapshot):
                 if cached_data:
                     data = json.loads(cached_data)
                 else:
+                    self._logger.debug(
+                        "[Epoch {}-{}] Pool {} | No metadata found in cache or first epoch",
+                        epoch.begin,
+                        epoch.end,
+                        pool_address
+                    )
                     return None
             else:
                 data = await get_project_epoch_snapshot(
@@ -74,6 +80,12 @@ class TokenPoolsProcessor(GenericProcessorSnapshot):
                 )
 
             if not data:
+                self._logger.debug(
+                    "[Epoch {}-{}] Pool {} | No metadata data available",
+                    epoch.begin,
+                    epoch.end,
+                    pool_address
+                )
                 return None
             
             token_addresses = [data["token0"]["address"], data["token1"]["address"]]
@@ -112,8 +124,12 @@ class TokenPoolsProcessor(GenericProcessorSnapshot):
 
             return snapshots
         except Exception as e:
-            self._logger.opt(exception=e).error(f"Error processing pool {pool_address}")
-            # Silently ignore any exceptions
+            self._logger.opt(exception=e).error(
+                "[Epoch {}-{}] Pool {} | Error processing pool metadata",
+                epoch.begin,
+                epoch.end,
+                pool_address
+            )
             return None
 
     async def compute(
@@ -137,7 +153,11 @@ class TokenPoolsProcessor(GenericProcessorSnapshot):
         Returns:
             Optional[Dict[str, Union[int, float]]]: Computed pair metadata snapshot.
         """
-        self._logger.info(f"Computing metadata for epoch {epoch.epochId}")
+        self._logger.info(
+            "[Epoch {}-{}] Starting token pools computation",
+            epoch.begin,
+            epoch.end
+        )
         min_chain_height = epoch.begin
         max_chain_height = epoch.end
         keys_to_fetch = []
@@ -150,7 +170,12 @@ class TokenPoolsProcessor(GenericProcessorSnapshot):
         pools = set()
         if keys_to_fetch:
             pools = await redis_conn.sunion(*keys_to_fetch)
-        self._logger.info(f"Found {len(pools)} active pools in the epoch {min_chain_height} to {max_chain_height}")
+        self._logger.info(
+            "[Epoch {}-{}] Found {} active pools to process",
+            min_chain_height,
+            max_chain_height,
+            len(pools)
+        )
         
         # Process all pools in parallel
         pool_tasks = []
