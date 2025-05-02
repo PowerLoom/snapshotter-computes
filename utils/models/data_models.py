@@ -1,8 +1,20 @@
-from typing import Dict
-from typing import List
+from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
+
+class UniswapEvent(BaseModel):
+    eventName: str
+    filterName: str
+    txHash: str
+    blockNumber: int
+    txIndex: int
+    logIndex: int
+    address: str
+    topics: List[str]
+    data: str
+    args: Dict[str, Any]
+    _score: Optional[int] = Field(None, alias='_score')
 
 class trade_data(BaseModel):
     """

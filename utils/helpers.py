@@ -3,7 +3,9 @@ import json
 import math
 
 from asyncio import gather
+from typing import Any, Dict, List, Optional
 from redis import asyncio as aioredis
+from computes.utils.models.data_models import UniswapEvent
 from snapshotter.utils.default_logger import logger
 from snapshotter.utils.redis.redis_keys import source_chain_epoch_size_key
 from rpc_helper.rpc import get_contract_abi_dict
@@ -25,9 +27,85 @@ from computes.utils.constants import STABLE_TOKENS_LIST
 from computes.utils.constants import TOKENS_DECIMALS
 from computes.utils.constants import ZER0_ADDRESS
 from computes.preloaders.eth_price.preloader import eth_price_preloader
+from snapshotter.settings.config import settings
 
 helper_logger = logger.bind(module='PowerLoom|Uniswap|Helpers')
 
+SCORE_BLOCK_MULTIPLIER = 1_000_000
+
+
+# TODO: accept RPC helper as fallback?
+async def get_events_from_cache(
+    pool_address: str,
+    from_block: int,
+    to_block: int,
+    redis_conn: aioredis.Redis
+) -> Dict[int, List[UniswapEvent]]:
+    """
+    Fetch event logs from Redis cache for a given pool address and block range.
+    
+    Args:
+        pool_address (str): The pool contract address
+        from_block (int): Starting block number
+        to_block (int): Ending block number
+        redis_conn (aioredis.Redis): Redis connection
+        
+    Returns:
+        Dict[int, List[UniswapEvent]]: Dictionary mapping block numbers to lists of event objects
+        
+    Example event JSON entry:
+    {
+        "eventName": "Swap",
+        "filterName": "uniswapv3_pool_events",
+        "txHash": "0x2f82087ed4d3bbf77c559d1337e3903a7108927cf9a2c9dae33bcce36f88933c",
+        "blockNumber": 22394920,
+        "txIndex": 4,
+        "logIndex": 38,
+        "address": "0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640",
+        "topics": [
+            "0xc42079f94a6350d7e6235f29174924f928cc2ac818eb64fed8004e115fbcca67",
+            "0x66a9893cc07d91d95644aedd05d03f95e1dba8af",
+            "0x66a9893cc07d91d95644aedd05d03f95e1dba8af"
+        ],
+        "data": "0x00000000000000000000000000000000000000000000000000000000203d7eb8fffffffffffffffffffffffffffffffffffffffffffffffffbe1f9518d38ad830000000000000000000000000000000000005b81d1e1ed548107534638248648000000000000000000000000000000000000000000000000516f1f5b22a9ea090000000000000000000000000000000000000000000000000000000000031219",
+        "args": {
+            "sender": "0x66a9893cC07D91D95644AEDD05D03f95e1dBA8Af",
+            "recipient": "0x66a9893cC07D91D95644AEDD05D03f95e1dBA8Af",
+            "amount0": 540901048,
+            "amount1": -296681971772772989,
+            "sqrtPriceX96": 1855984662392763862973509127145032,
+            "liquidity": 5867943315771091465,
+            "tick": 201241
+        },
+        "_score": 22394920000038
+    }
+    """
+    # Calculate score range for zrangebyscore
+    min_score = from_block * SCORE_BLOCK_MULTIPLIER
+    max_score = (to_block + 1) * SCORE_BLOCK_MULTIPLIER - 1  # -1 to not include next block's events
+    
+    # Get events from Redis zset
+    events = await redis_conn.zrangebyscore(
+        name=f"events:{settings.namespace}:{pool_address.lower()}",
+        min=min_score,
+        max=max_score,
+        withscores=True
+    )
+    
+    # Group events by block number
+    block_events: Dict[int, List[UniswapEvent]] = {}
+    for event_json, score in events:
+        event_data = json.loads(event_json)
+        event_data['_score'] = score  # Add score to event data
+        event = UniswapEvent.parse_obj(event_data)
+        block_number = event.blockNumber
+        
+        if block_number not in block_events:
+            block_events[block_number] = []
+            
+        block_events[block_number].append(event)
+    
+    return block_events
 
 def get_maker_pair_data(prop):
     """

@@ -27,6 +27,7 @@ getcontext().prec = 36
 tvl_logger = logger.bind(module='PowerLoom|UniswapTotalValueLocked')
 
 
+
 def transform_tick_bytes_to_list(tick_bytes):
     """
     Transform tick data from decoded web3 call result to a list of dictionaries.
@@ -160,47 +161,6 @@ def get_token1_in_pool(
         int: The amount of token1 in the pool.
     """
     return liquidity * (sqrtPriceHigh - sqrtPriceLow) // 1
-
-
-async def get_events(
-    pair_address: str,
-    rpc: RpcHelper,
-    from_block,
-    to_block,
-    redis_con,
-):
-    """
-    Fetch events for a given pair address within a block range.
-    """
-    event_sig, event_abi = get_event_sig_and_abi(
-        UNISWAP_TRADE_EVENT_SIGS,
-        UNISWAP_EVENTS_ABI,
-    )
-
-    tvl_logger.debug(
-        "[Epoch {}-{}] Pool {} | Fetching trade events",
-        from_block,
-        to_block,
-        pair_address
-    )
-
-    events = await rpc.get_events_logs(
-        contract_address=pair_address,
-        to_block=to_block,
-        from_block=from_block,
-        topics=[event_sig],
-        event_abi=event_abi,
-    )
-
-    tvl_logger.debug(
-        "[Epoch {}-{}] Pool {} | Found {} trade events",
-        from_block,
-        to_block,
-        pair_address,
-        len(events)
-    )
-
-    return events
 
 
 def _load_abi(path: str) -> str:

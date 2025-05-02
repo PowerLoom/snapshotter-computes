@@ -1,12 +1,12 @@
 import time
-from typing import Dict
+from typing import Dict, List, Tuple
 from typing import Optional
 from typing import Union
 
 from redis import asyncio as aioredis
 from rpc_helper.rpc import RpcHelper
 
-from computes.utils.core import get_pair_reserves
+from computes.utils.core import get_pair_reserves, get_block_details_in_block_range
 from snapshotter.utils.models.message_models import SnapshotProcessMessage
 from snapshotter.utils.callback_helpers import GenericProcessorSnapshot
 from snapshotter.utils.default_logger import logger
@@ -34,7 +34,7 @@ class PairTotalReservesProcessor(GenericProcessorSnapshot):
         protocol_state_contract,
         # TODO: need clarity on this interface
         task_type: str = "baseSnapshot:{poolAddress}:{Namespace}",
-    ) -> Optional[UniswapPairTotalReservesSnapshot]:
+    ) -> List[Tuple[str, UniswapPairTotalReservesSnapshot]]:
         """
         Compute the total reserves for a Uniswap pair within the given epoch.
 
@@ -49,6 +49,30 @@ class PairTotalReservesProcessor(GenericProcessorSnapshot):
         
         min_chain_height = epoch.begin
         max_chain_height = epoch.end
+        snapshots = list()
+        # Fetch block details once for the entire epoch
+        try:
+            block_details_dict = await get_block_details_in_block_range(
+                min_chain_height,
+                max_chain_height,
+                redis_conn=redis_conn,
+                rpc_helper=rpc_helper,
+            )
+            self._logger.debug(
+                "[Epoch {}-{}] Block details fetched successfully for {} blocks",
+                min_chain_height,
+                max_chain_height,
+                len(block_details_dict)
+            )
+        except Exception as err:
+            self._logger.opt(exception=True).error(
+                "[Epoch {}-{}] Failed to fetch block details: {}",
+                min_chain_height,
+                max_chain_height,
+                err
+            )
+            block_details_dict = dict()
+
         # find list of active pools for the epoch
         active_pool_set_keys_to_fetch = []
         for block_number in range(min_chain_height, max_chain_height + 1):
@@ -74,11 +98,6 @@ class PairTotalReservesProcessor(GenericProcessorSnapshot):
                 pool_address
             )
             
-            # fetch reserves of token0 and token1 within the pool
-            # fetch prices of token0 and token1 within the pool
-            # fetch timestamp of the pool
-            # store the data in the snapshot
-            project_id = task_type.format(poolAddress=pool_address, Namespace=settings.namespace)
             # Initialize dictionaries to store reserve and price data for each block
             epoch_reserves_snapshot_map_token0 = dict()
             epoch_prices_snapshot_map_token0 = dict()
@@ -89,7 +108,11 @@ class PairTotalReservesProcessor(GenericProcessorSnapshot):
             max_block_timestamp = int(time.time())
 
             self._logger.debug(
-                f"pair reserves {pool_address} computation init time {time.time()}"
+                "[Epoch {}-{}] Pool {} | Starting token pair reserves computation | Wall time: {}",
+                min_chain_height,
+                max_chain_height,
+                pool_address,
+                time.time()
             )
             
             # Fetch pair reserves for the entire block range of the epoch
@@ -101,6 +124,7 @@ class PairTotalReservesProcessor(GenericProcessorSnapshot):
                 rpc_helper=rpc_helper,
                 ipfs_reader=ipfs_reader,
                 protocol_state_contract=protocol_state_contract,
+                block_details_dict=block_details_dict,  # Pass the pre-fetched block details
             )
 
             # Process reserve data for each block in the epoch
@@ -165,10 +189,12 @@ class PairTotalReservesProcessor(GenericProcessorSnapshot):
                 },
             )
             self._logger.debug(
-                "[Epoch {}-{}] Pool {} | Computation completed",
+                "[Epoch {}-{}] Pool {} | Computation completed | Wall time: {}",
                 min_chain_height,
                 max_chain_height,
-                pool_address
+                pool_address,
+                time.time()
             )
+            snapshots.append((pool_address, pair_total_reserves_snapshot))
 
-        return pair_total_reserves_snapshot
+        return snapshots
