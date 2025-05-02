@@ -3,12 +3,13 @@ import functools
 import json
 from decimal import Decimal
 from decimal import getcontext
-from typing import Union
+from typing import Optional, Union
 
 from eth_abi import abi
 from eth_typing import Address
 from eth_typing.evm import Address
 from eth_typing.evm import ChecksumAddress
+from computes.utils.models.message_models import UniswapPoolMetadata
 from snapshotter.utils.default_logger import logger
 from rpc_helper.rpc import get_event_sig_and_abi
 from rpc_helper.rpc import RpcHelper
@@ -181,15 +182,17 @@ def _load_abi(path: str) -> str:
 async def calculate_reserves(
     pair_address: str,
     from_block,
-    pair_per_token_metadata,
+    pair_per_token_metadata: Optional[UniswapPoolMetadata],
     rpc_helper: RpcHelper,
     redis_conn,
 ):
     """
     Calculate reserves for a given pair address.
     """
+    if not pair_per_token_metadata:
+        return None
     tvl_logger.debug(
-        "[Epoch {}] Pool {} | Calculating reserves",
+        "[Epoch {}] Pool {} | Calculating token0 and token1 reserves",
         from_block,
         pair_address
     )
@@ -217,7 +220,7 @@ async def get_tick_info(
     pair_address: str,
     from_block,
     redis_conn,
-    pair_per_token_metadata,
+    pair_per_token_metadata: UniswapPoolMetadata,
 ):
     """
     Get tick information for a given pair address.
@@ -235,7 +238,7 @@ async def get_tick_info(
         pair_contract = current_node['web3_client'].eth.contract(address=pair_address, abi=pair_contract_abi)
 
         # Determine step size based on fee
-        fee = int(pair_per_token_metadata['pair']['fee'])
+        fee = int(pair_per_token_metadata.fee)
         step = (MAX_TICK - MIN_TICK) // 16
 
         if fee == 500:

@@ -2,10 +2,11 @@ import asyncio
 import json
 from functools import reduce
 import time
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from redis import asyncio as aioredis
 from computes.metadata import MetadataProcessor
+from computes.utils.models.message_models import UniswapPoolMetadata
 from snapshotter.utils.default_logger import logger
 from rpc_helper.rpc import get_event_sig_and_abi
 from rpc_helper.rpc import RpcHelper
@@ -94,7 +95,7 @@ async def get_pair_reserves(
             )
 
     metadata_processor = MetadataProcessor()
-    pair_per_token_metadata = await metadata_processor.get_pool_metadata(
+    pair_per_token_metadata: Optional[UniswapPoolMetadata] = await metadata_processor.get_pool_metadata(
         pool_address=pair_address,
         redis_conn=redis_conn,
         anchor_rpc_helper=anchor_rpc_helper,
