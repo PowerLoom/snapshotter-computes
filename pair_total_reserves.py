@@ -128,7 +128,14 @@ class PairTotalReservesProcessor(GenericProcessorSnapshot):
                 protocol_state_contract=protocol_state_contract,
                 block_details_dict=block_details_dict,  # Pass the pre-fetched block details
             )
-
+            if not pair_reserve_total:
+                self._logger.error(
+                    "[Epoch {}-{}] Pool {} | No token pair reserves data returned by 'get_pair_reserves()'",
+                    min_chain_height,
+                    max_chain_height,
+                    pool_address
+                )
+                continue
             # Process reserve data for each block in the epoch
             for block_num in range(min_chain_height, max_chain_height + 1):
                 block_pair_total_reserves = pair_reserve_total.get(block_num)

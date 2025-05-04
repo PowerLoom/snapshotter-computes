@@ -59,7 +59,7 @@ async def get_pair_reserves(
         dict: A dictionary containing pair reserves data for each block in the range.
     """
     core_logger.info(
-        "[Epoch {}-{}] Pool {} | Starting pair reserves computation | Wall time: {}",
+        "[Epoch {}-{}] Pool {} | Starting token0 and token1 reserves computation | Wall time: {}",
         from_block,
         to_block,
         pair_address,
@@ -166,6 +166,14 @@ async def get_pair_reserves(
             rpc_helper,
             redis_conn,
         )
+        if any(x == 0 for x in initial_reserves):
+            core_logger.error(
+                "[Epoch {}-{}] Pool {} | Failed to calculate initial reserves",
+                from_block,
+                to_block,
+                pair_address
+            )
+            return None
         core_logger.debug(
             "[Epoch {}-{}] Pool {} | Calculated initial reserves: token0={}, token1={}",
             from_block,
@@ -569,6 +577,8 @@ async def get_liquidity_depth(
     to_block,
     redis_conn: aioredis.Redis,
     rpc_helper: RpcHelper,
+    ipfs_reader: AsyncIPFSClient,
+    protocol_state_contract,
     fetch_timestamp=False,
 ):
     """
@@ -612,16 +622,26 @@ async def get_liquidity_depth(
         block_details_dict = dict()
 
     pair_address = Web3.to_checksum_address(pair_address)
-
-    pair_per_token_metadata = await get_pair_metadata(
-        pair_address=pair_address,
+    metadata_processor = MetadataProcessor()
+    pair_per_token_metadata = await metadata_processor.get_pool_metadata(
+        pool_address=pair_address,
         redis_conn=redis_conn,
-        rpc_helper=rpc_helper,
+        anchor_rpc_helper=rpc_helper,
+        ipfs_reader=ipfs_reader,
+        protocol_state_contract=protocol_state_contract,
     )
+    if not pair_per_token_metadata:
+        core_logger.error(
+            "[Epoch {}-{}] Pool {} | Failed to fetch pair metadata",
+            from_block,
+            to_block,
+            pair_address
+        )
+        raise Exception(f'Error attempting to get pair metadata for: {pair_address}')
 
     token0_price_map, token1_price_map = await asyncio.gather(
         get_token_price_in_block_range(
-            token_metadata=pair_per_token_metadata['token0'],
+            token_metadata=pair_per_token_metadata.token0.dict(),
             from_block=from_block,
             to_block=to_block,
             redis_conn=redis_conn,
@@ -630,7 +650,7 @@ async def get_liquidity_depth(
 
         ),
         get_token_price_in_block_range(
-            token_metadata=pair_per_token_metadata['token1'],
+            token_metadata=pair_per_token_metadata.token1.dict(),
             from_block=from_block,
             to_block=to_block,
             redis_conn=redis_conn,
@@ -648,6 +668,7 @@ async def get_liquidity_depth(
         pair_address=pair_address,
         from_block=from_block,
         redis_conn=redis_conn,
+        pair_per_token_metadata=pair_per_token_metadata
     )
 
     liquidity_depth_initial = calculate_liquidity_depth(
@@ -663,31 +684,24 @@ async def get_liquidity_depth(
             'token1': token1_price_map.get(block_num, 0),
         }
 
-    events = await get_events(
-        pair_address=pair_address,
-        rpc=rpc_helper,
+    events_by_block = await get_events_from_cache(
+        pool_address=pair_address,
+        redis_conn=redis_conn,
         from_block=from_block,
         to_block=to_block,
-        redis_con=redis_conn,
     )
 
     core_logger.debug(
-        f'Events fetched for liquidity depth: {events}',
+        f'Events fetched for liquidity depth: {events_by_block}',
     )
-    events_by_block = dict()
-    for event in events:
-        events_by_block[event['blockNumber']] = events_by_block.get(
-            event['blockNumber'], [],
-        )
-        events_by_block[event['blockNumber']].append(event)
 
     for block_num in range(from_block + 1, to_block + 1):
 
         events = events_by_block.get(block_num, [])
         for event in events:
-            amount0 = event['args']['amount0']
-            amount1 = event['args']['amount1']
-            if event['name'] == 'Mint':
+            amount0 = event.args['amount0']
+            amount1 = event.args['amount1']
+            if event.eventName == 'Mint':
                 liquidity_depth_dict[block_num]['token0']['amount'] += amount0
                 liquidity_depth_dict[block_num]['token1']['amount'] += amount1
             else:
