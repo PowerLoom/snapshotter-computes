@@ -94,6 +94,9 @@ async def get_events_from_cache(
     
     # Group events by block number
     block_events: Dict[int, List[UniswapEvent]] = {}
+    for block in range(from_block, to_block + 1):
+        block_events[block] = []
+
     for event_json, score in events:
         event_data = json.loads(event_json)
         event_data['_score'] = score  # Add score to event data

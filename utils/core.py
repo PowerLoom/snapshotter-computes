@@ -169,15 +169,7 @@ async def get_pair_reserves(
             rpc_helper,
             redis_conn,
         )
-        if any(x == 0 for x in initial_reserves):
-            core_logger.error(
-                "[Epoch {}-{}] Pool {} | Failed to calculate initial reserves",
-                from_block,
-                to_block,
-                pair_address
-            )
-            return None
-        core_logger.debug(
+        core_logger.info(
             "[Epoch {}-{}] Pool {} | Calculated initial reserves: token0={}, token1={}",
             from_block,
             to_block,
@@ -186,6 +178,15 @@ async def get_pair_reserves(
             initial_reserves[1]
         )
 
+        if any(x == 0 for x in initial_reserves):
+            core_logger.error(
+                "[Epoch {}-{}] Pool {} | Failed to calculate initial reserves",
+                from_block,
+                to_block,
+                pair_address
+            )
+            return None
+        
     # grab mint/burn events in range
     events: Dict[int, List[UniswapEvent]] = await get_events_from_cache(
         pool_address=pair_address,
@@ -205,8 +206,28 @@ async def get_pair_reserves(
     # sum burn and mint each block
     token0Amount = initial_reserves[0]
     token1Amount = initial_reserves[1]
+    
 
     pair_reserves_dict = dict()
+    for block_num in range(from_block, to_block + 1):
+        token0AmountNormalized = token0Amount / (10 ** int(pair_per_token_metadata.token0.decimals))
+        token1AmountNormalized = token1Amount / (10 ** int(pair_per_token_metadata.token1.decimals))
+
+        token0USD = token0Amount * token0_price_map.get(from_block, 0) * \
+            (10 ** -int(pair_per_token_metadata.token0.decimals))
+        token1USD = token1Amount * token1_price_map.get(from_block, 0) * \
+            (10 ** -int(pair_per_token_metadata.token1.decimals))
+        pair_reserves_dict[block_num] = {
+            'token0': token0AmountNormalized,
+            'token1': token1AmountNormalized,
+            'token0TokenAmt': token0Amount,
+            'token1TokenAmt': token1Amount,
+            'token0USD': token0USD,
+            'token1USD': token1USD,
+            'token0Price': token0_price_map.get(from_block, 0),
+            'token1Price': token1_price_map.get(from_block, 0),
+            'timestamp': block_details_dict.get(from_block, {}).get('timestamp', 0),
+        }
 
     for block_num, event_list in events.items():
         # Swap events use ints and mint events are positive, so only need to subtract burn events.

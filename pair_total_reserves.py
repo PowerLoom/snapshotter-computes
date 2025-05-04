@@ -204,6 +204,6 @@ class PairTotalReservesProcessor(GenericProcessorSnapshot):
                 pool_address,
                 time.time()
             )
-            snapshots.append((pool_address, pair_total_reserves_snapshot))
+            snapshots.append((task_type.format(poolAddress=pool_address, Namespace=settings.namespace), pair_total_reserves_snapshot))
 
         return snapshots
