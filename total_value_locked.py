@@ -127,41 +127,43 @@ def calculate_tvl_from_ticks(ticks, pair_metadata: UniswapPoolMetadata, sqrt_pri
 
 
 def get_token0_in_pool(
-    liquidity: int,
-    sqrtPriceLow: int,
-    sqrtPriceHigh: int,
+    liquidity: Decimal,
+    sqrtPriceLow: Decimal,
+    sqrtPriceHigh: Decimal,
 ) -> int:
     """
     Calculate the amount of token0 in the pool for a given price range.
 
     Args:
-        liquidity (int): The liquidity in the pool.
-        sqrtPriceLow (int): The square root of the lower price bound.
-        sqrtPriceHigh (int): The square root of the upper price bound.
+        liquidity (Decimal): The liquidity in the pool.
+        sqrtPriceLow (Decimal): The square root of the lower price bound.
+        sqrtPriceHigh (Decimal): The square root of the upper price bound.
 
     Returns:
         int: The amount of token0 in the pool.
     """
-    return liquidity * (sqrtPriceHigh - sqrtPriceLow) / (sqrtPriceLow * sqrtPriceHigh) // 1
+    result = liquidity * (sqrtPriceHigh - sqrtPriceLow) / (sqrtPriceLow * sqrtPriceHigh)
+    return int(result)
 
 
 def get_token1_in_pool(
-    liquidity: int,
-    sqrtPriceLow: int,
-    sqrtPriceHigh: int,
+    liquidity: Decimal,
+    sqrtPriceLow: Decimal,
+    sqrtPriceHigh: Decimal,
 ) -> int:
     """
     Calculate the amount of token1 in the pool for a given price range.
 
     Args:
-        liquidity (int): The liquidity in the pool.
-        sqrtPriceLow (int): The square root of the lower price bound.
-        sqrtPriceHigh (int): The square root of the upper price bound.
+        liquidity (Decimal): The liquidity in the pool.
+        sqrtPriceLow (Decimal): The square root of the lower price bound.
+        sqrtPriceHigh (Decimal): The square root of the upper price bound.
 
     Returns:
         int: The amount of token1 in the pool.
     """
-    return liquidity * (sqrtPriceHigh - sqrtPriceLow) // 1
+    result = liquidity * (sqrtPriceHigh - sqrtPriceLow)
+    return int(result)
 
 
 def _load_abi(path: str) -> str:

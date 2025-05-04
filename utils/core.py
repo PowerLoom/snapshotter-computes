@@ -1,4 +1,5 @@
 import asyncio
+from distutils import core
 import json
 from functools import reduce
 import time
@@ -129,7 +130,9 @@ async def get_pair_reserves(
             rpc_helper=rpc_helper,
             debug_log=False,
         ),
+        return_exceptions=True
     )
+    core_logger.debug('Epoch {}-{} | Pool {} | Token prices fetch results: {}', from_block, to_block, pair_address, [token0_price_map, token1_price_map])
 
     core_logger.debug(
         "[Epoch {}-{}] Pool {} | Token prices fetched successfully",
@@ -288,7 +291,13 @@ async def get_pair_reserves(
                 f' {pair_address} | epoch: {from_block} - {to_block}'
             ),
         )
-
+    core_logger.info(
+        "[Epoch {}-{}] Pool {} | Pair reserves computed: {}",
+        from_block,
+        to_block,
+        pair_address,
+        pair_reserves_dict
+    )
     return pair_reserves_dict
 
 
