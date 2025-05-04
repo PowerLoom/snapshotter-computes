@@ -190,7 +190,7 @@ async def calculate_reserves(
     Calculate reserves for a given pair address.
     """
     if not pair_per_token_metadata:
-        return None
+        return [0, 0]
     tvl_logger.debug(
         "[Epoch {}] Pool {} | Calculating token0 and token1 reserves",
         from_block,
@@ -203,7 +203,8 @@ async def calculate_reserves(
         redis_conn=redis_conn,
         pair_per_token_metadata=pair_per_token_metadata,
     )
-
+    if not ticks_list or not slot0:
+        return [0, 0]
     sqrt_price = slot0[0]
 
     t0_reserves, t1_reserves = calculate_tvl_from_ticks(
@@ -235,7 +236,6 @@ async def get_tick_info(
             override_address: {'code': univ3_helper_bytecode},
         }
         current_node = rpc_helper.get_current_node()
-        pair_contract = current_node['web3_client'].eth.contract(address=pair_address, abi=pair_contract_abi)
 
         # Determine step size based on fee
         fee = int(pair_per_token_metadata.fee)
@@ -274,8 +274,10 @@ async def get_tick_info(
                 contract_addr=pair_address,
                 abi=pair_contract_abi,
             ),
+            return_exceptions=True
         )
-
+        if any(isinstance(result, Exception) for result in [tickDataResponse, slot0Response]):
+            return [], None
         # Process tick data
         ticks_list = []
         for ticks in tickDataResponse:

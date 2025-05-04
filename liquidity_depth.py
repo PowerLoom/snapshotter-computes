@@ -7,9 +7,10 @@ from redis import asyncio as aioredis
 from rpc_helper.rpc import RpcHelper
 
 from computes.utils.core import get_liquidity_depth
-from computes.utils.models.message_models import LiquidityDepthSnapshot
+from computes.utils.models.message_models import EpochBaseSnapshot, LiquidityDepthSnapshot
 from snapshotter.utils.callback_helpers import SnapshotProcessMessage
 from snapshotter.utils.default_logger import logger
+from ipfs_client.main import AsyncIPFSClient
 
 
 class LiquidityDepthProcessor(SnapshotProcessMessage):
@@ -19,33 +20,42 @@ class LiquidityDepthProcessor(SnapshotProcessMessage):
 
     async def compute(
         self,
-        min_chain_height: int,
-        max_chain_height: int,
-        data_source_contract_address: str,
+        epoch: SnapshotProcessMessage,
         redis_conn: aioredis.Redis,
         rpc_helper: RpcHelper,
+        anchor_rpc_helper: RpcHelper,
+        ipfs_reader: AsyncIPFSClient,
+        protocol_state_contract,
     ) -> Optional[Dict[str, Union[int, float]]]:
 
 
         self._logger.debug(
-            f"liquidity  depth {data_source_contract_address} computation init time {time.time()}"
+            f"liquidity depth {epoch.data_source} computation init time {time.time()}"
         )
 
         liquidity_depth_dict = await get_liquidity_depth(
-            pair_address=data_source_contract_address,
-            from_block=min_chain_height,
-            to_block=max_chain_height,
+            pair_address=epoch.data_source,
+            from_block=epoch.begin,
+            to_block=epoch.end,
             redis_conn=redis_conn,
-            rpc_helper=rpc_helper
+            rpc_helper=rpc_helper,
+            ipfs_reader=ipfs_reader,
+            protocol_state_contract=protocol_state_contract,
         )
-        
-        liquidity_depth_snapshot: LiquidityDepthSnapshot = LiquidityDepthSnapshot(ticks_by_block=liquidity_depth_dict)
-
-        self._logger.debug(
-            f"liquidity depth dict {liquidity_depth_snapshot[max_chain_height]}, computation end time {time.time()}"
+        liquidity_depth_snapshot: LiquidityDepthSnapshot = LiquidityDepthSnapshot(
+            ticks_by_block=liquidity_depth_dict,
+            contract=epoch.primary_data_source,
+            chainHeightRange=EpochBaseSnapshot(
+                begin=epoch.begin,
+                end=epoch.end,
+            ),
+            timestamp=int(time.time())
         )
         self._logger.debug(
-            f"liquidity depth {data_source_contract_address}, computation end time {time.time()}"
+            f"liquidity depth dict {liquidity_depth_snapshot.ticks_by_block}, computation end time {time.time()}"
+        )
+        self._logger.debug(
+            f"liquidity depth {epoch.data_source}, computation end time {time.time()}"
         )
 
         return liquidity_depth_snapshot
