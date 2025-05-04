@@ -275,6 +275,19 @@ async def get_pair_reserves(
             'token1Price': token1Price,
             'timestamp': timestamp,
         }
+        # set same price for next blocks
+        for block_num in range(block_num + 1, to_block + 1):
+            pair_reserves_dict[block_num] = {
+                'token0': token0AmountNormalized,
+                'token1': token1AmountNormalized,
+                'token0TokenAmt': token0Amount,
+                'token1TokenAmt': token1Amount,
+                'token0USD': round(token0USD, 2),
+                'token1USD': round(token1USD, 2),
+                'token0Price': token0Price,
+                'token1Price': token1Price,
+                'timestamp': timestamp,
+            }
 
     core_logger.debug(
         'Calculated pair total reserves for epoch-range: {} - {} | pair_contract: {}',
