@@ -276,8 +276,9 @@ async def get_pair_reserves(
             'timestamp': timestamp,
         }
         # set same price for next blocks
-        for block_num in range(block_num + 1, to_block + 1):
-            pair_reserves_dict[block_num] = {
+        if block_num < to_block:
+            for block_num in range(block_num + 1, to_block + 1):
+                pair_reserves_dict[block_num] = {
                 'token0': token0AmountNormalized,
                 'token1': token1AmountNormalized,
                 'token0TokenAmt': token0Amount,
