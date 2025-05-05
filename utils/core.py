@@ -164,7 +164,7 @@ async def get_pair_reserves(
     else:
         initial_reserves = await calculate_reserves(
             pair_address,
-            from_block,
+            from_block - 1,
             pair_per_token_metadata,
             rpc_helper,
             redis_conn,
@@ -228,8 +228,9 @@ async def get_pair_reserves(
             'token1Price': token1_price_map.get(from_block, 0),
             'timestamp': block_details_dict.get(from_block, {}).get('timestamp', 0),
         }
-
-    for block_num, event_list in events.items():
+    # sort access by block number
+    for block_num in sorted(events.keys()):
+        event_list = events[block_num]
         # Swap events use ints and mint events are positive, so only need to subtract burn events.
         token0Amount += reduce(
             lambda acc, event: acc - event.args['amount0']
