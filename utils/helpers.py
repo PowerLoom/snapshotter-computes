@@ -3,7 +3,9 @@ import json
 import math
 
 from asyncio import gather
+from typing import Any, Dict, List, Optional
 from redis import asyncio as aioredis
+from computes.utils.models.data_models import UniswapEvent
 from snapshotter.utils.default_logger import logger
 from snapshotter.utils.redis.redis_keys import source_chain_epoch_size_key
 from rpc_helper.rpc import get_contract_abi_dict
@@ -25,9 +27,88 @@ from computes.utils.constants import STABLE_TOKENS_LIST
 from computes.utils.constants import TOKENS_DECIMALS
 from computes.utils.constants import ZER0_ADDRESS
 from computes.preloaders.eth_price.preloader import eth_price_preloader
+from snapshotter.settings.config import settings
 
 helper_logger = logger.bind(module='PowerLoom|Uniswap|Helpers')
 
+SCORE_BLOCK_MULTIPLIER = 1_000_000
+
+
+# TODO: accept RPC helper as fallback?
+async def get_events_from_cache(
+    pool_address: str,
+    from_block: int,
+    to_block: int,
+    redis_conn: aioredis.Redis
+) -> Dict[int, List[UniswapEvent]]:
+    """
+    Fetch event logs from Redis cache for a given pool address and block range.
+    
+    Args:
+        pool_address (str): The pool contract address
+        from_block (int): Starting block number
+        to_block (int): Ending block number
+        redis_conn (aioredis.Redis): Redis connection
+        
+    Returns:
+        Dict[int, List[UniswapEvent]]: Dictionary mapping block numbers to lists of event objects
+        
+    Example event JSON entry:
+    {
+        "eventName": "Swap",
+        "filterName": "uniswapv3_pool_events",
+        "txHash": "0x2f82087ed4d3bbf77c559d1337e3903a7108927cf9a2c9dae33bcce36f88933c",
+        "blockNumber": 22394920,
+        "txIndex": 4,
+        "logIndex": 38,
+        "address": "0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640",
+        "topics": [
+            "0xc42079f94a6350d7e6235f29174924f928cc2ac818eb64fed8004e115fbcca67",
+            "0x66a9893cc07d91d95644aedd05d03f95e1dba8af",
+            "0x66a9893cc07d91d95644aedd05d03f95e1dba8af"
+        ],
+        "data": "0x00000000000000000000000000000000000000000000000000000000203d7eb8fffffffffffffffffffffffffffffffffffffffffffffffffbe1f9518d38ad830000000000000000000000000000000000005b81d1e1ed548107534638248648000000000000000000000000000000000000000000000000516f1f5b22a9ea090000000000000000000000000000000000000000000000000000000000031219",
+        "args": {
+            "sender": "0x66a9893cC07D91D95644AEDD05D03f95e1dBA8Af",
+            "recipient": "0x66a9893cC07D91D95644AEDD05D03f95e1dBA8Af",
+            "amount0": 540901048,
+            "amount1": -296681971772772989,
+            "sqrtPriceX96": 1855984662392763862973509127145032,
+            "liquidity": 5867943315771091465,
+            "tick": 201241
+        },
+        "_score": 22394920000038
+    }
+    """
+    # Calculate score range for zrangebyscore
+    min_score = from_block * SCORE_BLOCK_MULTIPLIER
+    max_score = (to_block + 1) * SCORE_BLOCK_MULTIPLIER - 1  # -1 to not include next block's events
+    
+    # Get events from Redis zset
+    events = await redis_conn.zrangebyscore(
+        name=f"events:{settings.namespace}:{pool_address.lower()}",
+        min=min_score,
+        max=max_score,
+        withscores=True
+    )
+    
+    # Group events by block number
+    block_events: Dict[int, List[UniswapEvent]] = {}
+    for block in range(from_block, to_block + 1):
+        block_events[block] = []
+
+    for event_json, score in events:
+        event_data = json.loads(event_json)
+        event_data['_score'] = score  # Add score to event data
+        event = UniswapEvent.parse_obj(event_data)
+        block_number = event.blockNumber
+        
+        if block_number not in block_events:
+            block_events[block_number] = []
+            
+        block_events[block_number].append(event)
+    
+    return block_events
 
 def get_maker_pair_data(prop):
     """
@@ -288,10 +369,9 @@ async def get_pair_metadata(
     except Exception as err:
         # this will be retried in next cycle
         helper_logger.opt(exception=True).error(
-            (
-                f'RPC error while fetcing metadata for pair {pair_address},'
-                f' error_msg:{err}'
-            ),
+            'RPC error while fetcing metadata for pair {}, error_msg:{}',
+            pair_address,
+            err
         )
         raise err
 
@@ -325,23 +405,22 @@ async def get_token_eth_price_dict(
     token_address = Web3.to_checksum_address(token_address)
     # check if cache exists
     token_eth_price_dict = dict()
-    cached_token_price_dict = await redis_conn.zrangebyscore(
+    cached_token_price_in_eth_json_list = await redis_conn.zrangebyscore(
         name=uniswap_cached_block_height_token_eth_price.format(token_address),
         min=from_block,
         max=to_block,
+        withscores=False
     )
-    if len(cached_token_price_dict) > 0:
+    if cached_token_price_in_eth_json_list and len(cached_token_price_in_eth_json_list) == to_block - (from_block - 1):
+        price_entry_list = [json.loads(price_entry_json.decode("utf-8")) for price_entry_json in cached_token_price_in_eth_json_list]
         token_eth_price_dict = {
-            int(json.loads(price)['blockHeight']): json.loads(price)['price']
-            for price in cached_token_price_dict
+            int(price_entry['blockHeight']): price_entry['price']
+            for price_entry in price_entry_list
         }
 
         return token_eth_price_dict
-
-    # get token price function takes care of its own rate limit
-    # TODO repetitious refactor
+    
     try:
-
         token_eth_quote = await get_token_eth_quote_from_uniswap(
             token_address=token_address,
             token_decimals=token_decimals,
@@ -372,22 +451,21 @@ async def get_token_eth_price_dict(
             source_chain_epoch_size = int(
                 await redis_conn.get(source_chain_epoch_size_key()),
             )
-
-            await gather(
-                redis_conn.zadd(
-                    name=uniswap_cached_block_height_token_eth_price.format(
+            pipeline = redis_conn.pipeline()
+            pipeline.zadd(
+                name=uniswap_cached_block_height_token_eth_price.format(
                         Web3.to_checksum_address(token_address),
                     ),
-                    mapping=redis_cache_mapping,  # timestamp so zset do not ignore same height on multiple heights
-                ),
-                redis_conn.zremrangebyscore(
-                    name=uniswap_cached_block_height_token_eth_price.format(
-                        Web3.to_checksum_address(token_address),
+                mapping=redis_cache_mapping,  # timestamp so zset do not ignore same height on multiple heights
+            )
+            pipeline.zremrangebyscore(
+                name=uniswap_cached_block_height_token_eth_price.format(
+                    Web3.to_checksum_address(token_address),
                     ),
                     min=0,
-                    max=int(from_block) - source_chain_epoch_size * 4,
-                ),
+                max=int(from_block) - source_chain_epoch_size * 4,
             )
+            await pipeline.execute()
 
             return token_eth_price_dict
 
@@ -396,7 +474,7 @@ async def get_token_eth_price_dict(
 
     except Exception as e:
         # TODO BETTER ERROR HANDLING
-        helper_logger.debug(f'error while fetching token price for {token_address}, error_msg:{e}')
+        helper_logger.debug('error while fetching token price for {}, error_msg:{}', token_address, e)
         raise e
 
 
@@ -710,7 +788,7 @@ async def get_token_eth_quote_from_uniswap(
             else:
                 return [(0,) for _ in range(from_block, to_block + 1)]
     except Exception as e:
-        helper_logger.debug(f'error while fetching token price for {token_address}, error_msg:{e}')
+        helper_logger.debug('error while fetching token price for {}, error_msg:{}', token_address, e)
         raise e
 
 

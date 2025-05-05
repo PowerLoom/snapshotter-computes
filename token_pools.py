@@ -11,7 +11,7 @@ from snapshotter.utils.default_logger import logger
 from rpc_helper.rpc import RpcHelper
 from snapshotter.settings.config import settings
 from ipfs_client.main import AsyncIPFSClient
-from computes.utils.models.message_models import UniswapTokenPoolsSnapshot
+from computes.utils.models.message_models import UniswapPoolMetadata, UniswapTokenPoolsSnapshot
 from snapshotter.utils.data_utils import get_project_first_epoch
 from snapshotter.utils.data_utils import get_project_last_finalized_epoch
 from snapshotter.utils.data_utils import get_project_epoch_snapshot
@@ -24,7 +24,7 @@ class TokenPoolsProcessor(GenericProcessorSnapshot):
     """
 
     def __init__(self) -> None:
-        self._logger = logger.bind(module="MetadataProcessor")
+        self._logger = logger.bind(module="TokenPoolsProcessor")
 
     async def _process_pool(
         self,
@@ -67,6 +67,12 @@ class TokenPoolsProcessor(GenericProcessorSnapshot):
                 if cached_data:
                     data = json.loads(cached_data)
                 else:
+                    self._logger.debug(
+                        "[Epoch {}-{}] Pool {} | No metadata found in cache or first epoch",
+                        epoch.begin,
+                        epoch.end,
+                        pool_address
+                    )
                     return None
             else:
                 data = await get_project_epoch_snapshot(
@@ -74,6 +80,12 @@ class TokenPoolsProcessor(GenericProcessorSnapshot):
                 )
 
             if not data:
+                self._logger.debug(
+                    "[Epoch {}-{}] Pool {} | No metadata data available",
+                    epoch.begin,
+                    epoch.end,
+                    pool_address
+                )
                 return None
             
             token_addresses = [data["token0"]["address"], data["token1"]["address"]]
@@ -89,9 +101,8 @@ class TokenPoolsProcessor(GenericProcessorSnapshot):
 
                 if not last_finalized_epoch:
                     snapshot = UniswapTokenPoolsSnapshot(
-                        pools={}
+                        pools={pool_address: UniswapPoolMetadata(**data)}
                     )
-                    snapshot.pools[pool_address] = data
                 else:
                     # get the snapshot for the last finalized epoch
                     snapshot = await get_project_epoch_snapshot(
@@ -100,21 +111,25 @@ class TokenPoolsProcessor(GenericProcessorSnapshot):
                     if snapshot:
                         snapshot = UniswapTokenPoolsSnapshot(**snapshot)
                         if pool_address not in snapshot.pools:
-                            snapshot.pools[pool_address] = data
+                            snapshot.pools[pool_address] = UniswapPoolMetadata(**data)
                         else:
                             return None
                     else:
                         snapshot = UniswapTokenPoolsSnapshot(
                             pools={}
                         )
-                        snapshot.pools[pool_address] = data
+                        snapshot.pools[pool_address] = UniswapPoolMetadata(**data)
 
                     snapshots.append((project_id, snapshot))
 
             return snapshots
         except Exception as e:
-            self._logger.opt(exception=e).error(f"Error processing pool {pool_address}")
-            # Silently ignore any exceptions
+            self._logger.opt(exception=e).error(
+                "[Epoch {}-{}] Pool {} | Error processing pool metadata",
+                epoch.begin,
+                epoch.end,
+                pool_address
+            )
             return None
 
     async def compute(
@@ -125,8 +140,8 @@ class TokenPoolsProcessor(GenericProcessorSnapshot):
         anchor_rpc_helper: RpcHelper,
         ipfs_reader: AsyncIPFSClient,
         protocol_state_contract,
-        task_type: str = None,
-    ) -> Optional[Dict[str, Union[int, float]]]:
+        task_type: str,
+    ) -> Optional[UniswapTokenPoolsSnapshot]:
         """
         Compute the metadata for a Uniswap pair within the given epoch.
 
@@ -138,7 +153,11 @@ class TokenPoolsProcessor(GenericProcessorSnapshot):
         Returns:
             Optional[Dict[str, Union[int, float]]]: Computed pair metadata snapshot.
         """
-        self._logger.info(f"Computing metadata for epoch {epoch.epochId}")
+        self._logger.info(
+            "[Epoch {}-{}] Starting token pools computation",
+            epoch.begin,
+            epoch.end
+        )
         min_chain_height = epoch.begin
         max_chain_height = epoch.end
         keys_to_fetch = []
@@ -151,7 +170,12 @@ class TokenPoolsProcessor(GenericProcessorSnapshot):
         pools = set()
         if keys_to_fetch:
             pools = await redis_conn.sunion(*keys_to_fetch)
-        self._logger.info(f"Found {len(pools)} active pools in the epoch {min_chain_height} to {max_chain_height}")
+        self._logger.info(
+            "[Epoch {}-{}] Found {} active pools to process",
+            min_chain_height,
+            max_chain_height,
+            len(pools)
+        )
         
         # Process all pools in parallel
         pool_tasks = []

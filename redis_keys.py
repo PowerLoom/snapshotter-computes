@@ -57,3 +57,8 @@ uniswap_v3_token_stable_pair_map = (
 uniswap_eth_usd_price_zset = (
     'uniswap:ethBlockHeightPrice:' + settings.namespace + ':ethPriceZset'
 )
+
+# Redis key for Uniswap pool metadata
+def get_pool_metadata_key(pool_address: str) -> str:
+    return f'pool_metadata:{pool_address}'
+

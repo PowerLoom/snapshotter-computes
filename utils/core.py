@@ -1,25 +1,30 @@
 import asyncio
+from distutils import core
 import json
 from functools import reduce
+import time
+from typing import Dict, List, Optional
 
 from redis import asyncio as aioredis
+from computes.metadata import MetadataProcessor
+from computes.utils.models.message_models import UniswapPoolMetadata
 from snapshotter.utils.default_logger import logger
 from rpc_helper.rpc import get_event_sig_and_abi
 from rpc_helper.rpc import RpcHelper
 from snapshotter.utils.snapshot_utils import get_block_details_in_block_range
 from web3 import Web3
+from ipfs_client.main import AsyncIPFSClient
 
 from computes.redis_keys import uniswap_pair_cached_block_height_reserves
 from computes.total_value_locked import calculate_reserves
-from computes.total_value_locked import get_events
 from computes.total_value_locked import get_tick_info
 from computes.total_value_locked import get_token0_in_pool
 from computes.total_value_locked import get_token1_in_pool
 from computes.utils.constants import UNISWAP_EVENTS_ABI
 from computes.utils.constants import UNISWAP_TRADE_EVENT_SIGS
 from computes.utils.constants import UNISWAPV3_FEE_DIV
-from computes.utils.helpers import get_pair_metadata
-from computes.utils.models.data_models import epoch_event_trade_data
+from computes.utils.helpers import get_events_from_cache, get_pair_metadata
+from computes.utils.models.data_models import UniswapEvent, epoch_event_trade_data
 from computes.utils.models.data_models import event_trade_data
 from computes.utils.models.data_models import trade_data
 from computes.utils.pricing import get_token_price_in_block_range
@@ -32,10 +37,14 @@ async def get_pair_reserves(
     from_block,
     to_block,
     redis_conn: aioredis.Redis,
-    rpc_helper: RpcHelper
+    rpc_helper: RpcHelper,
+    anchor_rpc_helper: RpcHelper,
+    ipfs_reader: AsyncIPFSClient,
+    protocol_state_contract,
+    block_details_dict: dict = dict(),
 ):
     """
-    Fetch and calculate pair reserves for a given Uniswap pair over a block range.
+    Fetch and calculate token0 and token1 pair reserves for a given Uniswap V3 pool contract address over a block range.
 
     Args:
         pair_address (str): The address of the Uniswap pair contract.
@@ -43,72 +52,96 @@ async def get_pair_reserves(
         to_block (int): The ending block number.
         redis_conn (aioredis.Redis): Redis connection for caching.
         rpc_helper (RpcHelper): RPC helper for blockchain interactions.
-        fetch_timestamp (bool): Whether to fetch block timestamps.
+        ipfs_reader (AsyncIPFSClient): IPFS reader for metadata.
+        protocol_state_contract: Protocol state contract instance.
+        block_details_dict (dict, optional): Pre-fetched block details. If None, will fetch them.
 
     Returns:
         dict: A dictionary containing pair reserves data for each block in the range.
     """
-    core_logger.debug(
-        f'Starting pair total reserves query for: {pair_address}',
+    core_logger.info(
+        "[Epoch {}-{}] Pool {} | Starting token0 and token1 reserves computation | Wall time: {}",
+        from_block,
+        to_block,
+        pair_address,
+        time.time()
     )
+
     pair_address = Web3.to_checksum_address(pair_address)
+    
+    # Only fetch block details if not provided
+    if not block_details_dict:
+        try:
+            block_details_dict = await get_block_details_in_block_range(
+                from_block,
+                to_block,
+                redis_conn=redis_conn,
+                rpc_helper=rpc_helper,
+            )
+        except Exception as err:
+            core_logger.opt(exception=True).error(
+                "[Epoch {}-{}] Pool {} | Failed to fetch block details: {}",
+                from_block,
+                to_block,
+                pair_address,
+                err
+            )
+            return None
+        else:
+            core_logger.debug(
+                "[Epoch {}-{}] Pool {} | Block details fetched successfully",
+                from_block,
+                to_block,
+                pair_address
+            )
 
-    try:
-        block_details_dict = await get_block_details_in_block_range(
-            from_block,
-            to_block,
-            redis_conn=redis_conn,
-            rpc_helper=rpc_helper,
-        )
-    except Exception as err:
-        core_logger.opt(exception=True).error(
-            (
-                'Error attempting to get block details of block-range'
-                ' {}-{}: {}, retrying again'
-            ),
-            from_block,
-            to_block,
-            err,
-        )
-        raise err
-
-    pair_per_token_metadata = await get_pair_metadata(
-        pair_address=pair_address,
+    metadata_processor = MetadataProcessor()
+    pair_per_token_metadata: Optional[UniswapPoolMetadata] = await metadata_processor.get_pool_metadata(
+        pool_address=pair_address,
         redis_conn=redis_conn,
-        rpc_helper=rpc_helper,
+        anchor_rpc_helper=anchor_rpc_helper,
+        ipfs_reader=ipfs_reader,
+        protocol_state_contract=protocol_state_contract,
     )
 
-    core_logger.debug(
-        ('total pair reserves fetched block details for epoch for:' f' {pair_address}'),
-    )
+    if not pair_per_token_metadata:
+        core_logger.error(
+            "[Epoch {}-{}] Pool {} | Failed to fetch pair metadata",
+            from_block,
+            to_block,
+            pair_address
+        )
+        raise Exception(f'Error attempting to get pair metadata for: {pair_address}')
 
     token0_price_map, token1_price_map = await asyncio.gather(
         get_token_price_in_block_range(
-            token_metadata=pair_per_token_metadata['token0'],
+            token_metadata=pair_per_token_metadata.token0.dict(),
             from_block=from_block,
             to_block=to_block,
             redis_conn=redis_conn,
             rpc_helper=rpc_helper,
             debug_log=False,
-
         ),
         get_token_price_in_block_range(
-            token_metadata=pair_per_token_metadata['token1'],
+            token_metadata=pair_per_token_metadata.token1.dict(),
             from_block=from_block,
             to_block=to_block,
             redis_conn=redis_conn,
             rpc_helper=rpc_helper,
             debug_log=False,
-
         ),
+        return_exceptions=True
     )
+    core_logger.debug('Epoch {}-{} | Pool {} | Token prices fetch results: {}', from_block, to_block, pair_address, [token0_price_map, token1_price_map])
 
     core_logger.debug(
-        f'Total reserves fetched token prices for: {pair_address}',
+        "[Epoch {}-{}] Pool {} | Token prices fetched successfully",
+        from_block,
+        to_block,
+        pair_address
     )
 
     # attempt to fetch previous epoch end block reserves from redis
-
     cached_reserves_dict = await redis_conn.zrangebyscore(
         name=uniswap_pair_cached_block_height_reserves.format(
             Web3.to_checksum_address(pair_address),
@@ -120,68 +153,105 @@ async def get_pair_reserves(
     if cached_reserves_dict:
         loaded_dict = json.loads(cached_reserves_dict[0])
         initial_reserves = [int(loaded_dict['token0_reserves']), int(loaded_dict['token1_reserves'])]
-
+        core_logger.debug(
+            "[Epoch {}-{}] Pool {} | Using cached reserves: token0={}, token1={}",
+            from_block,
+            to_block,
+            pair_address,
+            initial_reserves[0],
+            initial_reserves[1]
+        )
     else:
         initial_reserves = await calculate_reserves(
             pair_address,
-            from_block,
+            from_block - 1,
             pair_per_token_metadata,
             rpc_helper,
             redis_conn,
         )
+        core_logger.info(
+            "[Epoch {}-{}] Pool {} | Calculated initial reserves: token0={}, token1={}",
+            from_block,
+            to_block,
+            pair_address,
+            initial_reserves[0],
+            initial_reserves[1]
+        )
 
-    core_logger.debug(
-        f'Total reserves fetched tick data for {pair_address} of {initial_reserves} for block {from_block}',
-    )
-
+        if any(x == 0 for x in initial_reserves):
+            core_logger.error(
+                "[Epoch {}-{}] Pool {} | Failed to calculate initial reserves",
+                from_block,
+                to_block,
+                pair_address
+            )
+            return None
+        
     # grab mint/burn events in range
-
-    events = await get_events(
-        pair_address=pair_address,
-        rpc=rpc_helper,
+    events: Dict[int, List[UniswapEvent]] = await get_events_from_cache(
+        pool_address=pair_address,
         from_block=from_block if cached_reserves_dict else from_block + 1,
         to_block=to_block,
-        redis_con=redis_conn,
+        redis_conn=redis_conn,
     )
 
     core_logger.debug(
-        f'Total reserves fetched event data for : {pair_address}',
+        "[Epoch {}-{}] Pool {} | Found {} events to process",
+        from_block,
+        to_block,
+        pair_address,
+        len(events)
     )
-    # sum burn and mint each block
 
+    # sum burn and mint each block
     token0Amount = initial_reserves[0]
     token1Amount = initial_reserves[1]
+    
 
     pair_reserves_dict = dict()
-
-    block_event_dict = dict()
-
     for block_num in range(from_block, to_block + 1):
-        block_event_dict[block_num] = list(filter(lambda x: x if x.get('blockNumber') == block_num else None, events))
+        token0AmountNormalized = token0Amount / (10 ** int(pair_per_token_metadata.token0.decimals))
+        token1AmountNormalized = token1Amount / (10 ** int(pair_per_token_metadata.token1.decimals))
 
-    for block_num, events in block_event_dict.items():
-        events_in_block = block_event_dict.get(block_num, [])
-
+        token0USD = token0Amount * token0_price_map.get(from_block, 0) * \
+            (10 ** -int(pair_per_token_metadata.token0.decimals))
+        token1USD = token1Amount * token1_price_map.get(from_block, 0) * \
+            (10 ** -int(pair_per_token_metadata.token1.decimals))
+        pair_reserves_dict[block_num] = {
+            'token0': token0AmountNormalized,
+            'token1': token1AmountNormalized,
+            'token0TokenAmt': token0Amount,
+            'token1TokenAmt': token1Amount,
+            'token0USD': token0USD,
+            'token1USD': token1USD,
+            'token0Price': token0_price_map.get(from_block, 0),
+            'token1Price': token1_price_map.get(from_block, 0),
+            'timestamp': block_details_dict.get(from_block, {}).get('timestamp', 0),
+        }
+    # sort access by block number
+    for block_num in sorted(events.keys()):
+        event_list = events.get(block_num, [])
+        if not event_list:
+            continue
         # Swap events use ints and mint events are positive, so only need to subtract burn events.
-
         token0Amount += reduce(
-            lambda acc, event: acc - event['args']['amount0']
-            if event['event'] == 'Burn'
-            else acc + event['args']['amount0'], events_in_block, 0,
+            lambda acc, event: acc - event.args['amount0']
+            if event.eventName == 'Burn'
+            else acc + event.args['amount0'], event_list, 0,
         )
         token1Amount += reduce(
-            lambda acc, event: acc - event['args']['amount1']
-            if event['event'] == 'Burn'
-            else acc + event['args']['amount1'], events_in_block, 0,
+            lambda acc, event: acc - event.args['amount1']
+            if event.eventName == 'Burn'
+            else acc + event.args['amount1'], event_list, 0,
         )
 
-        token0AmountNormalized = token0Amount / (10 ** int(pair_per_token_metadata['token0']['decimals']))
-        token1AmountNormalized = token1Amount / (10 ** int(pair_per_token_metadata['token1']['decimals']))
+        token0AmountNormalized = token0Amount / (10 ** int(pair_per_token_metadata.token0.decimals))
+        token1AmountNormalized = token1Amount / (10 ** int(pair_per_token_metadata.token1.decimals))
 
         token0USD = token0Amount * token0_price_map.get(block_num, 0) * \
-            (10 ** -int(pair_per_token_metadata['token0']['decimals']))
+            (10 ** -int(pair_per_token_metadata.token0.decimals))
         token1USD = token1Amount * token1_price_map.get(block_num, 0) * \
-            (10 ** -int(pair_per_token_metadata['token1']['decimals']))
+            (10 ** -int(pair_per_token_metadata.token1.decimals))
 
         token0Price = token0_price_map.get(block_num, 0)
         token1Price = token1_price_map.get(block_num, 0)
@@ -208,12 +278,26 @@ async def get_pair_reserves(
             'token1Price': token1Price,
             'timestamp': timestamp,
         }
+        # set same price for next blocks
+        if block_num < to_block:
+            for block_num in range(block_num + 1, to_block + 1):
+                pair_reserves_dict[block_num] = {
+                'token0': token0AmountNormalized,
+                'token1': token1AmountNormalized,
+                'token0TokenAmt': token0Amount,
+                'token1TokenAmt': token1Amount,
+                'token0USD': round(token0USD, 2),
+                'token1USD': round(token1USD, 2),
+                'token0Price': token0Price,
+                'token1Price': token1Price,
+                'timestamp': timestamp,
+            }
 
     core_logger.debug(
-        (
-            'Calculated pair total reserves for epoch-range:'
-            f' {from_block} - {to_block} | pair_contract: {pair_address}'
-        ),
+        'Calculated pair total reserves for epoch-range: {} - {} | pair_contract: {}',
+        from_block,
+        to_block,
+        pair_address
     )
 
     # here we store the final block in the epoch reserves in redis so they may be used as
@@ -224,22 +308,19 @@ async def get_pair_reserves(
         redis_cache_mapping = {
             json.dumps({'blockHeight': to_block, 'token0_reserves': end_block['token0TokenAmt'], 'token1_reserves': end_block['token1TokenAmt']}): int(to_block),
         }
-
-        await asyncio.gather(
-            redis_conn.zadd(
-                name=uniswap_pair_cached_block_height_reserves.format(
-                    Web3.to_checksum_address(pair_address),
-                ),
-                mapping=redis_cache_mapping,
-            ),
-            redis_conn.zremrangebyscore(
-                name=uniswap_pair_cached_block_height_reserves.format(
-                    Web3.to_checksum_address(pair_address),
-                ),
-                min=0,
-                max=to_block - 20,
-            ),
+        pipeline = redis_conn.pipeline()
+        pipeline.zadd(
+            name=uniswap_pair_cached_block_height_reserves.format(Web3.to_checksum_address(pair_address)),
+            mapping=redis_cache_mapping,
         )
+        pipeline.zremrangebyscore(
+            name=uniswap_pair_cached_block_height_reserves.format(
+                Web3.to_checksum_address(pair_address),
+            ),
+            min=0,
+            max=to_block - 20,
+        )
+        await pipeline.execute()
 
     else:
         core_logger.error(
@@ -248,7 +329,13 @@ async def get_pair_reserves(
                 f' {pair_address} | epoch: {from_block} - {to_block}'
             ),
         )
-
+    core_logger.info(
+        "[Epoch {}-{}] Pool {} | Pair reserves computed: {}",
+        from_block,
+        to_block,
+        pair_address,
+        pair_reserves_dict
+    )
     return pair_reserves_dict
 
 
@@ -396,54 +483,67 @@ async def get_pair_trade_volume(
     max_chain_height,
     redis_conn: aioredis.Redis,
     rpc_helper: RpcHelper,
-    fetch_timestamp=True,
+    ipfs_reader: AsyncIPFSClient,
+    protocol_state_contract,
+    block_details_dict: dict = dict(),
 ):
     """
-    Fetch and calculate trade volume for a Uniswap pair over a block range.
-
-    Args:
-        data_source_contract_address (str): The address of the Uniswap pair contract.
-        min_chain_height (int): The starting block number.
-        max_chain_height (int): The ending block number.
-        redis_conn (aioredis.Redis): Redis connection for caching.
-        rpc_helper (RpcHelper): RPC helper for blockchain interactions.
-        fetch_timestamp (bool): Whether to fetch block timestamps.
-
-    Returns:
-        dict: A dictionary containing trade volume data for the specified block range.
+    Fetch and calculate trade volume for a given Uniswap V3 pool contract address over a block range.
     """
-    data_source_contract_address = Web3.to_checksum_address(
-        data_source_contract_address,
+    core_logger.info(
+        "[Epoch {}-{}] Pool {} | Starting trade volume computation",
+        min_chain_height,
+        max_chain_height,
+        data_source_contract_address
     )
-    block_details_dict = dict()
 
-    if fetch_timestamp:
+    # Only fetch block details if not provided
+    if not block_details_dict:
         try:
             block_details_dict = await get_block_details_in_block_range(
-                from_block=min_chain_height,
-                to_block=max_chain_height,
+                min_chain_height,
+                max_chain_height,
                 redis_conn=redis_conn,
                 rpc_helper=rpc_helper,
             )
         except Exception as err:
             core_logger.opt(exception=True).error(
-                (
-                    'Error attempting to get block details of to_block {}:'
-                    ' {}, retrying again'
-                ),
+                "[Epoch {}-{}] Pool {} | Failed to fetch block details: {}",
+                min_chain_height,
                 max_chain_height,
-                err,
+                data_source_contract_address,
+                err
             )
             raise err
 
-    pair_per_token_metadata = await get_pair_metadata(
-        pair_address=data_source_contract_address,
+        core_logger.debug(
+            "[Epoch {}-{}] Pool {} | Block details fetched successfully",
+            min_chain_height,
+            max_chain_height,
+            data_source_contract_address
+        )
+
+    metadata_processor = MetadataProcessor()
+    pair_per_token_metadata = await metadata_processor.get_pool_metadata(
+        pool_address=data_source_contract_address,
         redis_conn=redis_conn,
-        rpc_helper=rpc_helper,
+        anchor_rpc_helper=rpc_helper,
+        ipfs_reader=ipfs_reader,
+        protocol_state_contract=protocol_state_contract,
     )
+
+    if not pair_per_token_metadata:
+        core_logger.error(
+            "[Epoch {}-{}] Pool {} | Failed to fetch pair metadata",
+            min_chain_height,
+            max_chain_height,
+            data_source_contract_address
+        )
+        raise Exception(f'Error attempting to get pair metadata for: {data_source_contract_address}')
+
     token0_price_map, token1_price_map = await asyncio.gather(
         get_token_price_in_block_range(
-            token_metadata=pair_per_token_metadata['token0'],
+            token_metadata=pair_per_token_metadata.token0.dict(),
             from_block=min_chain_height,
             to_block=max_chain_height,
             redis_conn=redis_conn,
@@ -451,7 +551,7 @@ async def get_pair_trade_volume(
             debug_log=False,
         ),
         get_token_price_in_block_range(
-            token_metadata=pair_per_token_metadata['token1'],
+            token_metadata=pair_per_token_metadata.token1.dict(),
             from_block=min_chain_height,
             to_block=max_chain_height,
             redis_conn=redis_conn,
@@ -460,129 +560,62 @@ async def get_pair_trade_volume(
         ),
     )
 
-    # fetch logs for swap, mint & burn
-    event_sig, event_abi = get_event_sig_and_abi(
-        UNISWAP_TRADE_EVENT_SIGS,
-        UNISWAP_EVENTS_ABI,
+    core_logger.debug(
+        "[Epoch {}-{}] Pool {} | Token prices fetched successfully",
+        min_chain_height,
+        max_chain_height,
+        data_source_contract_address
     )
 
-    events_log = await rpc_helper.get_events_logs(
-        **{
-            'contract_address': data_source_contract_address,
-            'to_block': max_chain_height,
-            'from_block': min_chain_height,
-            'topics': [event_sig],
-            'event_abi': event_abi,
-        },
+    events = await get_events(
+        pair_address=data_source_contract_address,
+        rpc=rpc_helper,
+        from_block=min_chain_height,
+        to_block=max_chain_height,
+        redis_con=redis_conn,
     )
 
-    # group logs by txHashs ==> {txHash: [logs], ...}
-    grouped_by_tx = dict()
-    [
-        grouped_by_tx[log['transactionHash'].hex()].append(log)
-        if log['transactionHash'].hex() in grouped_by_tx
-        else grouped_by_tx.update({log['transactionHash'].hex(): [log]})
-        for log in events_log
-    ]
-
-    # init data models with empty/0 values
-    epoch_results = epoch_event_trade_data(
-        Swap=event_trade_data(
-            logs=[],
-            trades=trade_data(
-                totalTradesUSD=float(),
-                totalFeeUSD=float(),
-                token0TradeVolume=float(),
-                token1TradeVolume=float(),
-                token0TradeVolumeUSD=float(),
-                token1TradeVolumeUSD=float(),
-                recent_transaction_logs=list(),
-            ),
-        ),
-        Mint=event_trade_data(
-            logs=[],
-            trades=trade_data(
-                totalTradesUSD=float(),
-                totalFeeUSD=float(),
-                token0TradeVolume=float(),
-                token1TradeVolume=float(),
-                token0TradeVolumeUSD=float(),
-                token1TradeVolumeUSD=float(),
-                recent_transaction_logs=list(),
-            ),
-        ),
-        Burn=event_trade_data(
-            logs=[],
-            trades=trade_data(
-                totalTradesUSD=float(),
-                totalFeeUSD=float(),
-                token0TradeVolume=float(),
-                token1TradeVolume=float(),
-                token0TradeVolumeUSD=float(),
-                token1TradeVolumeUSD=float(),
-                recent_transaction_logs=list(),
-            ),
-        ),
-        Trades=trade_data(
-            totalTradesUSD=float(),
-            totalFeeUSD=float(),
-            token0TradeVolume=float(),
-            token1TradeVolume=float(),
-            token0TradeVolumeUSD=float(),
-            token1TradeVolumeUSD=float(),
-            recent_transaction_logs=list(),
-        ),
+    core_logger.debug(
+        "[Epoch {}-{}] Pool {} | Found {} trade events to process",
+        min_chain_height,
+        max_chain_height,
+        data_source_contract_address,
+        len(events)
     )
 
-    # prepare final trade logs structure
-    for tx_hash, logs in grouped_by_tx.items():
-        # init temporary trade object to track trades at txHash level
-        tx_hash_trades = trade_data(
-            totalTradesUSD=float(),
-            totalFeeUSD=float(),
-            token0TradeVolume=float(),
-            token1TradeVolume=float(),
-            token0TradeVolumeUSD=float(),
-            token1TradeVolumeUSD=float(),
-            recent_transaction_logs=list(),
+    # Process events and calculate trade volumes
+    trade_data_list = []
+    for event in events:
+        trade_data = extract_trade_volume_log(
+            event_name=event['event'],
+            log=event,
+            pair_per_token_metadata=pair_per_token_metadata,
+            token0_price_map=token0_price_map,
+            token1_price_map=token1_price_map,
+            block_details_dict=block_details_dict,
         )
-        # shift Burn logs in end of list to check if equal size of mint already exist
-        # and then cancel out burn with mint
-        logs = sorted(logs, key=lambda x: x['event'], reverse=True)
+        if trade_data:
+            trade_data_list.append(trade_data)
 
-        # iterate over each txHash logs
-        for log in logs:
-            # fetch trade value fog log
-            trades_result, processed_log = extract_trade_volume_log(
-                event_name=log['event'],
-                log=log,
-                pair_per_token_metadata=pair_per_token_metadata,
-                token0_price_map=token0_price_map,
-                token1_price_map=token1_price_map,
-                block_details_dict=block_details_dict,
-            )
+    core_logger.info(
+        "[Epoch {}-{}] Pool {} | Trade volume computation completed | Processed {} trades",
+        min_chain_height,
+        max_chain_height,
+        data_source_contract_address,
+        len(trade_data_list)
+    )
 
-            if log['event'] == 'Swap':
-                epoch_results.Swap.logs.append(processed_log)
-                epoch_results.Swap.trades += trades_result
-                tx_hash_trades += trades_result  # swap in single txHash should be added
-
-            elif log['event'] == 'Mint':
-                epoch_results.Mint.logs.append(processed_log)
-                epoch_results.Mint.trades += trades_result
-
-            elif log['event'] == 'Burn':
-                epoch_results.Burn.logs.append(processed_log)
-                epoch_results.Burn.trades += trades_result
-
-        # At the end of txHash logs we must normalize trade values, so it does not affect result of other txHash logs
-        epoch_results.Trades += abs(tx_hash_trades)
-    epoch_trade_logs = epoch_results.dict()
-    max_block_details = block_details_dict.get(max_chain_height, dict())
-    max_block_timestamp = max_block_details.get('timestamp', None)
-    epoch_trade_logs.update({'timestamp': max_block_timestamp})
-    core_logger.debug(f'epoch_trade_logs: {epoch_trade_logs}')
-    return epoch_trade_logs
+    return {
+        "Trades": {
+            "totalTradesUSD": sum(trade['trade_volume_usd'] for trade in trade_data_list),
+            "totalFeeUSD": sum(trade['fee_usd'] for trade in trade_data_list),
+            "token0TradeVolume": sum(trade['token0_amount'] for trade in trade_data_list),
+            "token1TradeVolume": sum(trade['token1_amount'] for trade in trade_data_list),
+            "token0TradeVolumeUSD": sum(trade['token0_amount_usd'] for trade in trade_data_list),
+            "token1TradeVolumeUSD": sum(trade['token1_amount_usd'] for trade in trade_data_list),
+        },
+        "timestamp": block_details_dict[max_chain_height]['timestamp'] if fetch_timestamp else None,
+    }
 
 
 async def get_liquidity_depth(
@@ -591,6 +624,8 @@ async def get_liquidity_depth(
     to_block,
     redis_conn: aioredis.Redis,
     rpc_helper: RpcHelper,
+    ipfs_reader: AsyncIPFSClient,
+    protocol_state_contract,
     fetch_timestamp=False,
 ):
     """
@@ -634,16 +669,26 @@ async def get_liquidity_depth(
         block_details_dict = dict()
 
     pair_address = Web3.to_checksum_address(pair_address)
-
-    pair_per_token_metadata = await get_pair_metadata(
-        pair_address=pair_address,
+    metadata_processor = MetadataProcessor()
+    pair_per_token_metadata = await metadata_processor.get_pool_metadata(
+        pool_address=pair_address,
         redis_conn=redis_conn,
-        rpc_helper=rpc_helper,
+        anchor_rpc_helper=rpc_helper,
+        ipfs_reader=ipfs_reader,
+        protocol_state_contract=protocol_state_contract,
     )
+    if not pair_per_token_metadata:
+        core_logger.error(
+            "[Epoch {}-{}] Pool {} | Failed to fetch pair metadata",
+            from_block,
+            to_block,
+            pair_address
+        )
+        raise Exception(f'Error attempting to get pair metadata for: {pair_address}')
 
     token0_price_map, token1_price_map = await asyncio.gather(
         get_token_price_in_block_range(
-            token_metadata=pair_per_token_metadata['token0'],
+            token_metadata=pair_per_token_metadata.token0.dict(),
             from_block=from_block,
             to_block=to_block,
             redis_conn=redis_conn,
@@ -652,7 +697,7 @@ async def get_liquidity_depth(
 
         ),
         get_token_price_in_block_range(
-            token_metadata=pair_per_token_metadata['token1'],
+            token_metadata=pair_per_token_metadata.token1.dict(),
             from_block=from_block,
             to_block=to_block,
             redis_conn=redis_conn,
@@ -670,6 +715,7 @@ async def get_liquidity_depth(
         pair_address=pair_address,
         from_block=from_block,
         redis_conn=redis_conn,
+        pair_per_token_metadata=pair_per_token_metadata
     )
 
     liquidity_depth_initial = calculate_liquidity_depth(
@@ -685,31 +731,24 @@ async def get_liquidity_depth(
             'token1': token1_price_map.get(block_num, 0),
         }
 
-    events = await get_events(
-        pair_address=pair_address,
-        rpc=rpc_helper,
+    events_by_block = await get_events_from_cache(
+        pool_address=pair_address,
+        redis_conn=redis_conn,
         from_block=from_block,
         to_block=to_block,
-        redis_con=redis_conn,
     )
 
     core_logger.debug(
-        f'Events fetched for liquidity depth: {events}',
+        f'Events fetched for liquidity depth: {events_by_block}',
     )
-    events_by_block = dict()
-    for event in events:
-        events_by_block[event['blockNumber']] = events_by_block.get(
-            event['blockNumber'], [],
-        )
-        events_by_block[event['blockNumber']].append(event)
 
     for block_num in range(from_block + 1, to_block + 1):
 
         events = events_by_block.get(block_num, [])
         for event in events:
-            amount0 = event['args']['amount0']
-            amount1 = event['args']['amount1']
-            if event['name'] == 'Mint':
+            amount0 = event.args['amount0']
+            amount1 = event.args['amount1']
+            if event.eventName == 'Mint':
                 liquidity_depth_dict[block_num]['token0']['amount'] += amount0
                 liquidity_depth_dict[block_num]['token1']['amount'] += amount1
             else:

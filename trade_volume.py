@@ -41,9 +41,13 @@ class TradeVolumeProcessor(GenericProcessorSnapshot):
         max_chain_height = epoch.end
         data_source_contract_address = epoch.data_source
 
-        self._logger.debug(
-            f"trade volume {data_source_contract_address}, computation init time {time.time()}"
+        self._logger.info(
+            "[Epoch {}-{}] Pool {} | Starting trade volume computation",
+            min_chain_height,
+            max_chain_height,
+            data_source_contract_address
         )
+
         snapshot = await get_pair_trade_volume(
             data_source_contract_address=data_source_contract_address,
             min_chain_height=min_chain_height,
@@ -51,8 +55,14 @@ class TradeVolumeProcessor(GenericProcessorSnapshot):
             redis_conn=redis_conn,
             rpc_helper=rpc_helper,
         )
-        self._logger.debug(
-            f"trade volume {data_source_contract_address}, computation end time {time.time()}"
+
+        self._logger.info(
+            "[Epoch {}-{}] Pool {} | Trade volume computation completed | Total trades: ${:.2f} | Total fees: ${:.2f}",
+            min_chain_height,
+            max_chain_height,
+            data_source_contract_address,
+            float(snapshot["Trades"]["totalTradesUSD"]),
+            float(snapshot["Trades"]["totalFeeUSD"])
         )
 
         # Extract trade volume data from the snapshot
