@@ -230,7 +230,9 @@ async def get_pair_reserves(
         }
     # sort access by block number
     for block_num in sorted(events.keys()):
-        event_list = events[block_num]
+        event_list = events.get(block_num, [])
+        if not event_list:
+            continue
         # Swap events use ints and mint events are positive, so only need to subtract burn events.
         token0Amount += reduce(
             lambda acc, event: acc - event.args['amount0']
