@@ -86,11 +86,17 @@ async def get_events_from_cache(
     
     # Get events from Redis zset
     events = await redis_conn.zrangebyscore(
-        name=f"events:{settings.namespace}:{pool_address.lower()}",
+        name=f"events:{settings.namespace}:address:{pool_address.lower()}",
         min=min_score,
         max=max_score,
         withscores=True
     )
+
+    helper_logger.info(f"Found {len(events)} events in raw cache for pool {pool_address} from block {from_block} to block {to_block}")
+
+    if len(events) > 0:
+        helper_logger.info(f"First event: {events[0]}")
+        helper_logger.info(f"Last event: {events[-1]}")
     
     # Group events by block number
     block_events: Dict[int, List[UniswapEvent]] = {}
@@ -107,6 +113,8 @@ async def get_events_from_cache(
             block_events[block_number] = []
             
         block_events[block_number].append(event)
+
+    helper_logger.info(f"Found {len(block_events)} events in cache for pool {pool_address} from block {from_block} to block {to_block}")
     
     return block_events
 
