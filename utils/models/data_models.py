@@ -16,6 +16,18 @@ class UniswapEvent(BaseModel):
     args: Dict[str, Any]
     _score: Optional[int] = Field(None, alias='_score')
 
+
+class UniswapProcessedLog(UniswapEvent):
+    """
+    Represents a processed log from a Uniswap event, along with calculated trade data.
+    Inherits all fields from UniswapEvent.
+    """
+    token0_amount: float
+    token1_amount: float
+    timestamp: str  # Based on current usage: block_details.get('timestamp', '')
+    trade_amount_usd: float
+
+
 class trade_data(BaseModel):
     """
     Represents trading data for a pair of tokens.
