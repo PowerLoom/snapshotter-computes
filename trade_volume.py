@@ -123,6 +123,7 @@ class TradeVolumeProcessor(GenericProcessorSnapshot):
                 to_block=max_chain_height,
                 redis_conn=redis_conn,
                 rpc_helper=rpc_helper,
+                anchor_rpc_helper=anchor_rpc_helper,
                 ipfs_reader=ipfs_reader,
                 protocol_state_contract=protocol_state_contract,
                 metadata_processor=metadata_processor,
