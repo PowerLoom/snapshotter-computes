@@ -1,11 +1,19 @@
 import time
-
+from typing import List, Tuple
+from ipfs_client.main import AsyncIPFSClient
 from redis import asyncio as aioredis
 from rpc_helper.rpc import RpcHelper
 
+from computes.metadata import MetadataProcessor
+from computes.utils.core import get_block_details_in_block_range
 from computes.utils.core import get_pair_trade_volume
-from computes.utils.models.message_models import EpochBaseSnapshot
-from computes.utils.models.message_models import UniswapTradesSnapshot
+from computes.utils.models.message_models import (
+    EpochBaseSnapshot,
+    UniswapTradesSnapshot,
+    TradeType,
+    UniswapTrade
+)
+from snapshotter.settings.config import settings
 from snapshotter.utils.models.message_models import SnapshotProcessMessage
 from snapshotter.utils.callback_helpers import GenericProcessorSnapshot
 from snapshotter.utils.default_logger import logger
@@ -24,7 +32,11 @@ class TradeVolumeProcessor(GenericProcessorSnapshot):
         epoch: SnapshotProcessMessage,
         redis_conn: aioredis.Redis,
         rpc_helper: RpcHelper,
-    ):
+        anchor_rpc_helper: RpcHelper,
+        ipfs_reader: AsyncIPFSClient,
+        protocol_state_contract,
+        task_type: str = "tradesSnapshot:{poolAddress}:{Namespace}",
+    ) -> List[Tuple[str, UniswapTradesSnapshot]]:
         """
         Compute the trade volume for a Uniswap pair within the given epoch.
 
@@ -32,61 +44,159 @@ class TradeVolumeProcessor(GenericProcessorSnapshot):
             epoch (SnapshotProcessMessage): The epoch information.
             redis_conn (aioredis.Redis): Redis connection object.
             rpc_helper (RpcHelper): RPC helper object for blockchain interactions.
+            anchor_rpc_helper (RpcHelper): RPC helper for anchor chain interactions.
+            ipfs_reader (AsyncIPFSClient): IPFS client for reading data.
+            protocol_state_contract: Protocol state contract instance.
+            task_type (str): The task type string for formatting the snapshot key.
 
         Returns:
-            dict: Computed trade volume data.
+            List[Tuple[str, UniswapTradesSnapshot]]: List of (snapshot_key, snapshot_data).
         """
         
         min_chain_height = epoch.begin
         max_chain_height = epoch.end
-        data_source_contract_address = epoch.data_source
+        snapshots: List[Tuple[str, UniswapTradesSnapshot]] = list()
 
+        try:
+            block_details_dict = await get_block_details_in_block_range(
+                min_chain_height,
+                max_chain_height,
+                redis_conn=redis_conn,
+                rpc_helper=rpc_helper,
+            )
+            self._logger.debug(
+                "[Epoch {}-{}] Block details fetched successfully for {} blocks",
+                min_chain_height,
+                max_chain_height,
+                len(block_details_dict)
+            )
+        except Exception as err:
+            self._logger.opt(exception=True).error(
+                "[Epoch {}-{}] Failed to fetch block details: {}",
+                min_chain_height,
+                max_chain_height,
+                err
+            )
+            block_details_dict = dict()
+
+        # find list of active pools for the epoch
+        active_pool_set_keys_to_fetch = []
+        for block_number in range(min_chain_height, max_chain_height + 1):
+            key = f"active_pools:{block_number}:{settings.namespace}"
+            active_pool_set_keys_to_fetch.append(key)
+        
+        active_pool_addresses_bytes = set()
+        if active_pool_set_keys_to_fetch:
+            active_pool_addresses_bytes = await redis_conn.sunion(*active_pool_set_keys_to_fetch)
+        
+        active_pool_addresses = [addr.decode('utf-8') for addr in active_pool_addresses_bytes]
+        
         self._logger.info(
-            "[Epoch {}-{}] Pool {} | Starting trade volume computation",
+            "[Epoch {}-{}] Starting token pair reserves computation for {} active pools",
             min_chain_height,
             max_chain_height,
-            data_source_contract_address
+            len(active_pool_addresses)
         )
 
-        snapshot = await get_pair_trade_volume(
-            data_source_contract_address=data_source_contract_address,
-            min_chain_height=min_chain_height,
-            max_chain_height=max_chain_height,
-            redis_conn=redis_conn,
-            rpc_helper=rpc_helper,
-        )
+        metadata_processor = MetadataProcessor()
 
-        self._logger.info(
-            "[Epoch {}-{}] Pool {} | Trade volume computation completed | Total trades: ${:.2f} | Total fees: ${:.2f}",
-            min_chain_height,
-            max_chain_height,
-            data_source_contract_address,
-            float(snapshot["Trades"]["totalTradesUSD"]),
-            float(snapshot["Trades"]["totalFeeUSD"])
-        )
+        for pool_address in active_pool_addresses:
+            self._logger.debug(
+                "[Epoch {}-{}] Processing pool {} | Starting computation",
+                min_chain_height,
+                max_chain_height,
+                pool_address
+            )
+            
+            start_time = time.time()
+            self._logger.debug(
+                "[Epoch {}-{}] Pool {} | Starting trades snapshot computation | Wall time: {}",
+                min_chain_height,
+                max_chain_height,
+                pool_address,
+                start_time
+            )
+            
+            pair_trade_data = await get_pair_trade_volume(
+                pair_address=pool_address,
+                from_block=min_chain_height,
+                to_block=max_chain_height,
+                redis_conn=redis_conn,
+                rpc_helper=rpc_helper,
+                ipfs_reader=ipfs_reader,
+                protocol_state_contract=protocol_state_contract,
+                metadata_processor=metadata_processor,
+                block_details_dict=block_details_dict,
+            )
 
-        # Extract trade volume data from the snapshot
-        total_trades_in_usd = snapshot["Trades"]["totalTradesUSD"]
-        total_fee_in_usd = snapshot["Trades"]["totalFeeUSD"]
-        total_token0_vol = snapshot["Trades"]["token0TradeVolume"]
-        total_token1_vol = snapshot["Trades"]["token1TradeVolume"]
-        total_token0_vol_usd = snapshot["Trades"]["token0TradeVolumeUSD"]
-        total_token1_vol_usd = snapshot["Trades"]["token1TradeVolumeUSD"]
+            if not pair_trade_data or not pair_trade_data.get('trades'):
+                self._logger.error(
+                    "[Epoch {}-{}] Pool {} | No pool trade data returned or trades list is empty from 'get_pair_trade_volume()'",
+                    min_chain_height,
+                    max_chain_height,
+                    pool_address
+                )
+                continue
 
-        max_block_timestamp = snapshot.get("timestamp")
-        snapshot.pop("timestamp", None)
+            transformed_trades: List[UniswapTrade] = []
+            for processed_log in pair_trade_data['trades']: 
+                try:
+                    trade_type_enum = TradeType(processed_log.eventName)
+                except ValueError:
+                    self._logger.warning(
+                        "[Epoch {}-{}] Pool {} | Unknown eventName '{}' encountered for tradeType mapping. Skipping trade log: {}",
+                        min_chain_height, max_chain_height, pool_address, processed_log.eventName, processed_log.txHash
+                    )
+                    continue
 
-        # Create the UniswapTradesSnapshot object
-        trade_volume_snapshot = UniswapTradesSnapshot(
-            contract=data_source_contract_address,
-            chainHeightRange=EpochBaseSnapshot(begin=min_chain_height, end=max_chain_height),
-            timestamp=max_block_timestamp,
-            totalTrade=float(f"{total_trades_in_usd: .6f}"),
-            totalFee=float(f"{total_fee_in_usd: .6f}"),
-            token0TradeVolume=float(f"{total_token0_vol: .6f}"),
-            token1TradeVolume=float(f"{total_token1_vol: .6f}"),
-            token0TradeVolumeUSD=float(f"{total_token0_vol_usd: .6f}"),
-            token1TradeVolumeUSD=float(f"{total_token1_vol_usd: .6f}"),
-            events=snapshot,
-        )
-        return trade_volume_snapshot
+                raw_log_component = {
+                    "address": processed_log.address,
+                    "topics": processed_log.topics,
+                    "data": processed_log.data,
+                    "blockNumber": processed_log.blockNumber,
+                    "transactionHash": processed_log.txHash,
+                    "transactionIndex": processed_log.txIndex,
+                    "logIndex": processed_log.logIndex,
+                    "eventName": processed_log.eventName,
+                    "filterName": processed_log.filterName,
+                    "_score": processed_log._score,
+                }
+
+                decoded_data_component = {
+                    **processed_log.args, 
+                    "calculated_token0_amount": processed_log.token0_amount,
+                    "calculated_token1_amount": processed_log.token1_amount,
+                    "block_timestamp": processed_log.timestamp,
+                    "calculated_trade_amount_usd": processed_log.trade_amount_usd,
+                }
+                
+                uniswap_trade_entry = UniswapTrade(
+                    tradeType=trade_type_enum,
+                    log=raw_log_component,
+                    data=decoded_data_component
+                )
+                transformed_trades.append(uniswap_trade_entry)
+            
+            epoch_snapshot_model = EpochBaseSnapshot(**pair_trade_data['epoch'])
+            
+            current_trades_snapshot = UniswapTradesSnapshot(
+                address=pair_trade_data['address'], 
+                epoch=epoch_snapshot_model,
+                trades=transformed_trades
+            )
+            
+            snapshot_key = task_type.format(poolAddress=pool_address, Namespace=settings.namespace)
+            snapshots.append((snapshot_key, current_trades_snapshot))
+
+            self._logger.info(
+                "[Epoch {}-{}] Pool {} | UniswapTradesSnapshot created with {} trades. Wall time: {:.4f}s",
+                min_chain_height,
+                max_chain_height,
+                pool_address,
+                len(transformed_trades),
+                time.time() - start_time
+            )
+            
+        return snapshots
+
+        
