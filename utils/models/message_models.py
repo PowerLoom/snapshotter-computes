@@ -1,6 +1,6 @@
 from typing import Dict
 from typing import List
-
+from typing import Tuple
 from pydantic import BaseModel
 
 from snapshotter.utils.models.message_models import AggregateBase
@@ -29,6 +29,7 @@ class UniswapPairTotalReservesSnapshot(SnapshotBase):
     token1ReservesUSD: Dict[str, float]  # USD value of token1 reserves
     token0Prices: Dict[str, float]       # Prices of token0
     token1Prices: Dict[str, float]       # Prices of token1
+    previousSnapshots: List[Tuple[int, str]] = []  # List of previous snapshots
 
 
 class UniswapEthPriceSnapshot(BaseModel):
