@@ -1,7 +1,11 @@
+from enum import Enum
 from typing import Dict
 from typing import List
+from typing import Any
 from typing import Tuple
+
 from pydantic import BaseModel
+from pydantic import Field
 
 from snapshotter.utils.models.message_models import AggregateBase
 
@@ -29,7 +33,6 @@ class UniswapPairTotalReservesSnapshot(SnapshotBase):
     token1ReservesUSD: Dict[str, float]  # USD value of token1 reserves
     token0Prices: Dict[str, float]       # Prices of token0
     token1Prices: Dict[str, float]       # Prices of token1
-    previousSnapshots: List[Tuple[int, str]] = []  # List of previous snapshots
 
 
 class UniswapEthPriceSnapshot(BaseModel):
@@ -89,20 +92,6 @@ class UniswapTradeEvents(BaseModel):
     Mint: logsTradeModel  # Mint (liquidity addition) event details
     Burn: logsTradeModel  # Burn (liquidity removal) event details
     Trades: Dict[str, float]  # Aggregated trades data
-
-
-class UniswapTradesSnapshot(BaseModel):
-    """
-    Represents a snapshot of Uniswap trades for a specific epoch and contract.
-    """
-    contract: str  # The contract address
-    totalTrade: float  # Total trade volume in USD
-    totalFee: float  # Total fees collected in USD
-    token0TradeVolume: float  # Trade volume for token0 in its native decimals
-    token1TradeVolume: float  # Trade volume for token1 in its native decimals
-    token0TradeVolumeUSD: float  # Trade volume for token0 in USD
-    token1TradeVolumeUSD: float  # Trade volume for token1 in USD
-    events: UniswapTradeEvents  # Detailed breakdown of trade events
 
 
 class UniswapTradesAggregateSnapshot(AggregateBase):
@@ -185,3 +174,53 @@ class UniswapStatsSnapshot(AggregateBase):
 class MonitoredPairsSnapshot(BaseModel):
     """Snapshot of monitored Uniswap pairs."""
     pairs: List[str] = []  # List of monitored pair addresses
+
+
+class TradeType(str, Enum):
+    """
+    Defines the different types of Uniswap trade events.
+    
+    Enum values:
+        SWAP: Regular token exchange events.
+        MINT: Liquidity provision events.
+        BURN: Liquidity withdrawal events.
+    """
+    SWAP = "Swap"
+    MINT = "Mint"
+    BURN = "Burn"
+
+
+class UniswapTrade(BaseModel):
+    """
+    Represents a single Uniswap trade event with associated data.
+    
+    Captures both the raw log data and the decoded trade information.
+    
+    Attributes:
+        tradeType (TradeType): The type of trade event (Swap, Mint, or Burn).
+        log (Dict[str, Any]): The raw blockchain log data for this trade.
+        data (Dict[str, Any]): The decoded trade data with human-readable values.
+    """
+    tradeType: TradeType = Field(..., description="The type of trade event")
+    log: Dict[str, Any]  # Raw log data
+    data: Dict[str, Any]  # Decoded trade data
+
+
+class UniswapTradesSnapshot(BaseModel):
+    """
+    Uniswap Trades Snapshot Model
+    
+    Collects all trade events that occurred within a specific block range for a pool.
+    
+    Attributes:
+        address (str): The contract address of the Uniswap pair.
+        epoch (EpochBaseSnapshot): The block range this snapshot covers.
+        trades (List[UniswapTrade]): List of trade events sorted by transaction index.
+        previousSnapshots (List[Tuple[int, str]]): References to previous snapshots
+            as tuples of (epoch_number, snapshot_cid).
+    """
+    address: str                 # The contract address
+    epoch: EpochBaseSnapshot     # Range of blocks for this snapshot
+    trades: List[UniswapTrade]   # Sorted by transaction index
+    # Previous Snapshot Links
+    previousSnapshots: List[Tuple[int, str]] = []  # Will be filled by snapshot worker
