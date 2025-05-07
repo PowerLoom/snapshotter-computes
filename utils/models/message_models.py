@@ -23,6 +23,56 @@ class SnapshotBase(BaseModel):
     timestamp: int                   # Timestamp of the snapshot
 
 
+class UniswapBaseSnapshot(BaseModel):
+    """
+    Base Snapshot Model for Uniswap Pools/Pairs
+    
+    This model captures comprehensive data about a Uniswap liquidity pool including
+    reserves, prices, and trading activity across a specific block range (epoch).
+    
+    Attributes:
+        address (str): The contract address of the Uniswap pair.
+        epoch (EpochBaseSnapshot): The block range this snapshot covers.
+        token0Reserves (Dict[int, float]): Mapping of block numbers to token0 reserves.
+        token1Reserves (Dict[int, float]): Mapping of block numbers to token1 reserves.
+        token0ReservesUSD (Dict[int, float]): USD value of token0 reserves by block.
+        token1ReservesUSD (Dict[int, float]): USD value of token1 reserves by block.
+        token0Prices (Dict[int, float]): Prices of token0 in terms of token1 by block.
+        token1Prices (Dict[int, float]): Prices of token1 in terms of token0 by block.
+        token0PricesUSD (Dict[int, float]): USD prices of token0 by block.
+        token1PricesUSD (Dict[int, float]): USD prices of token1 by block.
+        totalTrade (float): Total trading volume in USD for this epoch.
+        totalFee (float): Total fees collected in USD for this epoch.
+        token0TradeVolume (float): Trading volume for token0 in its native units.
+        token1TradeVolume (float): Trading volume for token1 in its native units.
+        token0TradeVolumeUSD (float): USD value of token0 trading volume.
+        token1TradeVolumeUSD (float): USD value of token1 trading volume.
+        previousSnapshots (List[Tuple[int, str]]): References to previous snapshots
+            as tuples of (epoch_number, snapshot_cid).
+    """
+    # Generic data
+    address: str                    # Contract address
+    epoch: EpochBaseSnapshot        # Range of blocks for this snapshot
+    # Reserve Data
+    token0Reserves: Dict[int, float]     # Block number to corresponding total reserves for token0
+    token1Reserves: Dict[int, float]     # Block number to corresponding total reserves for token1
+    token0ReservesUSD: Dict[int, float]  # USD value of token0 reserves
+    token1ReservesUSD: Dict[int, float]  # USD value of token1 reserves
+    token0Prices: Dict[int, float]       # Prices of token0 (in terms of token1)
+    token1Prices: Dict[int, float]       # Prices of token1 (in terms of token0)
+    token0PricesUSD: Dict[int, float]    # Prices of token0 (in USD)
+    token1PricesUSD: Dict[int, float]    # Prices of token1 (in USD)
+    # Trade Volume Data
+    totalTrade: float  # Total trade volume in USD
+    totalFee: float    # Total fees collected in USD
+    token0TradeVolume: float      # Trade volume for token0 in its native decimals
+    token1TradeVolume: float      # Trade volume for token1 in its native decimals
+    token0TradeVolumeUSD: float   # Trade volume for token0 in USD
+    token1TradeVolumeUSD: float   # Trade volume for token1 in USD
+    # Previous Snapshot Links
+    previousSnapshots: List[Tuple[int, str]] = []  # Will be filled by snapshot worker
+
+
 class UniswapPairTotalReservesSnapshot(SnapshotBase):
     """
     Snapshot of total reserves for a Uniswap pair.

@@ -264,6 +264,8 @@ async def get_tick_info(
         ]
 
         # Execute RPC calls
+        # TODO: add at_block to rpc_helper.web3_call_with_override
+        # TODO: get sqrtPrice at all block heights
         tickDataResponse, slot0Response = await asyncio.gather(
             rpc_helper.web3_call_with_override(
                 tasks=tick_tasks,

@@ -7,7 +7,7 @@ from typing import Dict, List, Optional, Any, Tuple
 
 from redis import asyncio as aioredis
 from computes.metadata import MetadataProcessor
-from computes.utils.models.message_models import UniswapPoolMetadata
+from computes.utils.models.message_models import UniswapBaseSnapshot, UniswapPoolMetadata
 from snapshotter.utils.default_logger import logger
 from rpc_helper.rpc import get_event_sig_and_abi
 from rpc_helper.rpc import RpcHelper
@@ -213,9 +213,9 @@ async def get_pair_reserves(
         token0AmountNormalized = token0Amount / (10 ** int(pair_per_token_metadata.token0.decimals))
         token1AmountNormalized = token1Amount / (10 ** int(pair_per_token_metadata.token1.decimals))
 
-        token0USD = token0Amount * token0_price_map.get(from_block, 0) * \
+        token0USD = token0Amount * token0_price_map.get(block_num, 0) * \
             (10 ** -int(pair_per_token_metadata.token0.decimals))
-        token1USD = token1Amount * token1_price_map.get(from_block, 0) * \
+        token1USD = token1Amount * token1_price_map.get(block_num, 0) * \
             (10 ** -int(pair_per_token_metadata.token1.decimals))
         pair_reserves_dict[block_num] = {
             'token0': token0AmountNormalized,
@@ -224,9 +224,9 @@ async def get_pair_reserves(
             'token1TokenAmt': token1Amount,
             'token0USD': token0USD,
             'token1USD': token1USD,
-            'token0Price': token0_price_map.get(from_block, 0),
-            'token1Price': token1_price_map.get(from_block, 0),
-            'timestamp': block_details_dict.get(from_block, {}).get('timestamp', 0),
+            'token0Price': token0_price_map.get(block_num, 0),
+            'token1Price': token1_price_map.get(block_num, 0),
+            'timestamp': block_details_dict.get(block_num, {}).get('timestamp', 0),
         }
     # sort access by block number
     for block_num in sorted(events.keys()):
@@ -351,6 +351,10 @@ async def get_pair_reserves(
         to_block,
         pair_address,
         pair_reserves_dict
+    )
+
+    base_combined_reserves_trades_snapshot = UniswapBaseSnapshot(
+        
     )
     return pair_reserves_dict
 
