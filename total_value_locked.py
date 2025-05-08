@@ -22,6 +22,10 @@ AddressLike = Union[Address, ChecksumAddress]
 getcontext().prec = 36
 tvl_logger = logger.bind(module='PowerLoom|UniswapTotalValueLocked')
 
+class Slot0DataError(Exception):
+    """Custom exception for errors during slot0 data fetching or processing."""
+    pass
+
 
 def transform_tick_bytes_to_list(tick_bytes) -> List[TickData]:
     """
@@ -193,8 +197,6 @@ async def calculate_reserves(
         from_block
     )
     
-    ticks_list: Optional[List[TickData]]
-    slot0_data_dict: Optional[Dict[int, Slot0Data]]
     ticks_list, slot0_data_dict = await get_tick_info(
         rpc_helper=rpc_helper,
         pair_address=pair_address,
@@ -203,15 +205,16 @@ async def calculate_reserves(
         pair_per_token_metadata=pair_per_token_metadata,
     )
     
-    if ticks_list is None or not slot0_data_dict:
-        tvl_logger.warning(f"Could not get required tick/slot0 info for {pair_address} at block range {from_block}-{to_block}")
+    if ticks_list is None or slot0_data_dict is None:
+        tvl_logger.warning(f"Could not get required tick or slot0 info for {pair_address} at block range {from_block}-{to_block}")
         return [0, 0], slot0_data_dict
         
-    slot0_data_for_tvl = slot0_data_dict.get(from_block)
-    if slot0_data_for_tvl is None:
-        tvl_logger.warning(f"Slot0 data for from_block {from_block} not found in results for {pair_address}")
+    if not slot0_data_dict:
+        tvl_logger.warning(f"slot0_data_dict is empty for {pair_address} at block range {from_block}-{to_block}. Cannot get specific from_block data.")
         return [0, 0], slot0_data_dict
 
+    slot0_data_for_tvl = slot0_data_dict.get(from_block)
+    
     sqrt_price = slot0_data_for_tvl.sqrtPriceX96
 
     t0_reserves, t1_reserves = calculate_tvl_from_ticks(
@@ -223,6 +226,97 @@ async def calculate_reserves(
     return [int(t0_reserves), int(t1_reserves)], slot0_data_dict
 
 
+async def get_slot0_data_for_block_range(
+    rpc_helper: RpcHelper,
+    pair_address: str,
+    from_block: int,
+    to_block: int
+) -> Dict[int, Slot0Data]:
+    """
+    Fetches, validates, and processes slot0 data for a given pair address over a block range.
+
+    Returns:
+        A dictionary mapping block numbers to Slot0Data objects.
+    Raises:
+        Slot0DataError: If there's an issue fetching, validating, or parsing slot0 data.
+    """
+    tvl_logger.debug(
+        "[Range {}-{}] Pool {} | Fetching slot0 data",
+        from_block, to_block, pair_address
+    )
+
+    if from_block > to_block:
+        tvl_logger.debug(
+            f"Invalid or empty block range ({from_block}-{to_block}) for slot0 data for {pair_address}, "
+            f"returning empty dict."
+        )
+        return {}
+
+    slot0ResponseListRaw = None
+    try:
+        slot0ResponseListRaw = await rpc_helper.batch_eth_call_on_block_range(
+            abi_dict=get_contract_abi_dict(abi=pair_contract_abi),
+            function_name='slot0',
+            contract_address=pair_address,
+            from_block=from_block,
+            to_block=to_block,
+            params=[],
+        )
+    except Exception as e:
+        msg = (
+            f"Exception during batch_eth_call_on_block_range for slot0 data for {pair_address} "
+            f"range {from_block}-{to_block}: {e}"
+        )
+        tvl_logger.error(msg)
+        raise Slot0DataError(msg) from e
+
+    if slot0ResponseListRaw is None:
+        msg = f"Batch call for slot0 returned None for {pair_address} range {from_block}-{to_block}"
+        tvl_logger.error(msg)
+        raise Slot0DataError(msg)
+
+    if not isinstance(slot0ResponseListRaw, list):
+        msg = (
+            f"Batch call for slot0 did not return a list for {pair_address} range {from_block}-{to_block}. "
+            f"Got: {type(slot0ResponseListRaw)}"
+        )
+        tvl_logger.error(msg)
+        raise Slot0DataError(msg)
+        
+    slot0_data_dict: Dict[int, Slot0Data] = {}
+    expected_len = to_block - from_block + 1
+
+    if len(slot0ResponseListRaw) != expected_len:
+        msg = (
+            f"Slot0 response list length ({len(slot0ResponseListRaw)}) does not match expected "
+            f"block range length ({expected_len}) for {pair_address} range {from_block}-{to_block}. "
+            f"Expected complete data."
+        )
+        tvl_logger.error(msg)
+        raise Slot0DataError(msg)
+         
+    for i in range(expected_len):
+        block_num = from_block + i
+        slot0_tuple = slot0ResponseListRaw[i]
+
+        try:
+            slot0_data_obj = Slot0Data(*slot0_tuple)
+            slot0_data_dict[block_num] = slot0_data_obj
+        except Exception as e_slot0_parse:
+            msg = (
+                f"Failed to parse slot0 tuple {slot0_tuple} for {pair_address} at block {block_num} "
+                f"(index {i}): {e_slot0_parse}."
+            )
+            tvl_logger.error(msg)
+            raise Slot0DataError(msg) from e_slot0_parse
+    
+    tvl_logger.info(
+        'Processed slot0 data ({}) for pool {} range {}-{}',
+        len(slot0_data_dict), pair_address, from_block, to_block
+    )
+    return slot0_data_dict
+
+
 async def get_tick_info(
     rpc_helper: RpcHelper,
     pair_address: str,
@@ -232,17 +326,16 @@ async def get_tick_info(
 ) -> Tuple[Optional[List[TickData]], Optional[Dict[int, Slot0Data]]]:
     """Gets tick data and slot0 info for a given block range."""
     tvl_logger.debug(
-        "[Range {}-{}] Pool {} | Fetching tick information",
+        "[Range {}-{}] Pool {} | Fetching tick and slot0 information",
         from_block, to_block, pair_address
     )
     try:
-        # Prepare tick_tasks as before
         fee = int(pair_per_token_metadata.fee)
         step = (MAX_TICK - MIN_TICK) // 16
         if fee == 500:
             step = (MAX_TICK - MIN_TICK) // 4
         elif fee == 3000:
-            step = MAX_TICK - MIN_TICK // 2
+            step = MAX_TICK - MIN_TICK // 2 
         elif fee == 10000:
             step = MAX_TICK - MIN_TICK
         tick_tasks = []
@@ -251,96 +344,68 @@ async def get_tick_info(
                 ('getTicks', [pair_address, idx, min(idx + step - 1, MAX_TICK)]),
             )
 
-        # Execute RPC calls in parallel
-        tickDataResponse, slot0ResponseListRaw = await asyncio.gather(
+        results = await asyncio.gather(
             rpc_helper.web3_call(
                 tasks=tick_tasks, 
                 contract_addr=helper_contract.address,
                 abi=helper_contract.abi,
                 tasks_block_override=[from_block for _ in range(len(tick_tasks))],
             ),
-            rpc_helper.batch_eth_call_on_block_range(
-                abi_dict=get_contract_abi_dict(abi=pair_contract_abi),
-                function_name='slot0',
-                contract_address=pair_address,
+            get_slot0_data_for_block_range(
+                rpc_helper=rpc_helper,
+                pair_address=pair_address,
                 from_block=from_block,
-                to_block=to_block,
-                params=[],
+                to_block=to_block
             ),
             return_exceptions=True
         )
 
-        # --- Handle potential errors from gather --- 
+        tickDataResponse = results[0]
+        slot0_data_result = results[1]
+        
+        processed_slot0_data: Optional[Dict[int, Slot0Data]] = None
+
         if isinstance(tickDataResponse, Exception):
             tvl_logger.error(f"Error fetching tick data for {pair_address} @ {from_block}: {tickDataResponse}")
-            tickDataResponse = None
+            tickDataResponse = None 
 
-        if isinstance(slot0ResponseListRaw, Exception):
-            tvl_logger.error(f"Error fetching slot0 data for {pair_address} range {from_block}-{to_block}: {slot0ResponseListRaw}")
-            slot0ResponseListRaw = None
+        if isinstance(slot0_data_result, Exception):
+            tvl_logger.error(
+                f"Exception caught from get_slot0_data_for_block_range for {pair_address} "
+                f"range {from_block}-{to_block}: {slot0_data_result}"
+            )
+        else:
+            # If no exception from gather, slot0_data_result is the Dict[int, Slot0Data]
+            # or could be an empty dict if from_block > to_block
+            processed_slot0_data = slot0_data_result 
         
-        if tickDataResponse is None or slot0ResponseListRaw is None:
-             tvl_logger.error(f"Failed to gather required tick/slot0 data for {pair_address} range {from_block}-{to_block}")
-             return None, None
-
-        if not slot0ResponseListRaw:
-            tvl_logger.error(f"Batch call for slot0 returned empty list for {pair_address} range {from_block}-{to_block}")
-            return None, None
-
-        # TODO: Might need to handle better the case where the slot0 data is not available for all blocks in the range
-        slot0_data_dict: Dict[int, Slot0Data] = {}
-        expected_len = to_block - from_block + 1
-
-        if len(slot0ResponseListRaw) != expected_len:
+        if tickDataResponse is None or processed_slot0_data is None:
              tvl_logger.error(
-                 f"Slot0 response list length ({len(slot0ResponseListRaw)}) does not match expected "
-                 f"block range length ({expected_len}) for {pair_address} range {from_block}-{to_block}. "
-                 f"Expected complete data. Aborting."
-             )
+                 f"Failed to gather required data for {pair_address} range {from_block}-{to_block}. "
+                 f"Tick data success: {tickDataResponse is not None}, Slot0 data success: {processed_slot0_data is not None}"
+            )
              return None, None
-             
-        for i in range(expected_len):
-            block_num = from_block + i
-            slot0_tuple = slot0ResponseListRaw[i]
 
-            try:
-                slot0_data_obj = Slot0Data(*slot0_tuple)
-                slot0_data_dict[block_num] = slot0_data_obj
-            except Exception as e_slot0_parse:
-                tvl_logger.error(
-                    f"Failed to parse slot0 tuple {slot0_tuple} for {pair_address} at block {block_num} "
-                    f"(index {i}): {e_slot0_parse}. Aborting."
-                )
-                return None, None
-
-
-        # Process tickDataResponse using the original logic
         ticks_list: List[TickData] = []
         temp_ticks_list_of_lists = []
-        if tickDataResponse:
-             for ticks_bytes in tickDataResponse:
-                  temp_ticks_list_of_lists.append(transform_tick_bytes_to_list(ticks_bytes))
+        for ticks_bytes in tickDataResponse:
+             temp_ticks_list_of_lists.append(transform_tick_bytes_to_list(ticks_bytes))
         
-        # Flatten the list of lists
         if temp_ticks_list_of_lists:
              non_empty_tick_lists = [lst for lst in temp_ticks_list_of_lists if lst]
              if non_empty_tick_lists:
                  ticks_list = functools.reduce(lambda x, y: x + y, non_empty_tick_lists)
-             else:
-                 ticks_list = []
-        else:
-             ticks_list = []
 
         tvl_logger.info(
             'Fetched tick data ({}) and slot0 data ({}) for pool {} range {}-{}',
-            len(ticks_list), len(slot0_data_dict), pair_address, from_block, to_block
+            len(ticks_list), len(processed_slot0_data), pair_address, from_block, to_block
         )
 
-        return ticks_list, slot0_data_dict
+        return ticks_list, processed_slot0_data
 
     except Exception as e:
         tvl_logger.opt(exception=True).error(
-            'Error in get_tick_info for pool {} | range {}-{}: {}',
+            'Unexpected error in get_tick_info for pool {} | range {}-{}: {}',
             pair_address, from_block, to_block, e
         )
         return None, None

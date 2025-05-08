@@ -17,6 +17,7 @@ from ipfs_client.main import AsyncIPFSClient
 
 from computes.redis_keys import uniswap_pair_cached_block_height_reserves
 from computes.total_value_locked import calculate_reserves
+from computes.total_value_locked import get_slot0_data_for_block_range
 from computes.total_value_locked import get_tick_info
 from computes.total_value_locked import get_token0_in_pool
 from computes.total_value_locked import get_token1_in_pool
@@ -177,6 +178,12 @@ async def get_pair_reserves(
             initial_reserves[0],
             initial_reserves[1]
         )
+        slot0_data_dict = await get_slot0_data_for_block_range(
+            rpc_helper=rpc_helper,
+            pair_address=pair_address,
+            from_block=from_block,
+            to_block=to_block,
+        )
     else:
         # Calculate reserves at the end of the previous block (from_block - 1)
         initial_reserves, slot0_data_dict = await calculate_reserves(
@@ -203,6 +210,15 @@ async def get_pair_reserves(
                 pair_address
             )
             return None
+    
+    # TODO: decide best way to handle failed slot0 data fetch
+    if not slot0_data_dict:
+        core_logger.error(
+            "[Epoch {}-{}] Pool {} | Failed to fetch slot0 data",
+            from_block,
+            to_block,
+            pair_address
+        )
 
     # sum burn and mint each block
     token0Amount = initial_reserves[0]
