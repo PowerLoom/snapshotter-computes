@@ -7,7 +7,7 @@ from snapshotter.utils.models.message_models import SnapshotProcessMessage
 from snapshotter.utils.redis.redis_conn import RedisPoolCache
 from snapshotter.utils.redis.redis_keys import source_chain_epoch_size_key
 
-from computes.trade_volume import TradeVolumeProcessor
+from computes.trades import TradesProcessor
 from computes.utils.models.message_models import UniswapTradesSnapshot
 
 
@@ -22,7 +22,7 @@ async def test_trade_volume_processor():
         epochId=1,
     )
 
-    processor = TradeVolumeProcessor()
+    processor = TradesProcessor()
     rpc_helper = RpcHelper(settings.rpc)
     aioredis_pool = RedisPoolCache()
     await aioredis_pool.populate()

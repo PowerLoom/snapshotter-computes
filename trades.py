@@ -19,7 +19,7 @@ from snapshotter.utils.callback_helpers import GenericProcessorSnapshot
 from snapshotter.utils.default_logger import logger
 
 
-class TradeVolumeProcessor(GenericProcessorSnapshot):
+class TradesProcessor(GenericProcessorSnapshot):
     """
     Processor for calculating and storing trade volume for Uniswap pairs.
     """
