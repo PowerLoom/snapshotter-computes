@@ -29,7 +29,7 @@
 
       "pair_contract": "computes/static/abis/UniswapV3Pool.json",
 
-      "uniswap_v3_helper": "computes/static/abis/UniswapV3Helper.json"
+      "uniswap_v3_helper": "computes/static/abis/UniV3Helper.json"
       
   }
   

@@ -298,9 +298,24 @@ async def get_slot0_data_for_block_range(
     for i in range(expected_len):
         block_num = from_block + i
         slot0_tuple = slot0ResponseListRaw[i]
-
         try:
-            slot0_data_obj = Slot0Data(*slot0_tuple)
+            # Field names must match the order in Slot0Data model and the tuple from eth_abi.decode
+            field_names = [
+                "sqrtPriceX96", 
+                "tick", 
+                "observationIndex", 
+                "observationCardinality", 
+                "observationCardinalityNext", 
+                "feeProtocol", 
+                "unlocked"
+            ]
+            if len(slot0_tuple) != len(field_names):
+                raise ValueError(
+                    f"Tuple length {len(slot0_tuple)} does not match expected number of fields {len(field_names)}"
+                )
+            
+            data_dict = dict(zip(field_names, slot0_tuple))
+            slot0_data_obj = Slot0Data(**data_dict)
             slot0_data_dict[block_num] = slot0_data_obj
         except Exception as e_slot0_parse:
             msg = (
