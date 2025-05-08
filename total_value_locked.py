@@ -5,23 +5,19 @@ from decimal import Decimal
 from decimal import getcontext
 from typing import Optional, Union
 
-from eth_abi import abi
 from eth_typing import Address
 from eth_typing.evm import Address
 from eth_typing.evm import ChecksumAddress
 from computes.utils.models.message_models import UniswapPoolMetadata
 from snapshotter.utils.default_logger import logger
-from rpc_helper.rpc import get_event_sig_and_abi
-from rpc_helper.rpc import RpcHelper
+from redis import asyncio as aioredis
+from rpc_helper.rpc import RpcHelper, get_contract_abi_dict
+from web3 import Web3
 
 from computes.utils.constants import helper_contract
 from computes.utils.constants import MAX_TICK
 from computes.utils.constants import MIN_TICK
-from computes.utils.constants import override_address
 from computes.utils.constants import pair_contract_abi
-from computes.utils.constants import UNISWAP_EVENTS_ABI
-from computes.utils.constants import UNISWAP_TRADE_EVENT_SIGS
-from computes.utils.constants import univ3_helper_bytecode
 
 AddressLike = Union[Address, ChecksumAddress]
 getcontext().prec = 36
@@ -183,10 +179,10 @@ def _load_abi(path: str) -> str:
 
 async def calculate_reserves(
     pair_address: str,
-    from_block,
+    from_block: int,
+    to_block: int,
     pair_per_token_metadata: Optional[UniswapPoolMetadata],
     rpc_helper: RpcHelper,
-    redis_conn,
 ):
     """
     Calculate reserves for a given pair address.
@@ -202,7 +198,7 @@ async def calculate_reserves(
         rpc_helper=rpc_helper,
         pair_address=pair_address,
         from_block=from_block,
-        redis_conn=redis_conn,
+        to_block=to_block,
         pair_per_token_metadata=pair_per_token_metadata,
     )
     if not ticks_list or not slot0:
@@ -221,80 +217,92 @@ async def calculate_reserves(
 async def get_tick_info(
     rpc_helper: RpcHelper,
     pair_address: str,
-    from_block,
-    redis_conn,
+    from_block: int,
+    to_block: int,
     pair_per_token_metadata: UniswapPoolMetadata,
 ):
-    """
-    Get tick information for a given pair address.
-    """
+    """Gets tick data and slot0 info for a given block range."""
     tvl_logger.debug(
         "[Epoch {}] Pool {} | Fetching tick information",
         from_block,
         pair_address
     )
     try:
-        overrides = {
-            override_address: {'code': univ3_helper_bytecode},
-        }
-        current_node = rpc_helper.get_current_node()
-
-        # Determine step size based on fee
+        # Prepare tick_tasks as before
         fee = int(pair_per_token_metadata.fee)
         step = (MAX_TICK - MIN_TICK) // 16
-
         if fee == 500:
             step = (MAX_TICK - MIN_TICK) // 4
         elif fee == 3000:
             step = MAX_TICK - MIN_TICK // 2
         elif fee == 10000:
             step = MAX_TICK - MIN_TICK
-
         tick_tasks = []
-
-        # TODO: use rpc_helper batch_web3_call
-        # getTicks() is inclusive for start and end ticks
         for idx in range(MIN_TICK, MAX_TICK + 1, step):
             tick_tasks.append(
                 ('getTicks', [pair_address, idx, min(idx + step - 1, MAX_TICK)]),
             )
 
-        slot0_tasks = [
-            ('slot0', []),
-        ]
-
-        # Execute RPC calls
-        # TODO: add at_block to rpc_helper.web3_call_with_override
-        # TODO: get sqrtPrice at all block heights
-        tickDataResponse, slot0Response = await asyncio.gather(
-            rpc_helper.web3_call_with_override(
-                tasks=tick_tasks,
+        # Execute RPC calls in parallel
+        tickDataResponse, slot0ResponseList = await asyncio.gather(
+            rpc_helper.web3_call(
+                tasks=tick_tasks, 
                 contract_addr=helper_contract.address,
                 abi=helper_contract.abi,
-                overrides=overrides,
+                tasks_block_override=[from_block for _ in range(len(tick_tasks))],
             ),
-            rpc_helper.web3_call(
-                tasks=slot0_tasks,
-                contract_addr=pair_address,
-                abi=pair_contract_abi,
+            rpc_helper.batch_eth_call_on_block_range(
+                abi_dict=get_contract_abi_dict(abi=pair_contract_abi),
+                function_name='slot0',
+                contract_address=pair_address,
+                from_block=from_block,
+                to_block=to_block,
+                params=[],
             ),
             return_exceptions=True
         )
-        if any(isinstance(result, Exception) for result in [tickDataResponse, slot0Response]):
-            return [], None
-        # Process tick data
+
+        # --- Handle potential errors from gather --- 
+        if isinstance(tickDataResponse, Exception):
+            tvl_logger.error(f"Error fetching tick data for {pair_address}: {tickDataResponse}")
+            tickDataResponse = None
+
+        if isinstance(slot0ResponseList, Exception):
+            tvl_logger.error(f"Error fetching slot0 data for {pair_address}: {slot0ResponseList}")
+            slot0ResponseList = None
+        
+        if tickDataResponse is None or slot0ResponseList is None:
+             tvl_logger.error(f"Failed to gather all required data for {pair_address} between {from_block}-{to_block}")
+             return None, None
+
+        if not slot0ResponseList:
+            tvl_logger.error(f"Batch call for slot0 returned empty list for {pair_address} between {from_block}-{to_block}")
+            return None, None
+        
+        # Extract the slot0 result corresponding to the 'from_block'
+        slot0_at_from_block = slot0ResponseList[0] 
+
+        # Process tickDataResponse using the original logic
         ticks_list = []
         for ticks in tickDataResponse:
             ticks_list.append(transform_tick_bytes_to_list(ticks))
+        
+        # Flatten the list of lists if necessary
+        if ticks_list:
+             ticks_list = functools.reduce(lambda x, y: x + y, ticks_list)
+        else:
+             ticks_list = [] # Ensure it's an empty list if reduce fails on empty input
 
-        ticks_list = functools.reduce(lambda x, y: x + y, ticks_list)
-
-        slot0 = slot0Response[0]
-
-        return ticks_list, slot0
-    except Exception as err:
-        tvl_logger.warning(
-            'Failed to get tick data for pair {} at block {} with error {}',
-            pair_address, from_block, err,
+        tvl_logger.info(
+            'Fetched tick and slot0 data for pool {} in range {}-{}',
+            pair_address, from_block, to_block
         )
-        raise err
+        # Return ticks list and the slot0 data for the *from_block*
+        return ticks_list, slot0_at_from_block
+
+    except Exception as e:
+        tvl_logger.opt(exception=True).error(
+            'Error in get_tick_info for pool {} | range {}-{}: {}',
+            pair_address, from_block, to_block, e
+        )
+        return None, None
