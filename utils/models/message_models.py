@@ -2,10 +2,10 @@ from enum import Enum
 from typing import Dict
 from typing import List
 from typing import Any
-from typing import Tuple
 
 from pydantic import BaseModel
 from pydantic import Field
+from typing import Tuple
 
 from snapshotter.utils.models.message_models import AggregateBase
 
@@ -89,8 +89,8 @@ class UniswapEthPriceSnapshot(BaseModel):
     """
     Snapshot of ETH price for a Uniswap pair.
     """
-    chainHeightRange: EpochBaseSnapshot  # Range of blocks for this snapshot
-    ethPrice: Dict[str, float]  # Block number to corresponding ETH price
+    epoch: EpochBaseSnapshot  # Range of blocks for this snapshot
+    ethPrice: Dict[int, float]  # Block number to corresponding ETH price
 
 
 class UniswapTokenMetadata(BaseModel):

@@ -1,6 +1,5 @@
-from typing import Dict, List, Tuple
+from typing import List, Tuple
 from typing import Optional
-from typing import Union
 
 from redis import asyncio as aioredis
 import json
@@ -65,7 +64,7 @@ class EthPriceProcessor(GenericProcessorSnapshot):
             eth_price_snapshot = UniswapEthPriceSnapshot(
                 **{
                     "ethPrice": price_dict,
-                    "chainHeightRange": EpochBaseSnapshot(
+                    "epoch": EpochBaseSnapshot(
                         begin=min_chain_height,
                         end=max_chain_height,
                     ),

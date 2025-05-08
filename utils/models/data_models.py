@@ -14,7 +14,8 @@ class UniswapEvent(BaseModel):
     topics: List[str]
     data: str
     args: Dict[str, Any]
-    _score: Optional[int] = Field(None, alias='_score')
+    score: Optional[int] = Field(None, alias='_score')
+
 
 
 class UniswapProcessedLog(UniswapEvent):
