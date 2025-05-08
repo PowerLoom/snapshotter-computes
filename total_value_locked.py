@@ -3,12 +3,13 @@ import functools
 import json
 from decimal import Decimal
 from decimal import getcontext
-from typing import Optional, Union
+from typing import Optional, Union, List, Tuple, Dict, Any
 
 from eth_typing import Address
 from eth_typing.evm import Address
 from eth_typing.evm import ChecksumAddress
 from computes.utils.models.message_models import UniswapPoolMetadata
+from computes.utils.models.data_models import TickData, Slot0Data
 from snapshotter.utils.default_logger import logger
 from redis import asyncio as aioredis
 from rpc_helper.rpc import RpcHelper, get_contract_abi_dict
@@ -24,51 +25,50 @@ getcontext().prec = 36
 tvl_logger = logger.bind(module='PowerLoom|UniswapTotalValueLocked')
 
 
-
-def transform_tick_bytes_to_list(tick_bytes):
+def transform_tick_bytes_to_list(tick_bytes) -> List[TickData]:
     """
-    Transform tick data from decoded web3 call result to a list of dictionaries.
+    Transform tick data from decoded web3 call result to a list of TickData objects.
 
     Args:
-        decoded_data: Decoded tick data from web3 call.
+        tick_bytes: Decoded bytes for a single tick range call result.
 
     Returns:
-        list: A list of dictionaries containing liquidity_net and idx for each tick.
+        list: A list of TickData objects.
     """
     if len(tick_bytes) == 0:
         return []
 
     ticks = [
-        {
-            'liquidity_net': int.from_bytes(i[:-3], 'big', signed=True),
-            'idx': int.from_bytes(i[-3:], 'big', signed=True),
-        }
+        TickData(
+            liquidity_net=int.from_bytes(i[:-3], 'big', signed=True),
+            idx=int.from_bytes(i[-3:], 'big', signed=True),
+        )
         for i in tick_bytes
     ]
 
     return ticks
 
 
-def calculate_tvl_from_ticks(ticks, pair_metadata: UniswapPoolMetadata, sqrt_price):
+def calculate_tvl_from_ticks(ticks: List[TickData], pair_metadata: UniswapPoolMetadata, sqrt_price: int) -> Tuple[int, int]:
     """
     Calculate the Total Value Locked (TVL) from tick data.
 
     Args:
-        ticks (list): List of tick data.
-        pair_metadata (dict): Metadata for the token pair.
-        sqrt_price (int): Square root of the current price.
+        ticks (List[TickData]): List of tick data objects.
+        pair_metadata (UniswapPoolMetadata): Metadata for the token pair.
+        sqrt_price (int): Square root of the current price (uint160 from slot0).
 
     Returns:
-        tuple: A tuple containing the liquidity of token0 and token1.
+        tuple: A tuple containing the liquidity of token0 and token1 as integers.
     """
     sqrt_price = Decimal(sqrt_price) / Decimal(2 ** 96)
 
     liquidity_total = Decimal(0)
     token0_liquidity = Decimal(0)
     token1_liquidity = Decimal(0)
-    tick_spacing = 1
+    tick_spacing = Decimal(1)
 
-    if len(ticks) == 0:
+    if not ticks:
         return (0, 0)
 
     int_fee = int(pair_metadata.fee)
@@ -85,12 +85,10 @@ def calculate_tvl_from_ticks(ticks, pair_metadata: UniswapPoolMetadata, sqrt_pri
 
     for i in range(len(ticks)):
         tick = ticks[i]
-        idx = Decimal(tick['idx'])
-        nextIdx = Decimal(ticks[i + 1]['idx']) \
-            if i < len(ticks) - 1 \
-            else idx + tick_spacing
+        idx = Decimal(tick.idx)
+        nextIdx = Decimal(ticks[i + 1].idx) if i < len(ticks) - 1 else idx + tick_spacing
 
-        liquidity_net = Decimal(tick['liquidity_net'])
+        liquidity_net = Decimal(tick.liquidity_net)
         liquidity_total += liquidity_net
         sqrtPriceLow = Decimal(1.0001) ** (idx / 2)
         sqrtPriceHigh = Decimal(1.0001) ** (nextIdx / 2)
@@ -183,9 +181,9 @@ async def calculate_reserves(
     to_block: int,
     pair_per_token_metadata: Optional[UniswapPoolMetadata],
     rpc_helper: RpcHelper,
-):
+) -> List[int]:
     """
-    Calculate reserves for a given pair address.
+    Calculate reserves for a given pair address at a specific block.
     """
     if not pair_per_token_metadata:
         return [0, 0]
@@ -194,16 +192,21 @@ async def calculate_reserves(
         from_block,
         pair_address
     )
-    ticks_list, slot0 = await get_tick_info(
+    ticks_list: Optional[List[TickData]]
+    slot0_data: Optional[Slot0Data]
+    ticks_list, slot0_data = await get_tick_info(
         rpc_helper=rpc_helper,
         pair_address=pair_address,
         from_block=from_block,
         to_block=to_block,
         pair_per_token_metadata=pair_per_token_metadata,
     )
-    if not ticks_list or not slot0:
+    
+    if ticks_list is None or slot0_data is None:
+        tvl_logger.warning(f"Could not get tick/slot0 info for {pair_address} at block range {from_block}-{to_block}")
         return [0, 0]
-    sqrt_price = slot0[0]
+        
+    sqrt_price = slot0_data.sqrtPriceX96
 
     t0_reserves, t1_reserves = calculate_tvl_from_ticks(
         ticks_list,
@@ -220,12 +223,11 @@ async def get_tick_info(
     from_block: int,
     to_block: int,
     pair_per_token_metadata: UniswapPoolMetadata,
-):
+) -> Tuple[Optional[List[TickData]], Optional[Slot0Data]]:
     """Gets tick data and slot0 info for a given block range."""
     tvl_logger.debug(
-        "[Epoch {}] Pool {} | Fetching tick information",
-        from_block,
-        pair_address
+        "[Range {}-{}] Pool {} | Fetching tick information",
+        from_block, to_block, pair_address
     )
     try:
         # Prepare tick_tasks as before
@@ -264,41 +266,43 @@ async def get_tick_info(
 
         # --- Handle potential errors from gather --- 
         if isinstance(tickDataResponse, Exception):
-            tvl_logger.error(f"Error fetching tick data for {pair_address}: {tickDataResponse}")
+            tvl_logger.error(f"Error fetching tick data for {pair_address} @ {from_block}: {tickDataResponse}")
             tickDataResponse = None
 
         if isinstance(slot0ResponseList, Exception):
-            tvl_logger.error(f"Error fetching slot0 data for {pair_address}: {slot0ResponseList}")
+            tvl_logger.error(f"Error fetching slot0 data for {pair_address} range {from_block}-{to_block}: {slot0ResponseList}")
             slot0ResponseList = None
         
         if tickDataResponse is None or slot0ResponseList is None:
-             tvl_logger.error(f"Failed to gather all required data for {pair_address} between {from_block}-{to_block}")
+             tvl_logger.error(f"Failed to gather required tick/slot0 data for {pair_address} range {from_block}-{to_block}")
              return None, None
 
         if not slot0ResponseList:
-            tvl_logger.error(f"Batch call for slot0 returned empty list for {pair_address} between {from_block}-{to_block}")
+            tvl_logger.error(f"Batch call for slot0 returned empty list for {pair_address} range {from_block}-{to_block}")
             return None, None
-        
-        # Extract the slot0 result corresponding to the 'from_block'
-        slot0_at_from_block = slot0ResponseList[0] 
+            
+        slot0_tuple_at_from_block = slot0ResponseList[0] 
+        slot0_data_at_from_block = Slot0Data(*slot0_tuple_at_from_block)
 
-        # Process tickDataResponse using the original logic
-        ticks_list = []
-        for ticks in tickDataResponse:
-            ticks_list.append(transform_tick_bytes_to_list(ticks))
+        ticks_list: List[TickData] = []
+        temp_ticks_list_of_lists = []
+        for ticks_bytes in tickDataResponse:
+            temp_ticks_list_of_lists.append(transform_tick_bytes_to_list(ticks_bytes))
         
-        # Flatten the list of lists if necessary
-        if ticks_list:
-             ticks_list = functools.reduce(lambda x, y: x + y, ticks_list)
+        if temp_ticks_list_of_lists:
+             non_empty_tick_lists = [lst for lst in temp_ticks_list_of_lists if lst]
+             if non_empty_tick_lists:
+                 ticks_list = functools.reduce(lambda x, y: x + y, non_empty_tick_lists)
+             else:
+                 ticks_list = []
         else:
-             ticks_list = [] # Ensure it's an empty list if reduce fails on empty input
+             ticks_list = []
 
         tvl_logger.info(
-            'Fetched tick and slot0 data for pool {} in range {}-{}',
-            pair_address, from_block, to_block
+            'Fetched tick data ({}) and slot0 data for pool {} @ block {}',
+            len(ticks_list), pair_address, from_block
         )
-        # Return ticks list and the slot0 data for the *from_block*
-        return ticks_list, slot0_at_from_block
+        return ticks_list, slot0_data_at_from_block
 
     except Exception as e:
         tvl_logger.opt(exception=True).error(

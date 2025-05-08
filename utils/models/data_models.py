@@ -121,5 +121,29 @@ class epoch_event_trade_data(BaseModel):
     Trades: trade_data
 
 
+# --- New Models for Tick and Slot0 Data ---
+
+class TickData(BaseModel):
+    """
+    Represents the processed data for a single tick from the getTicks helper call.
+    Corresponds to the output of transform_tick_bytes_to_list.
+    """
+    liquidity_net: int  # Decoded from int128
+    idx: int            # Decoded from int24
+
+
+class Slot0Data(BaseModel):
+    """
+    Represents the data returned by the slot0 function of a UniswapV3Pool contract.
+    """
+    sqrtPriceX96: int          # uint160
+    tick: int                  # int24
+    observationIndex: int      # uint16
+    observationCardinality: int # uint16
+    observationCardinalityNext: int # uint16
+    feeProtocol: int           # uint8
+    unlocked: bool             # bool
+
+
 
 
