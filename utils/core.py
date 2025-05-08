@@ -150,6 +150,22 @@ async def get_pair_reserves(
         max=int(from_block - 1),
     )
 
+    # grab mint/burn events in range
+    events: Dict[int, List[UniswapEvent]] = await get_events_from_cache(
+        pool_address=pair_address,
+        from_block=from_block,
+        to_block=to_block,
+        redis_conn=redis_conn,
+    )
+
+    core_logger.info(
+        "[Epoch {}-{}] Pool {} | Found {} events to process",
+        from_block,
+        to_block,
+        pair_address,
+        len(events)
+    )
+
     if cached_reserves_dict:
         loaded_dict = json.loads(cached_reserves_dict[0])
         initial_reserves = [int(loaded_dict['token0_reserves']), int(loaded_dict['token1_reserves'])]
@@ -162,11 +178,13 @@ async def get_pair_reserves(
             initial_reserves[1]
         )
     else:
-        initial_reserves = await calculate_reserves(
-            pair_address,
-            from_block - 1,
-            pair_per_token_metadata,
-            rpc_helper,
+        # Calculate reserves at the end of the previous block (from_block - 1)
+        initial_reserves, slot0_data_dict = await calculate_reserves(
+            pair_address=pair_address,
+            from_block=from_block - 1,
+            to_block=to_block,
+            pair_per_token_metadata=pair_per_token_metadata,
+            rpc_helper=rpc_helper,
         )
         core_logger.info(
             "[Epoch {}-{}] Pool {} | Calculated initial reserves: token0={}, token1={}",
@@ -177,7 +195,7 @@ async def get_pair_reserves(
             initial_reserves[1]
         )
 
-        if any(x == 0 for x in initial_reserves):
+        if not initial_reserves or any(x == 0 for x in initial_reserves):
             core_logger.error(
                 "[Epoch {}-{}] Pool {} | Failed to calculate initial reserves",
                 from_block,
@@ -185,22 +203,6 @@ async def get_pair_reserves(
                 pair_address
             )
             return None
-        
-    # grab mint/burn events in range
-    events: Dict[int, List[UniswapEvent]] = await get_events_from_cache(
-        pool_address=pair_address,
-        from_block=from_block if cached_reserves_dict else from_block + 1,
-        to_block=to_block,
-        redis_conn=redis_conn,
-    )
-
-    core_logger.info(
-        "[Epoch {}-{}] Pool {} | Found {} events to process",
-        from_block,
-        to_block,
-        pair_address,
-        len(events)
-    )
 
     # sum burn and mint each block
     token0Amount = initial_reserves[0]
