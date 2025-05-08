@@ -130,18 +130,16 @@ factory_contract_abi = read_json_file(
 
 # Load helper contract ABI
 helper_contract_abi = read_json_file(
-    'computes/static/abis/UniV3Helper.json',
+    worker_settings.uniswap_contract_abis.uniswap_v3_helper,
     constants_logger,
 )
-
-# Override address for helper contract
-override_address = Web3.to_checksum_address('0x' + '1' * 40)
 
 # Initialize helper contract
 helper_contract = current_node['web3_client'].eth.contract(
     address=Web3.to_checksum_address(
-        override_address,
-    ), abi=helper_contract_abi,
+        worker_settings.contract_addresses.uniswap_v3_helper,
+    ),
+    abi=helper_contract_abi,
 )
 factory_contract_obj = current_node['web3_client'].eth.contract(
     address=Web3.to_checksum_address(

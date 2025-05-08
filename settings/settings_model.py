@@ -6,10 +6,11 @@ class UniswapContractAbis(BaseModel):
     pair_contract: str
     erc20: str
     trade_events: str
-
+    uniswap_v3_helper: str
 
 class ContractAddresses(BaseModel):
     uniswap_v3_factory: str
+    uniswap_v3_helper: str
     DAI_WETH_PAIR: str
     USDC_WETH_PAIR: str
     USDT_WETH_PAIR: str

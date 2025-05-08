@@ -1,6 +1,8 @@
 {
   "contract_addresses": {
       "uniswap_v3_factory": "0x1F98431c8aD98523631AE4a59f267346ea31F984",
+
+      "uniswap_v3_helper": "0x5f05F62e85675778bFb28ed4c2E83eC9C7796809",
       
       "DAI_WETH_PAIR": "0xC2eFb029Ed7EeCd775C21b53Fa594D5dA2D3febb",
       
@@ -25,7 +27,9 @@
 
       "erc20": "computes/static/abis/IERC20.json",
 
-      "pair_contract": "computes/static/abis/UniswapV3Pool.json"
+      "pair_contract": "computes/static/abis/UniswapV3Pool.json",
+
+      "uniswap_v3_helper": "computes/static/abis/UniswapV3Helper.json"
       
   }
   
