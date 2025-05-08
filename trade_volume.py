@@ -160,7 +160,7 @@ class TradeVolumeProcessor(GenericProcessorSnapshot):
                     "logIndex": processed_log.logIndex,
                     "eventName": processed_log.eventName,
                     "filterName": processed_log.filterName,
-                    "_score": processed_log._score,
+                    "_score": processed_log.score,
                 }
 
                 decoded_data_component = {

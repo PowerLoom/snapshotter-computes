@@ -106,7 +106,13 @@ async def get_events_from_cache(
     for event_json, score in events:
         event_data = json.loads(event_json)
         event_data['_score'] = score  # Add score to event data
-        event = UniswapEvent.parse_obj(event_data)
+        
+        try:
+            event = UniswapEvent.model_validate(event_data)
+        except Exception as e_parse:
+            helper_logger.error(f"Failed to parse event data: {event_data}. Error: {e_parse}")
+            continue
+            
         block_number = event.blockNumber
         
         if block_number not in block_events:

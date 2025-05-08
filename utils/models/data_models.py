@@ -25,8 +25,8 @@ class UniswapProcessedLog(UniswapEvent):
     """
     token0_amount: float
     token1_amount: float
-    timestamp: str  # Based on current usage: block_details.get('timestamp', '')
     trade_amount_usd: float
+    timestamp: Optional[int] = None
 
 
 class trade_data(BaseModel):

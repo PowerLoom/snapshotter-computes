@@ -352,10 +352,10 @@ async def get_pair_reserves(
         pair_address,
         pair_reserves_dict
     )
-
-    base_combined_reserves_trades_snapshot = UniswapBaseSnapshot(
-        
-    )
+    
+    # TODO: add base_combined_reserves_trades_snapshot
+    # base_combined_reserves_trades_snapshot = UniswapBaseSnapshot(
+    # )
     return pair_reserves_dict
 
 
@@ -436,7 +436,7 @@ def extract_trade_volume_log(
     fee = int(pair_per_token_metadata.fee) / UNISWAPV3_FEE_DIV
 
     block_details = block_details_dict.get(log.blockNumber, {})
-    current_timestamp = block_details.get('timestamp', '')
+    current_timestamp = block_details.get('timestamp', None)
 
     # Determine trade_volume_usd based on event type
     if event_name == 'Swap':
@@ -460,11 +460,8 @@ def extract_trade_volume_log(
         # trade_fee_usd remains 0 for Mint/Burn as per original logic
 
     # Create the UniswapProcessedLog instance
-    # Prepare data for UniswapProcessedLog
-    processed_log_data_for_init = log.dict(by_alias=True)
-    # Override _score with its direct attribute value to ensure it's not FieldInfo.
-    # This assumes log._score provides the actual intended value (None or int for this field).
-    processed_log_data_for_init['_score'] = log._score
+    # Prepare data for UniswapProcessedLog using Pydantic V2 method
+    processed_log_data_for_init = log.model_dump(by_alias=True)
 
     processed_log = UniswapProcessedLog(
         **processed_log_data_for_init,
@@ -611,7 +608,7 @@ async def get_pair_trade_volume(
         for event_to_process in events_in_block: 
             core_logger.info(
                 "[Epoch {}-{}] Pool {} | Block {} | Processing event: {}",
-                from_block, to_block, pair_address, block_num, event_to_process.json(indent=2) # Changed from model_dump_json
+                from_block, to_block, pair_address, block_num, event_to_process.model_dump_json(indent=2)
             )
             try:
                 returned_trade_data, processed_log_event_candidate = extract_trade_volume_log(
@@ -625,8 +622,8 @@ async def get_pair_trade_volume(
                 core_logger.info(
                     "[Epoch {}-{}] Pool {} | Block {} | extract_trade_volume_log returned: trade_data={}, processed_log_event={}",
                     from_block, to_block, pair_address, block_num,
-                    returned_trade_data.json(indent=2) if returned_trade_data else "None", # Changed from model_dump_json
-                    processed_log_event_candidate.json(indent=2) if processed_log_event_candidate else "None" # Changed from model_dump_json
+                    returned_trade_data.model_dump_json(indent=2) if returned_trade_data else "None",
+                    processed_log_event_candidate.model_dump_json(indent=2) if processed_log_event_candidate else "None"
                 )
 
                 if processed_log_event_candidate:
