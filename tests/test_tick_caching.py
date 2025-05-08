@@ -29,7 +29,7 @@ async def test_tick_cache():
     # Call your async function
     # Cache data from 30 blocks ago
     reserves = await calculate_reserves(
-        pair_address, from_block - 30, pair_per_token_metadata, rpc_helper, redis_conn
+        pair_address, from_block - 30, pair_per_token_metadata, rpc_helper
     )
 
     # Check that it returns an array of correct form
@@ -48,7 +48,7 @@ async def test_tick_cache():
 
     # Cache data for from block, should also delete previous data
     reserves = await calculate_reserves(
-        pair_address, from_block, pair_per_token_metadata, rpc_helper, redis_conn
+        pair_address, from_block, pair_per_token_metadata, rpc_helper
     )
 
     cached_tick_dict = await redis_conn.zrangebyscore(

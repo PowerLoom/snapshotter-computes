@@ -167,7 +167,6 @@ async def get_pair_reserves(
             from_block - 1,
             pair_per_token_metadata,
             rpc_helper,
-            redis_conn,
         )
         core_logger.info(
             "[Epoch {}-{}] Pool {} | Calculated initial reserves: token0={}, token1={}",
@@ -758,7 +757,6 @@ async def get_liquidity_depth(
         rpc_helper=rpc_helper,
         pair_address=pair_address,
         from_block=from_block,
-        redis_conn=redis_conn,
         pair_per_token_metadata=pair_per_token_metadata
     )
 

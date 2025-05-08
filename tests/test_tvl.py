@@ -54,13 +54,13 @@ async def test_calculate_reserves():
     
     # Call your async function
     reserves = await calculate_reserves(
-        pair_address, from_block, pair_per_token_metadata, rpc_helper, redis_conn
+        pair_address, from_block, pair_per_token_metadata, rpc_helper
     )
     rpc_ticks, slot0 = await get_tick_info(
         rpc_helper=rpc_helper,
         pair_address=pair_address,
         from_block=from_block,
-        redis_conn=redis_conn,
+        to_block=from_block,
         pair_per_token_metadata=pair_per_token_metadata,
     )
     rpc_tick_len = len(rpc_ticks)
