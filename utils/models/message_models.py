@@ -91,6 +91,7 @@ class UniswapEthPriceSnapshot(BaseModel):
     """
     epoch: EpochBaseSnapshot  # Range of blocks for this snapshot
     ethPrice: Dict[int, float]  # Block number to corresponding ETH price
+    previousSnapshots: List[Tuple[int, str]] = []  # Will be filled by snapshot worker
 
 
 class UniswapTokenMetadata(BaseModel):
