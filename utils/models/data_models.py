@@ -145,5 +145,20 @@ class Slot0Data(BaseModel):
     unlocked: bool             # bool
 
 
-
+class PairBlockDetail(BaseModel):
+    """
+    Represents the reserve and price details for a token pair at a specific block.
+    This corresponds to the structure of values in the pair_reserves_dict.
+    """
+    token0ReservesNormalized: float
+    token1ReservesNormalized: float
+    token0Reserves: int
+    token1Reserves: int
+    token0ReservesUSD: float
+    token1ReservesUSD: float
+    token0Price: float
+    token1Price: float
+    token0PriceInToken1: float
+    token1PriceInToken0: float
+    timestamp: Optional[int]
 
