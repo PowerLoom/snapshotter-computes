@@ -57,6 +57,7 @@ class MetadataProcessor(GenericProcessorSnapshot):
             redis_conn=redis_conn,
             state_contract_obj=protocol_state_contract,
             rpc_helper=anchor_rpc_helper,
+            ipfs_reader=ipfs_reader,
             epoch_id=last_finalized_epoch,
             project_id=task_type.format(poolAddress=pool_address, Namespace=settings.namespace),
         )
