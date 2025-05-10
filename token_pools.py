@@ -1,10 +1,11 @@
-from typing import Dict
+from typing import Dict, List, Tuple
 from typing import Optional
 from typing import Union
 import asyncio
 
 from redis import asyncio as aioredis
 import json
+from computes.metadata import MetadataProcessor
 from snapshotter.utils.models.message_models import SnapshotProcessMessage
 from snapshotter.utils.callback_helpers import GenericProcessorSnapshot
 from snapshotter.utils.default_logger import logger
@@ -51,81 +52,63 @@ class TokenPoolsProcessor(GenericProcessorSnapshot):
         """
         try:
             snapshots = []
-            metadata_project_id = "metadata:{poolAddress}:{Namespace}".format(
-                poolAddress=pool_address,
-                Namespace=settings.namespace,
+            metadata_helper = MetadataProcessor()
+            pool_metadata: Optional[UniswapPoolMetadata] = await metadata_helper.get_pool_metadata(
+                pool_address=pool_address,
+                redis_conn=redis_conn,
+                protocol_state_contract=protocol_state_contract,
+                anchor_rpc_helper=anchor_rpc_helper,
+                ipfs_reader=ipfs_reader,
             )
-            project_first_epoch = await get_project_first_epoch(
-                redis_conn, protocol_state_contract, anchor_rpc_helper, metadata_project_id,
-            )
-
-            if not project_first_epoch:
-                # Check Redis cache first
-                cache_key = f'pool_metadata:{pool_address}'
-                cached_data = await redis_conn.get(cache_key)
-
-                if cached_data:
-                    data = json.loads(cached_data)
-                else:
-                    self._logger.debug(
-                        "[Epoch {}-{}] Pool {} | No metadata found in cache or first epoch",
-                        epoch.begin,
-                        epoch.end,
-                        pool_address
-                    )
-                    return None
-            else:
-                data = await get_project_epoch_snapshot(
-                    redis_conn, protocol_state_contract, anchor_rpc_helper, ipfs_reader, project_first_epoch, metadata_project_id
-                )
-
-            if not data:
-                self._logger.debug(
-                    "[Epoch {}-{}] Pool {} | No metadata data available",
-                    epoch.begin,
-                    epoch.end,
-                    pool_address
-                )
+            if not pool_metadata:
                 return None
-            
-            token_addresses = [data["token0"]["address"], data["token1"]["address"]]
+            logger.info(f"Epoch {epoch.begin}-{epoch.end} | Token pools compute | Pool {pool_address} | Token pools compute | Processing token pools for Token0: {pool_metadata.token0.address} | Token1: {pool_metadata.token1.address}")
+            token_addresses = [pool_metadata.token0.address, pool_metadata.token1.address]
             token_addresses = [Web3.to_checksum_address(token_address) for token_address in token_addresses]
 
             for token_address in token_addresses:
                 project_id = task_type.format(tokenAddress=token_address, Namespace=settings.namespace)
-
+                logger.info(f"Epoch {epoch.begin}-{epoch.end} | Token pools compute | Pool {pool_address} | Attempting to get project ID: {project_id} for token: {token_address}")
                 # get the last finalized epoch
                 last_finalized_epoch = await get_project_last_finalized_epoch(
                     redis_conn, protocol_state_contract, anchor_rpc_helper, project_id,
                 )
-
+                logger.info(
+                    f"Epoch {epoch.begin}-{epoch.end} | Token pools compute | Pool {pool_address} | "
+                    f"Token pools compute | Last finalized epoch: {last_finalized_epoch} for project ID: {project_id} "
+                    f"for token: {token_address}"
+                )
                 if not last_finalized_epoch:
                     snapshot = UniswapTokenPoolsSnapshot(
-                        pools={pool_address: UniswapPoolMetadata(**data)}
+                        pools={pool_address: pool_metadata}
                     )
+                    logger.info(f"Epoch {epoch.begin}-{epoch.end} | Token pools compute | Pool {pool_address} | Token pools compute | No last finalized epoch found for project ID: {project_id} for token: {token_address}. Creating snapshot with pool metadata: {snapshot}")
+                    snapshots.append((project_id, snapshot))
                 else:
                     # get the snapshot for the last finalized epoch
                     snapshot = await get_project_epoch_snapshot(
                         redis_conn, protocol_state_contract, anchor_rpc_helper, ipfs_reader, last_finalized_epoch, project_id,
                     )
+                    logger.info(
+                        f"Epoch {epoch.begin}-{epoch.end} | Token pools compute | Pool {pool_address} | "
+                        f"Token pools compute | Snapshot for project ID: {project_id} for token: {token_address} at last finalized epoch: {last_finalized_epoch} found: {snapshot}"
+                    )
                     if snapshot:
                         snapshot = UniswapTokenPoolsSnapshot(**snapshot)
                         if pool_address not in snapshot.pools:
-                            snapshot.pools[pool_address] = UniswapPoolMetadata(**data)
-                        else:
-                            return None
+                            snapshot.pools[pool_address] = pool_metadata
                     else:
                         snapshot = UniswapTokenPoolsSnapshot(
                             pools={}
                         )
-                        snapshot.pools[pool_address] = UniswapPoolMetadata(**data)
-
+                        snapshot.pools[pool_address] = pool_metadata
+                    logger.info(f"Epoch {epoch.begin}-{epoch.end} | Token pools compute | Pool {pool_address} | Token {token_address} | Token pools compute | Token pools snapshot generated: {snapshot}")
                     snapshots.append((project_id, snapshot))
 
             return snapshots
         except Exception as e:
             self._logger.opt(exception=e).error(
-                "[Epoch {}-{}] Pool {} | Error processing pool metadata",
+                "[Epoch {}-{}] Token pools compute | Pool {} | Error processing pool metadata",
                 epoch.begin,
                 epoch.end,
                 pool_address
@@ -141,7 +124,7 @@ class TokenPoolsProcessor(GenericProcessorSnapshot):
         ipfs_reader: AsyncIPFSClient,
         protocol_state_contract,
         task_type: str,
-    ) -> Optional[UniswapTokenPoolsSnapshot]:
+    ) -> Optional[List[Tuple[str, UniswapTokenPoolsSnapshot]]]:
         """
         Compute the metadata for a Uniswap pair within the given epoch.
 
@@ -154,7 +137,7 @@ class TokenPoolsProcessor(GenericProcessorSnapshot):
             Optional[Dict[str, Union[int, float]]]: Computed pair metadata snapshot.
         """
         self._logger.info(
-            "[Epoch {}-{}] Starting token pools computation",
+            "[Epoch {}-{}] Token pools compute | Starting token pools computation",
             epoch.begin,
             epoch.end
         )
@@ -171,7 +154,7 @@ class TokenPoolsProcessor(GenericProcessorSnapshot):
         if keys_to_fetch:
             pools = await redis_conn.sunion(*keys_to_fetch)
         self._logger.info(
-            "[Epoch {}-{}] Found {} active pools to process",
+            "[Epoch {}-{}] Token pools compute | Found {} active pools to process",
             min_chain_height,
             max_chain_height,
             len(pools)
@@ -194,10 +177,11 @@ class TokenPoolsProcessor(GenericProcessorSnapshot):
         
         # Gather results from all tasks, with return_exceptions=False
         # This will make asyncio.gather() ignore failed tasks and continue with the rest
+        logger.info(f"Epoch {epoch.begin}-{epoch.end} | Token pools compute | Gathering results from {len(pool_tasks)} tasks")
         snapshots = []
         results = await asyncio.gather(*pool_tasks, return_exceptions=False)
         for result in results:
             if result:
                 snapshots.extend(result)
-
+        logger.info(f"Epoch {epoch.begin}-{epoch.end} | Token pools compute | Results gathered from {len(pool_tasks)} tasks")
         return snapshots
