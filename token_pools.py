@@ -1,6 +1,4 @@
-from typing import Dict
 from typing import Optional
-from typing import Union
 import asyncio
 
 from redis import asyncio as aioredis
@@ -12,9 +10,7 @@ from rpc_helper.rpc import RpcHelper
 from snapshotter.settings.config import settings
 from ipfs_client.main import AsyncIPFSClient
 from computes.utils.models.message_models import UniswapPoolMetadata, UniswapTokenPoolsSnapshot
-from snapshotter.utils.data_utils import get_project_first_epoch
-from snapshotter.utils.data_utils import get_project_last_finalized_epoch
-from snapshotter.utils.data_utils import get_project_epoch_snapshot
+from snapshotter.utils.data_utils import get_project_latest_snapshot
 from web3 import Web3
 
 
@@ -55,17 +51,17 @@ class TokenPoolsProcessor(GenericProcessorSnapshot):
                 poolAddress=pool_address,
                 Namespace=settings.namespace,
             )
-            project_first_epoch = await get_project_first_epoch(
-                redis_conn, protocol_state_contract, anchor_rpc_helper, metadata_project_id,
+            pool_metadata = await get_project_latest_snapshot(
+                redis_conn, protocol_state_contract, anchor_rpc_helper, ipfs_reader, metadata_project_id,
             )
 
-            if not project_first_epoch:
+            if not pool_metadata:
                 # Check Redis cache first
                 cache_key = f'pool_metadata:{pool_address}'
                 cached_data = await redis_conn.get(cache_key)
 
                 if cached_data:
-                    data = json.loads(cached_data)
+                    pool_metadata = json.loads(cached_data)
                 else:
                     self._logger.debug(
                         "[Epoch {}-{}] Pool {} | No metadata found in cache or first epoch",
@@ -74,53 +70,66 @@ class TokenPoolsProcessor(GenericProcessorSnapshot):
                         pool_address
                     )
                     return None
-            else:
-                data = await get_project_epoch_snapshot(
-                    redis_conn, protocol_state_contract, anchor_rpc_helper, ipfs_reader, project_first_epoch, metadata_project_id
-                )
-
-            if not data:
-                self._logger.debug(
-                    "[Epoch {}-{}] Pool {} | No metadata data available",
-                    epoch.begin,
-                    epoch.end,
-                    pool_address
-                )
-                return None
             
-            token_addresses = [data["token0"]["address"], data["token1"]["address"]]
+            token_addresses = [pool_metadata["token0"]["address"], pool_metadata["token1"]["address"]]
             token_addresses = [Web3.to_checksum_address(token_address) for token_address in token_addresses]
 
             for token_address in token_addresses:
                 project_id = task_type.format(tokenAddress=token_address, Namespace=settings.namespace)
 
-                # get the last finalized epoch
-                last_finalized_epoch = await get_project_last_finalized_epoch(
-                    redis_conn, protocol_state_contract, anchor_rpc_helper, project_id,
+                token_pools_snapshot = await get_project_latest_snapshot(
+                    redis_conn, protocol_state_contract, anchor_rpc_helper, ipfs_reader, project_id,
                 )
 
-                if not last_finalized_epoch:
-                    snapshot = UniswapTokenPoolsSnapshot(
-                        pools={pool_address: UniswapPoolMetadata(**data)}
-                    )
+                if token_pools_snapshot:
+                    snapshot = UniswapTokenPoolsSnapshot(**token_pools_snapshot)
                 else:
-                    # get the snapshot for the last finalized epoch
-                    snapshot = await get_project_epoch_snapshot(
-                        redis_conn, protocol_state_contract, anchor_rpc_helper, ipfs_reader, last_finalized_epoch, project_id,
+                    snapshot = UniswapTokenPoolsSnapshot(
+                        pools={}
                     )
-                    if snapshot:
-                        snapshot = UniswapTokenPoolsSnapshot(**snapshot)
-                        if pool_address not in snapshot.pools:
-                            snapshot.pools[pool_address] = UniswapPoolMetadata(**data)
-                        else:
-                            return None
-                    else:
-                        snapshot = UniswapTokenPoolsSnapshot(
-                            pools={}
-                        )
-                        snapshot.pools[pool_address] = UniswapPoolMetadata(**data)
 
-                    snapshots.append((project_id, snapshot))
+                local_pools = await redis_conn.smembers(f"token_pools:{token_address}")
+                if local_pools:
+                    local_pools = [pool.decode('utf-8') for pool in local_pools]
+                local_pools_with_metadata = {}
+                for pool in local_pools:
+                    if pool in snapshot.pools:
+                        continue
+                    # check if metadata is present in redis
+                    cache_key = f'pool_metadata:{pool}'
+                    cached_data = await redis_conn.get(cache_key)
+
+                    if cached_data:
+                        local_pools_with_metadata[pool] = json.loads(cached_data)
+                    else:
+                        metadata_project_id = f"metadata:{pool_address}:{settings.namespace}"
+                        pool_metadata = await get_project_latest_snapshot(
+                            redis_conn, protocol_state_contract, anchor_rpc_helper, ipfs_reader, metadata_project_id,
+                        )
+
+                        if pool_metadata:
+                            local_pools_with_metadata[pool] = pool_metadata
+                        else:
+                            self._logger.error(
+                                "[Epoch {}-{}] Pool {} | No metadata found in cache or protocol state",
+                                epoch.begin,
+                                epoch.end,
+                                pool_address
+                            )
+                            continue
+                self._logger.info(
+                    "LOCAL POOLS: {} | {}",
+                    token_address,
+                    local_pools_with_metadata
+                )
+
+                if not local_pools_with_metadata:
+                    continue
+
+                for pool in local_pools_with_metadata:
+                    snapshot.pools[pool] = UniswapPoolMetadata(**local_pools_with_metadata[pool])
+                
+                snapshots.append((project_id, snapshot))
 
             return snapshots
         except Exception as e:
