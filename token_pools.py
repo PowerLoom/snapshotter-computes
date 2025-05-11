@@ -3,6 +3,7 @@ import asyncio
 
 from redis import asyncio as aioredis
 import json
+from computes.metadata import MetadataProcessor
 from snapshotter.utils.models.message_models import SnapshotProcessMessage
 from snapshotter.utils.callback_helpers import GenericProcessorSnapshot
 from snapshotter.utils.default_logger import logger
@@ -47,9 +48,13 @@ class TokenPoolsProcessor(GenericProcessorSnapshot):
         """
         try:
             snapshots = []
-            metadata_project_id = "metadata:{poolAddress}:{Namespace}".format(
-                poolAddress=pool_address,
-                Namespace=settings.namespace,
+            metadata_helper = MetadataProcessor()
+            pool_metadata: Optional[UniswapPoolMetadata] = await metadata_helper.get_pool_metadata(
+                pool_address=pool_address,
+                redis_conn=redis_conn,
+                protocol_state_contract=protocol_state_contract,
+                anchor_rpc_helper=anchor_rpc_helper,
+                ipfs_reader=ipfs_reader,
             )
             pool_metadata = await get_project_latest_snapshot(
                 redis_conn, protocol_state_contract, anchor_rpc_helper, ipfs_reader, metadata_project_id,
@@ -134,7 +139,7 @@ class TokenPoolsProcessor(GenericProcessorSnapshot):
             return snapshots
         except Exception as e:
             self._logger.opt(exception=e).error(
-                "[Epoch {}-{}] Pool {} | Error processing pool metadata",
+                "[Epoch {}-{}] Token pools compute | Pool {} | Error processing pool metadata",
                 epoch.begin,
                 epoch.end,
                 pool_address
@@ -150,7 +155,7 @@ class TokenPoolsProcessor(GenericProcessorSnapshot):
         ipfs_reader: AsyncIPFSClient,
         protocol_state_contract,
         task_type: str,
-    ) -> Optional[UniswapTokenPoolsSnapshot]:
+    ) -> Optional[List[Tuple[str, UniswapTokenPoolsSnapshot]]]:
         """
         Compute the metadata for a Uniswap pair within the given epoch.
 
@@ -163,7 +168,7 @@ class TokenPoolsProcessor(GenericProcessorSnapshot):
             Optional[Dict[str, Union[int, float]]]: Computed pair metadata snapshot.
         """
         self._logger.info(
-            "[Epoch {}-{}] Starting token pools computation",
+            "[Epoch {}-{}] Token pools compute | Starting token pools computation",
             epoch.begin,
             epoch.end
         )
@@ -180,7 +185,7 @@ class TokenPoolsProcessor(GenericProcessorSnapshot):
         if keys_to_fetch:
             pools = await redis_conn.sunion(*keys_to_fetch)
         self._logger.info(
-            "[Epoch {}-{}] Found {} active pools to process",
+            "[Epoch {}-{}] Token pools compute | Found {} active pools to process",
             min_chain_height,
             max_chain_height,
             len(pools)
@@ -203,10 +208,11 @@ class TokenPoolsProcessor(GenericProcessorSnapshot):
         
         # Gather results from all tasks, with return_exceptions=False
         # This will make asyncio.gather() ignore failed tasks and continue with the rest
+        logger.info(f"Epoch {epoch.begin}-{epoch.end} | Token pools compute | Gathering results from {len(pool_tasks)} tasks")
         snapshots = []
         results = await asyncio.gather(*pool_tasks, return_exceptions=False)
         for result in results:
             if result:
                 snapshots.extend(result)
-
+        logger.info(f"Epoch {epoch.begin}-{epoch.end} | Token pools compute | Results gathered from {len(pool_tasks)} tasks")
         return snapshots
