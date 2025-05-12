@@ -80,6 +80,8 @@ class TokenPoolsProcessor(GenericProcessorSnapshot):
                 )
 
                 if token_pools_snapshot:
+                    if isinstance(token_pools_snapshot, str):
+                        token_pools_snapshot = json.loads(token_pools_snapshot)
                     snapshot = UniswapTokenPoolsSnapshot(**token_pools_snapshot)
                 else:
                     snapshot = UniswapTokenPoolsSnapshot(
