@@ -3,7 +3,6 @@ import asyncio
 
 from redis import asyncio as aioredis
 import json
-from computes.metadata import MetadataProcessor
 from snapshotter.utils.models.message_models import SnapshotProcessMessage
 from snapshotter.utils.callback_helpers import GenericProcessorSnapshot
 from snapshotter.utils.default_logger import logger
@@ -47,15 +46,9 @@ class TokenPoolsProcessor(GenericProcessorSnapshot):
             tuple: A tuple containing project_id and pool metadata snapshot if available
         """
         try:
+            metadata_project_id = f"metadata:{pool_address}:{settings.namespace}"
             snapshots = []
-            metadata_helper = MetadataProcessor()
-            pool_metadata: Optional[UniswapPoolMetadata] = await metadata_helper.get_pool_metadata(
-                pool_address=pool_address,
-                redis_conn=redis_conn,
-                protocol_state_contract=protocol_state_contract,
-                anchor_rpc_helper=anchor_rpc_helper,
-                ipfs_reader=ipfs_reader,
-            )
+
             pool_metadata = await get_project_latest_snapshot(
                 redis_conn, protocol_state_contract, anchor_rpc_helper, ipfs_reader, metadata_project_id,
             )
@@ -107,7 +100,6 @@ class TokenPoolsProcessor(GenericProcessorSnapshot):
                     if cached_data:
                         local_pools_with_metadata[pool] = json.loads(cached_data)
                     else:
-                        metadata_project_id = f"metadata:{pool_address}:{settings.namespace}"
                         pool_metadata = await get_project_latest_snapshot(
                             redis_conn, protocol_state_contract, anchor_rpc_helper, ipfs_reader, metadata_project_id,
                         )
