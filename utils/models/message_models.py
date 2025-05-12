@@ -53,6 +53,8 @@ class UniswapBaseSnapshot(BaseModel):
     # Generic data
     address: str                    # Contract address
     epoch: EpochBaseSnapshot        # Range of blocks for this snapshot
+    token0: str
+    token1: str
     # Reserve Data
     token0Reserves: Dict[int, float]     # Block number to corresponding total reserves for token0
     token1Reserves: Dict[int, float]     # Block number to corresponding total reserves for token1

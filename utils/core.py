@@ -471,6 +471,8 @@ async def get_pair_reserves(
             begin=from_block,
             end=to_block,
         ),
+        token0=pair_per_token_metadata.token0.address,
+        token1=pair_per_token_metadata.token1.address,
         token0Reserves=token0ReservesSnap,
         token1Reserves=token1ReservesSnap,
         token0ReservesUSD=token0ReservesUSDSnap,
