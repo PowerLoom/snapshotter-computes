@@ -91,7 +91,7 @@ class TradesProcessor(GenericProcessorSnapshot):
             active_pool_addresses_bytes = await redis_conn.sunion(*active_pool_set_keys_to_fetch)
         
         active_pool_addresses = [addr.decode('utf-8') for addr in active_pool_addresses_bytes]
-        active_pool_addresses = map(lambda x: Web3.to_checksum_address(x), active_pool_addresses)
+        active_pool_addresses = [Web3.to_checksum_address(addr) for addr in active_pool_addresses]
         
         self._logger.info(
             "[Epoch {}-{}] Starting token pair reserves computation for {} active pools",
