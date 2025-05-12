@@ -3,7 +3,7 @@ from typing import List, Tuple
 from ipfs_client.main import AsyncIPFSClient
 from redis import asyncio as aioredis
 from rpc_helper.rpc import RpcHelper
-from web3.Web3 import to_checksum_address
+from web3 import Web3
 
 from computes.metadata import MetadataProcessor
 from computes.utils.core import get_block_details_in_block_range
@@ -91,7 +91,7 @@ class TradesProcessor(GenericProcessorSnapshot):
             active_pool_addresses_bytes = await redis_conn.sunion(*active_pool_set_keys_to_fetch)
         
         active_pool_addresses = [addr.decode('utf-8') for addr in active_pool_addresses_bytes]
-        active_pool_addresses = map(lambda x: to_checksum_address(x), active_pool_addresses)
+        active_pool_addresses = map(lambda x: Web3.to_checksum_address(x), active_pool_addresses)
         
         self._logger.info(
             "[Epoch {}-{}] Starting token pair reserves computation for {} active pools",

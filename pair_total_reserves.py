@@ -4,7 +4,7 @@ from typing import Optional
 
 from redis import asyncio as aioredis
 from rpc_helper.rpc import RpcHelper
-from web3.Web3 import to_checksum_address
+from web3 import Web3
 
 from computes.utils.core import get_pair_reserves, get_block_details_in_block_range
 from snapshotter.utils.models.message_models import SnapshotProcessMessage
@@ -88,7 +88,7 @@ class PairTotalReservesProcessor(GenericProcessorSnapshot):
             len(active_pool_addresses)
         )
         active_pool_addresses = map(lambda x: x.decode('utf-8'), active_pool_addresses)
-        active_pool_addresses = map(lambda x: to_checksum_address(x), active_pool_addresses)
+        active_pool_addresses = map(lambda x: Web3.to_checksum_address(x), active_pool_addresses)
         
         # for each Uniswap V3 pool, fetch reserves of token0 and token1 within them
         for pool_address in active_pool_addresses:
