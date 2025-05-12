@@ -135,6 +135,8 @@ class MetadataProcessor(GenericProcessorSnapshot):
         if keys_to_fetch:
             pools = await redis_conn.sunion(*keys_to_fetch)
         self._logger.info(f"Found {len(pools)} active pools in the epoch {min_chain_height} to {max_chain_height}")
+
+        pools = map(lambda x: Web3.to_checksum_address(x.decode('utf-8')), pools)
         
         # Process all pools in parallel
         pool_tasks = []
