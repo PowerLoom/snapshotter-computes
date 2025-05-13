@@ -141,7 +141,6 @@ class MetadataProcessor(GenericProcessorSnapshot):
         # Process all pools in parallel
         pool_tasks = []
         for pool_address in pools:
-            pool_address = Web3.to_checksum_address(pool_address.decode('utf-8'))
             task = self._process_pool(
                 epoch=epoch,
                 pool_address=pool_address,
