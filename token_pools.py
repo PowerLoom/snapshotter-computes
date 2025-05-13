@@ -116,11 +116,6 @@ class TokenPoolsProcessor(GenericProcessorSnapshot):
                                 pool_address
                             )
                             continue
-                self._logger.info(
-                    "LOCAL POOLS: {} | {}",
-                    token_address,
-                    local_pools_with_metadata
-                )
 
                 if not local_pools_with_metadata:
                     continue
