@@ -86,7 +86,7 @@ async def get_events_from_cache(
     
     # Get events from Redis zset
     events = await redis_conn.zrangebyscore(
-        name=f"events:{settings.namespace}:address:{pool_address.lower()}",
+        name=f"events:{settings.namespace}:address:{pool_address}",
         min=min_score,
         max=max_score,
         withscores=True
