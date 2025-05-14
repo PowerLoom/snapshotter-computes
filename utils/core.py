@@ -473,7 +473,7 @@ async def get_pair_reserves(
             begin=from_block,
             end=to_block,
         ),
-        timestamps=snapshot_timestamp,
+        timestamps=timestampsSnap,
         token0=Web3.to_checksum_address(pair_per_token_metadata.token0.address),
         token1=Web3.to_checksum_address(pair_per_token_metadata.token1.address),
         token0Reserves=token0ReservesSnap,
