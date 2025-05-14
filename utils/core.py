@@ -440,6 +440,7 @@ async def get_pair_reserves(
     token1PricesSnap = {}
     token0PricesUSDSnap = {}
     token1PricesUSDSnap = {}
+    timestampsSnap = {}
 
     for block_num_snap in range(from_block, to_block + 1):
         block_data_obj: Optional[PairBlockDetail] = pair_reserves_dict.get(block_num_snap, {})
@@ -452,6 +453,7 @@ async def get_pair_reserves(
         token1PricesSnap[block_num_snap] = block_data_obj.token1PriceInToken0
         token0PricesUSDSnap[block_num_snap] = block_data_obj.token0Price # USD price of token0
         token1PricesUSDSnap[block_num_snap] = block_data_obj.token1Price # USD price of token1
+        timestampsSnap[block_num_snap] = block_data_obj.timestamp
 
     snapshot_timestamp = 0  # Default timestamp
     end_block_data: Optional[PairBlockDetail] = pair_reserves_dict.get(to_block)
@@ -471,6 +473,7 @@ async def get_pair_reserves(
             begin=from_block,
             end=to_block,
         ),
+        timestamps=snapshot_timestamp,
         token0=Web3.to_checksum_address(pair_per_token_metadata.token0.address),
         token1=Web3.to_checksum_address(pair_per_token_metadata.token1.address),
         token0Reserves=token0ReservesSnap,
