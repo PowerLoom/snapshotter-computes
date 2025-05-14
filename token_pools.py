@@ -46,6 +46,7 @@ class TokenPoolsProcessor(GenericProcessorSnapshot):
             tuple: A tuple containing project_id and pool metadata snapshot if available
         """
         try:
+            WETH_ADDRESS = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
             metadata_project_id = f"metadata:{pool_address}:{settings.namespace}"
             snapshots = []
 
@@ -71,8 +72,11 @@ class TokenPoolsProcessor(GenericProcessorSnapshot):
             
             token_addresses = [pool_metadata["token0"]["address"], pool_metadata["token1"]["address"]]
             token_addresses = [Web3.to_checksum_address(token_address) for token_address in token_addresses]
-
+            
             for token_address in token_addresses:
+                # Skipping WETH Pools snapshot
+                if token_address == WETH_ADDRESS:
+                    continue
                 project_id = task_type.format(tokenAddress=token_address, Namespace=settings.namespace)
 
                 token_pools_snapshot = await get_project_latest_snapshot(
