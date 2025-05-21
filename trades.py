@@ -1,4 +1,5 @@
 import time
+import json
 from typing import List, Tuple
 from ipfs_client.main import AsyncIPFSClient
 from redis import asyncio as aioredis
@@ -6,6 +7,7 @@ from rpc_helper.rpc import RpcHelper
 from web3 import Web3
 
 from computes.metadata import MetadataProcessor
+from computes.redis_keys import uniswap_eth_usd_price_zset
 from computes.utils.core import get_block_details_in_block_range
 from computes.utils.core import get_pair_trade_volume
 from computes.utils.models.message_models import (
@@ -102,6 +104,18 @@ class TradesProcessor(GenericProcessorSnapshot):
 
         metadata_processor = MetadataProcessor()
 
+        eth_price_dict = await redis_conn.zrangebyscore(
+            name=uniswap_eth_usd_price_zset,
+            min=int(min_chain_height),
+            max=int(max_chain_height),
+        )
+
+        eth_price_dict = {
+            str(json.loads(price.decode('utf-8'))['blockHeight']):
+            json.loads(price.decode('utf-8'))['price']
+            for price in eth_price_dict
+        }
+
         for pool_address in active_pool_addresses:
             self._logger.debug(
                 "[Epoch {}-{}] Processing pool {} | Starting computation",
@@ -151,6 +165,14 @@ class TradesProcessor(GenericProcessorSnapshot):
                         min_chain_height, max_chain_height, pool_address, processed_log.eventName, processed_log.txHash
                     )
                     continue
+                
+                eth_price = eth_price_dict.get(processed_log.blockNumber)
+                if not eth_price:
+                    self._logger.warning(
+                        "[Epoch {}-{}] Pool {} | No ETH price found for block number {}. Skipping trade log: {}",
+                        min_chain_height, max_chain_height, pool_address, processed_log.blockNumber, processed_log.txHash
+                    )
+                    eth_price = 0
 
                 raw_log_component = {
                     "address": processed_log.address,
@@ -171,6 +193,7 @@ class TradesProcessor(GenericProcessorSnapshot):
                     "calculated_token1_amount": processed_log.token1_amount,
                     "block_timestamp": processed_log.timestamp,
                     "calculated_trade_amount_usd": processed_log.trade_amount_usd,
+                    "calculated_eth_price": eth_price,
                 }
                 
                 uniswap_trade_entry = UniswapTrade(

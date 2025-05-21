@@ -131,8 +131,6 @@ class EthPricePreloader(GenericPreloader):
                 await redis_conn.get(source_chain_epoch_size_key()),
             )
 
-            prune_blocks = min(int(from_block) - source_chain_epoch_size * 50400, 0)
-
             await asyncio.gather(
                 redis_conn.zadd(
                     name=uniswap_eth_usd_price_zset,
@@ -141,7 +139,7 @@ class EthPricePreloader(GenericPreloader):
                 redis_conn.zremrangebyscore(
                     name=uniswap_eth_usd_price_zset,
                     min=0,
-                    max=prune_blocks,
+                    max=int(from_block) - source_chain_epoch_size * 4,
                 ),
             )
 
