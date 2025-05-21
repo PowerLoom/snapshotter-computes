@@ -111,7 +111,7 @@ class TradesProcessor(GenericProcessorSnapshot):
         )
 
         eth_price_dict = {
-            str(json.loads(price.decode('utf-8'))['blockHeight']):
+            json.loads(price.decode('utf-8'))['blockHeight']:
             json.loads(price.decode('utf-8'))['price']
             for price in eth_price_dict
         }
