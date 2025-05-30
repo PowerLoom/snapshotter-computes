@@ -6,12 +6,15 @@ from rpc_helper.rpc import RpcHelper
 from rpc_helper.rpc import get_contract_abi_dict
 
 from snapshotter.utils.callback_helpers import GenericPreloader
+from snapshotter.utils.data_utils import get_source_chain_block_time
 from snapshotter.utils.default_logger import logger
 from snapshotter.utils.models.message_models import EpochBase
 from snapshotter.utils.file_utils import read_json_file
 from computes.redis_keys import uniswap_eth_usd_price_zset
-from snapshotter.utils.redis.redis_keys import source_chain_epoch_size_key
+from snapshotter.utils.redis.redis_keys import source_chain_block_time_key
 from computes.settings.config import settings as worker_settings
+
+SECONDS_IN_7_DAYS = 7 * 24 * 60 * 60
 
 
 class EthPricePreloader(GenericPreloader):
@@ -126,10 +129,13 @@ class EthPricePreloader(GenericPreloader):
                     )
                 ] = int(block_num)
 
-            # cache price at height
-            source_chain_epoch_size = int(
-                await redis_conn.get(source_chain_epoch_size_key()),
-            )
+            source_chain_block_time = await redis_conn.get(source_chain_block_time_key())
+            if source_chain_block_time and source_chain_block_time > 0:
+                num_blocks_in_7_days = SECONDS_IN_7_DAYS / source_chain_block_time
+                pruning_max_score = int(from_block) - int(num_blocks_in_7_days)
+            else:
+                self._logger.warning("Source chain block time not found in Redis. Using default pruning logic.")
+                pruning_max_score = int(from_block) - 50400
 
             await asyncio.gather(
                 redis_conn.zadd(
@@ -139,7 +145,7 @@ class EthPricePreloader(GenericPreloader):
                 redis_conn.zremrangebyscore(
                     name=uniswap_eth_usd_price_zset,
                     min=0,
-                    max=int(from_block) - source_chain_epoch_size * 4,
+                    max=pruning_max_score,
                 ),
             )
 
