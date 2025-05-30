@@ -130,7 +130,8 @@ class EthPricePreloader(GenericPreloader):
                 ] = int(block_num)
 
             source_chain_block_time = await redis_conn.get(source_chain_block_time_key())
-            if source_chain_block_time and source_chain_block_time > 0:
+            if source_chain_block_time:
+                source_chain_block_time = int(source_chain_block_time)
                 num_blocks_in_7_days = SECONDS_IN_7_DAYS / source_chain_block_time
                 pruning_max_score = int(from_block) - int(num_blocks_in_7_days)
             else:
