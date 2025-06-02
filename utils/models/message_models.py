@@ -67,7 +67,12 @@ class UniswapBaseSnapshot(BaseModel):
     token1PricesUSD: Dict[int, float]    # Prices of token1 (in USD)
     # Trade Volume Data
     totalTrade: float  # Total trade volume in USD
+    totalTradeMintBurn: float = 0
     totalFee: float    # Total fees collected in USD
+    token0MintBurnVolume: float = 0
+    token1MintBurnVolume: float = 0
+    token0MintBurnVolumeUSD: float = 0
+    token1MintBurnVolumeUSD: float = 0
     token0TradeVolume: float      # Trade volume for token0 in its native decimals
     token1TradeVolume: float      # Trade volume for token1 in its native decimals
     token0TradeVolumeUSD: float   # Trade volume for token0 in USD

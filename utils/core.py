@@ -486,7 +486,12 @@ async def get_pair_reserves(
         token1PricesUSD=token1PricesUSDSnap,
         # Add aggregated trade volume data
         totalTrade=epoch_total_trade_data.totalTradesUSD,
+        totalTradeMintBurn=epoch_total_trade_data.totalTradesMintBurnUSD,
         totalFee=epoch_total_trade_data.totalFeeUSD,
+        token0MintBurnVolume=epoch_total_trade_data.token0MintBurnVolume,
+        token1MintBurnVolume=epoch_total_trade_data.token1MintBurnVolume,
+        token0MintBurnVolumeUSD=epoch_total_trade_data.token0MintBurnVolumeUSD,
+        token1MintBurnVolumeUSD=epoch_total_trade_data.token1MintBurnVolumeUSD,
         token0TradeVolume=epoch_total_trade_data.token0TradeVolume,
         token1TradeVolume=epoch_total_trade_data.token1TradeVolume,
         token0TradeVolumeUSD=epoch_total_trade_data.token0TradeVolumeUSD,
@@ -592,8 +597,31 @@ def extract_trade_volume_log(
             if token1_amount_usd
             else token0_amount_usd * fee
         )
-    else: # Mint or Burn
+        trade_data_obj = trade_data(
+            totalTradesUSD=trade_volume_usd,
+            totalTradesMintBurnUSD=0,
+            totalFeeUSD=trade_fee_usd,
+            token0TradeVolume=token0_amount,
+            token1TradeVolume=token1_amount,
+            token0TradeVolumeUSD=token0_amount_usd,
+            token1TradeVolumeUSD=token1_amount_usd,
+        )
+    else:  # Mint or Burn
         trade_volume_usd = token0_amount_usd + token1_amount_usd
+        
+        trade_data_obj = trade_data(
+            totalTradesUSD=0,
+            totalTradesMintBurnUSD=trade_volume_usd,
+            totalFeeUSD=0,
+            token0TradeVolume=0,
+            token1TradeVolume=0,
+            token0TradeVolumeUSD=0,
+            token1TradeVolumeUSD=0,
+            token0MintBurnVolume=token0_amount,
+            token1MintBurnVolume=token1_amount,
+            token0MintBurnVolumeUSD=token0_amount_usd,
+            token1MintBurnVolumeUSD=token1_amount_usd,
+        )
         # trade_fee_usd remains 0 for Mint/Burn as per original logic
 
     # Create the UniswapProcessedLog instance
@@ -609,14 +637,7 @@ def extract_trade_volume_log(
     )
 
     return (
-        trade_data(
-            totalTradesUSD=trade_volume_usd,
-            totalFeeUSD=trade_fee_usd,
-            token0TradeVolume=token0_amount,
-            token1TradeVolume=token1_amount,
-            token0TradeVolumeUSD=token0_amount_usd,
-            token1TradeVolumeUSD=token1_amount_usd,
-        ),
+        trade_data_obj,
         processed_log,
     )
 

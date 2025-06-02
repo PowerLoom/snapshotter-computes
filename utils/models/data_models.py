@@ -42,7 +42,12 @@ class trade_data(BaseModel):
         token1TradeVolumeUSD (float): Trading volume for token1 in USD.
     """
     totalTradesUSD: float
+    totalTradesMintBurnUSD: float = 0
     totalFeeUSD: float
+    token0MintBurnVolume: float = 0
+    token1MintBurnVolume: float = 0
+    token0MintBurnVolumeUSD: float = 0
+    token1MintBurnVolumeUSD: float = 0
     token0TradeVolume: float
     token1TradeVolume: float
     token0TradeVolumeUSD: float
@@ -62,6 +67,10 @@ class trade_data(BaseModel):
         self.token1TradeVolume += other.token1TradeVolume
         self.token0TradeVolumeUSD += other.token0TradeVolumeUSD
         self.token1TradeVolumeUSD += other.token1TradeVolumeUSD
+        self.token0MintBurnVolume += other.token0MintBurnVolume
+        self.token1MintBurnVolume += other.token1MintBurnVolume
+        self.token0MintBurnVolumeUSD += other.token0MintBurnVolumeUSD
+        self.token1MintBurnVolumeUSD += other.token1MintBurnVolumeUSD
         return self
 
     def __sub__(self, other: "trade_data") -> "trade_data":
@@ -78,6 +87,10 @@ class trade_data(BaseModel):
         self.token1TradeVolume -= other.token1TradeVolume
         self.token0TradeVolumeUSD -= other.token0TradeVolumeUSD
         self.token1TradeVolumeUSD -= other.token1TradeVolumeUSD
+        self.token0MintBurnVolume -= other.token0MintBurnVolume
+        self.token1MintBurnVolume -= other.token1MintBurnVolume
+        self.token0MintBurnVolumeUSD -= other.token0MintBurnVolumeUSD
+        self.token1MintBurnVolumeUSD -= other.token1MintBurnVolumeUSD
         return self
 
     def __abs__(self) -> "trade_data":
@@ -92,6 +105,10 @@ class trade_data(BaseModel):
         self.token1TradeVolume = abs(self.token1TradeVolume)
         self.token0TradeVolumeUSD = abs(self.token0TradeVolumeUSD)
         self.token1TradeVolumeUSD = abs(self.token1TradeVolumeUSD)
+        self.token0MintBurnVolume = abs(self.token0MintBurnVolume)
+        self.token1MintBurnVolume = abs(self.token1MintBurnVolume)
+        self.token0MintBurnVolumeUSD = abs(self.token0MintBurnVolumeUSD)
+        self.token1MintBurnVolumeUSD = abs(self.token1MintBurnVolumeUSD)
         return self
 
 
