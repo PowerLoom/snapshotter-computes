@@ -60,12 +60,12 @@ async def get_token_price_at_block_height(
             "DAI": Web3.to_checksum_address(
                 worker_settings.contract_addresses.DAI,
             ),
-            "USDT": Web3.to_checksum_address(
-                worker_settings.contract_addresses.USDT,
+            "USDbC": Web3.to_checksum_address(
+                worker_settings.contract_addresses.USDbC,
             ),
         }
         stable_coins_decimals = {
-            "USDT": 6,
+            "USDbC": 6,
             "DAI": 18,
             "USDC": 6,
         }
@@ -265,7 +265,7 @@ async def get_token_price_at_block_height(
                                 worker_settings.contract_addresses.WETH,
                             ),
                             Web3.to_checksum_address(
-                                worker_settings.contract_addresses.USDT,
+                                worker_settings.contract_addresses.USDbC,
                             ),
                         ],
                     ).call,
@@ -278,7 +278,7 @@ async def get_token_price_at_block_height(
                 if temp_token_price:
                     # USDT decimals
                     temp_token_price = (
-                        temp_token_price[2] / 10 ** stable_coins_decimals["USDT"]
+                        temp_token_price[2] / 10 ** stable_coins_decimals["USDbC"]
                         if temp_token_price[2] != 0
                         else 0
                     )
@@ -314,7 +314,7 @@ async def get_token_price_at_block_height(
                                 worker_settings.contract_addresses.WETH,
                             ),
                             Web3.to_checksum_address(
-                                worker_settings.contract_addresses.USDT,
+                                worker_settings.contract_addresses.USDbC,
                             ),
                         ],
                     ).call,
@@ -328,7 +328,7 @@ async def get_token_price_at_block_height(
                 if temp_token_price:
                     # USDT decimals
                     temp_token_price = (
-                        temp_token_price[2] / 10 ** stable_coins_decimals["USDT"]
+                        temp_token_price[2] / 10 ** stable_coins_decimals["USDbC"]
                         if temp_token_price[2] != 0
                         else 0
                     )
@@ -361,7 +361,7 @@ async def get_token_price_at_block_height(
                             worker_settings.contract_addresses.WETH,
                         ),
                         Web3.to_checksum_address(
-                            worker_settings.contract_addresses.USDT,
+                            worker_settings.contract_addresses.USDbC,
                         ),
                     ],
                 ).call,
@@ -372,7 +372,7 @@ async def get_token_price_at_block_height(
                 executor=None,
             )
             token_price = (
-                token_price[1] / 10 ** stable_coins_decimals["USDT"]
+                token_price[1] / 10 ** stable_coins_decimals["USDbC"]
             )  # USDT decimals
             if debug_log:
                 print(

@@ -13,11 +13,11 @@ class ContractAddresses(BaseModel):
     uniswap_v3_helper: str
     DAI_WETH_PAIR: str
     USDC_WETH_PAIR: str
-    USDT_WETH_PAIR: str
+    USDbC_WETH_PAIR: str
     WETH: str
     MAKER: str
     USDC: str
-    USDT: str
+    USDbC: str
     DAI: str
 
 

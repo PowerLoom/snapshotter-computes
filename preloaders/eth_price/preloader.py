@@ -30,7 +30,7 @@ class EthPricePreloader(GenericPreloader):
         Initialize the EthPricePreloader with a logger.
         """
         self._logger = logger.bind(module='BlockDetailsPreloader')
-        self.usdc_weth_pair = '0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640'
+        self.usdc_weth_pair = worker_settings.contract_addresses.USDC_WETH_PAIR
         # Token decimals for price calculations
         self.TOKENS_DECIMALS = {
             'USDC': 6,
@@ -68,7 +68,7 @@ class EthPricePreloader(GenericPreloader):
         rpc_helper: RpcHelper,
     ):
         """
-        Fetches the ETH price in USD for a given block range using Uniswap DAI/ETH, USDC/ETH and USDT/ETH pairs.
+        Fetches the ETH price in USD for a given block range using Uniswap USDC/WETH pair.
 
         Args:
             from_block (int): The starting block number.
