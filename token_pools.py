@@ -17,9 +17,15 @@ from web3 import Web3
 class TokenPoolsProcessor(GenericProcessorSnapshot):
     """
     Processor for calculating and snapshotting token pools for Uniswap pairs.
+    
+    This class handles the processing and computation of token pool data for Uniswap pairs,
+    including metadata retrieval, caching, and parallel processing of multiple pools.
     """
 
     def __init__(self) -> None:
+        """
+        Initialize the TokenPoolsProcessor with a bound logger.
+        """
         self._logger = logger.bind(module="TokenPoolsProcessor")
 
     async def _process_pool(
@@ -33,29 +39,39 @@ class TokenPoolsProcessor(GenericProcessorSnapshot):
         ipfs_reader: AsyncIPFSClient,
     ):
         """
-        Process a single token asynchronously.
+        Process a single token pool asynchronously.
+
+        This method handles the processing of a single pool, including:
+        - Retrieving pool metadata from cache or protocol state
+        - Processing token addresses and creating snapshots
+        - Handling WETH pools and local pool metadata
 
         Args:
+            epoch (SnapshotProcessMessage): The epoch information for processing
             pool_address (str): The pool address to process
-            task_type (str): The task type format string
-            redis_conn (aioredis.Redis): Redis connection object
-            protocol_state_contract: The protocol state contract
-            anchor_rpc_helper (RpcHelper): RPC helper for anchor chain
+            task_type (str): The task type format string for project ID generation
+            redis_conn (aioredis.Redis): Redis connection for caching and data retrieval
+            protocol_state_contract: The protocol state contract for on-chain data
+            anchor_rpc_helper (RpcHelper): RPC helper for anchor chain interactions
+            ipfs_reader (AsyncIPFSClient): IPFS client for data retrieval
             
         Returns:
-            tuple: A tuple containing project_id and pool metadata snapshot if available
+            Optional[List[Tuple[str, UniswapTokenPoolsSnapshot]]]: List of project IDs and their corresponding snapshots,
+            or None if processing fails
         """
         try:
+            # WETH address constant for filtering
             WETH_ADDRESS = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
             metadata_project_id = f"metadata:{pool_address}:{settings.namespace}"
             snapshots = []
 
+            # Attempt to get pool metadata from protocol state
             pool_metadata = await get_project_latest_snapshot(
                 redis_conn, protocol_state_contract, anchor_rpc_helper, ipfs_reader, metadata_project_id,
             )
 
             if not pool_metadata:
-                # Check Redis cache first
+                # Fallback to Redis cache if protocol state doesn't have metadata
                 cache_key = f'pool_metadata:{pool_address}'
                 cached_data = await redis_conn.get(cache_key)
 
@@ -70,15 +86,18 @@ class TokenPoolsProcessor(GenericProcessorSnapshot):
                     )
                     return None
             
+            # Process token addresses and ensure checksum format
             token_addresses = [pool_metadata["token0"]["address"], pool_metadata["token1"]["address"]]
             token_addresses = [Web3.to_checksum_address(token_address) for token_address in token_addresses]
             
             for token_address in token_addresses:
-                # Skipping WETH Pools snapshot
+                # Skip WETH pools as they're handled separately
                 if token_address == WETH_ADDRESS:
                     continue
+                    
                 project_id = task_type.format(tokenAddress=token_address, Namespace=settings.namespace)
 
+                # Get existing token pools snapshot or create new one
                 token_pools_snapshot = await get_project_latest_snapshot(
                     redis_conn, protocol_state_contract, anchor_rpc_helper, ipfs_reader, project_id,
                 )
@@ -88,24 +107,27 @@ class TokenPoolsProcessor(GenericProcessorSnapshot):
                         token_pools_snapshot = json.loads(token_pools_snapshot)
                     snapshot = UniswapTokenPoolsSnapshot(**token_pools_snapshot)
                 else:
-                    snapshot = UniswapTokenPoolsSnapshot(
-                        pools={}
-                    )
+                    snapshot = UniswapTokenPoolsSnapshot(pools={})
 
+                # Get and process local pools
                 local_pools = await redis_conn.smembers(f"token_pools:{token_address}")
                 if local_pools:
                     local_pools = [pool.decode('utf-8') for pool in local_pools]
                 local_pools_with_metadata = {}
+                
+                # Process each local pool
                 for pool in local_pools:
                     if pool in snapshot.pools:
                         continue
-                    # check if metadata is present in redis
+                        
+                    # Check Redis cache for pool metadata
                     cache_key = f'pool_metadata:{pool}'
                     cached_data = await redis_conn.get(cache_key)
 
                     if cached_data:
                         local_pools_with_metadata[pool] = json.loads(cached_data)
                     else:
+                        # Fallback to protocol state if not in cache
                         pool_metadata = await get_project_latest_snapshot(
                             redis_conn, protocol_state_contract, anchor_rpc_helper, ipfs_reader, metadata_project_id,
                         )
@@ -124,6 +146,7 @@ class TokenPoolsProcessor(GenericProcessorSnapshot):
                 if not local_pools_with_metadata:
                     continue
 
+                # Update snapshot with local pool metadata
                 for pool in local_pools_with_metadata:
                     snapshot.pools[pool] = UniswapPoolMetadata(**local_pools_with_metadata[pool])
                 
@@ -150,33 +173,47 @@ class TokenPoolsProcessor(GenericProcessorSnapshot):
         task_type: str,
     ) -> Optional[List[Tuple[str, UniswapTokenPoolsSnapshot]]]:
         """
-        Compute the metadata for a Uniswap pair within the given epoch.
+        Compute token pool snapshots for the given epoch.
+
+        This method orchestrates the parallel processing of multiple pools:
+        1. Collects active pools for the epoch
+        2. Processes pools in parallel using asyncio
+        3. Aggregates results into snapshots
 
         Args:
-            epoch (SnapshotProcessMessage): The epoch information.
-            redis_conn (aioredis.Redis): Redis connection object.
-            rpc_helper (RpcHelper): RPC helper object for blockchain interactions.
+            epoch (SnapshotProcessMessage): The epoch information for processing
+            redis_conn (aioredis.Redis): Redis connection for data retrieval
+            rpc_helper (RpcHelper): RPC helper for blockchain interactions
+            anchor_rpc_helper (RpcHelper): RPC helper for anchor chain
+            ipfs_reader (AsyncIPFSClient): IPFS client for data retrieval
+            protocol_state_contract: The protocol state contract
+            task_type (str): The task type format string
 
         Returns:
-            Optional[Dict[str, Union[int, float]]]: Computed pair metadata snapshot.
+            Optional[List[Tuple[str, UniswapTokenPoolsSnapshot]]]: List of project IDs and their corresponding snapshots,
+            or None if computation fails
         """
         self._logger.info(
             "[Epoch {}-{}] Token pools compute | Starting token pools computation",
             epoch.begin,
             epoch.end
         )
+        
+        # Get epoch boundaries
         min_chain_height = epoch.begin
         max_chain_height = epoch.end
+        
+        # Collect keys for active pools
         keys_to_fetch = []
-        # Collect all keys to fetch
         for block_number in range(min_chain_height, max_chain_height + 1):
             key = f"active_pools:{block_number}:{settings.namespace}"
             keys_to_fetch.append(key)
 
-        # Use sunion to get the union of all sets at once
+        # Get union of all active pools
         pools = set()
         if keys_to_fetch:
             pools = await redis_conn.sunion(*keys_to_fetch)
+            
         self._logger.info(
             "[Epoch {}-{}] Token pools compute | Found {} active pools to process",
             min_chain_height,
@@ -184,7 +221,7 @@ class TokenPoolsProcessor(GenericProcessorSnapshot):
             len(pools)
         )
         
-        # Process all pools in parallel
+        # Create tasks for parallel processing
         pool_tasks = []
         for pool_address in pools:
             pool_address = Web3.to_checksum_address(pool_address.decode('utf-8'))

@@ -14,10 +14,15 @@ from ipfs_client.main import AsyncIPFSClient
 
 class ActivePoolsProcessor(GenericProcessorSnapshot):
     """
-    Processor for calculating and snapshotting total reserves for Uniswap pairs.
+    Processor for tracking and snapshotting active Uniswap V3 pools within a given epoch.
+    
+    This processor aggregates data about which pools were active during the specified epoch
+    by analyzing Redis data that tracks pool activity per block. It creates snapshots that
+    include the frequency of pool activity and the epoch range.
     """
 
     def __init__(self) -> None:
+        """Initialize the processor with a module-specific logger."""
         self._logger = logger.bind(module="ActivePoolsProcessor")
 
     async def compute(
@@ -28,40 +33,57 @@ class ActivePoolsProcessor(GenericProcessorSnapshot):
         anchor_rpc_helper: RpcHelper,
         ipfs_reader: AsyncIPFSClient,
         protocol_state_contract,
-        # TODO: need clarity on this interface
         task_type: str,
     ) -> List[Tuple[str, ActivePoolsSnapshot]]:
         """
-        Compute the total reserves for a Uniswap pair within the given epoch.
+        Compute active pools snapshot for the given epoch.
+
+        This method aggregates pool activity data from Redis for each block in the epoch,
+        tracking how frequently each pool appears in the active pools set.
 
         Args:
-            epoch (SnapshotProcessMessage): The epoch information.
-            redis_conn (aioredis.Redis): Redis connection object.
-            rpc_helper (RpcHelper): RPC helper object for blockchain interactions.
+            epoch (SnapshotProcessMessage): The epoch information containing begin and end block numbers
+            redis_conn (aioredis.Redis): Redis connection for accessing pool activity data
+            rpc_helper (RpcHelper): RPC helper for blockchain interactions
+            anchor_rpc_helper (RpcHelper): Anchor chain RPC helper
+            ipfs_reader (AsyncIPFSClient): IPFS client for reading data
+            protocol_state_contract: Protocol state contract instance
+            task_type (str): Format string for task identification
 
         Returns:
-            Optional[Dict[str, Union[int, float]]]: Computed pair total reserves snapshot.
+            List[Tuple[str, ActivePoolsSnapshot]]: List containing a tuple of task identifier and snapshot
         """
         
+        # Get epoch boundaries
         min_chain_height = epoch.begin
         max_chain_height = epoch.end
         
-        # fetch all active pools for epoch from redis
+        # Initialize dictionary to track pool activity frequency
         active_pools = {}
+        
+        # Iterate through each block in the epoch
         for block_number in range(min_chain_height, max_chain_height + 1):
-            # pipeline.zincrby(f"active_pools_per_block:{block_number}:{namespace}", 1, pool_address)
+            # Construct Redis key for active pools in this block
             key = f"active_pools_per_block:{block_number}:{settings.namespace}"
-            # get all pools for block with score which is frequency of occurrence
+            
+            # Retrieve all pools and their activity scores for this block
             block_active_pools = await redis_conn.zrange(key, 0, -1, withscores=True)
+            
+            # Process each pool's activity data
             for pool_address, score in block_active_pools:
+                # Decode and normalize pool address
                 pool_address = pool_address.decode('utf-8')
                 pool_address = Web3.to_checksum_address(pool_address)
+                
+                # Accumulate activity score for this pool
                 if pool_address not in active_pools:
                     active_pools[pool_address] = 0
                 active_pools[pool_address] += int(score)
         
-        # sort active pools by score
+        # Log the aggregated pool activity data
         self._logger.info(f"Active pools: {active_pools}")
+        
+        # Create snapshot with pool activity data and epoch information
         snapshot = ActivePoolsSnapshot(
             pools=active_pools,
             epoch=EpochBaseSnapshot(
@@ -71,4 +93,5 @@ class ActivePoolsProcessor(GenericProcessorSnapshot):
         )
         self._logger.info(f"Snapshot: {snapshot}")
 
+        # Return task identifier and snapshot
         return [(task_type.format(Namespace=settings.namespace), snapshot)]

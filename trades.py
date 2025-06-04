@@ -25,9 +25,16 @@ from snapshotter.utils.default_logger import logger
 class TradesProcessor(GenericProcessorSnapshot):
     """
     Processor for calculating and storing trade volume for Uniswap pairs.
+    
+    This class handles the computation and storage of trade volume data for Uniswap V3 pools
+    within a given epoch. It processes trade events, calculates volumes, and creates snapshots
+    of trading activity for each active pool.
     """
 
     def __init__(self) -> None:
+        """
+        Initialize the processor with a logger instance.
+        """
         self._logger = logger.bind(module="TradeVolumeProcessor")
 
     async def compute(
@@ -41,25 +48,33 @@ class TradesProcessor(GenericProcessorSnapshot):
         task_type: str,
     ) -> List[Tuple[str, UniswapTradesSnapshot]]:
         """
-        Compute the trade volume for a Uniswap pair within the given epoch.
+        Compute the trade volume for Uniswap pairs within the given epoch.
+
+        This method processes trade events for all active pools in the epoch, calculates
+        trade volumes, and creates snapshots of trading activity. It handles:
+        - Fetching block details and active pools
+        - Processing trade events for each pool
+        - Calculating trade volumes and USD values
+        - Creating snapshots of trading activity
 
         Args:
-            epoch (SnapshotProcessMessage): The epoch information.
-            redis_conn (aioredis.Redis): Redis connection object.
-            rpc_helper (RpcHelper): RPC helper object for blockchain interactions.
+            epoch (SnapshotProcessMessage): The epoch information containing begin and end block heights.
+            redis_conn (aioredis.Redis): Redis connection for caching and data storage.
+            rpc_helper (RpcHelper): RPC helper for main blockchain interactions.
             anchor_rpc_helper (RpcHelper): RPC helper for anchor chain interactions.
             ipfs_reader (AsyncIPFSClient): IPFS client for reading data.
             protocol_state_contract: Protocol state contract instance.
             task_type (str): The task type string for formatting the snapshot key.
 
         Returns:
-            List[Tuple[str, UniswapTradesSnapshot]]: List of (snapshot_key, snapshot_data).
+            List[Tuple[str, UniswapTradesSnapshot]]: List of (snapshot_key, snapshot_data) pairs.
         """
         
         min_chain_height = epoch.begin
         max_chain_height = epoch.end
         snapshots: List[Tuple[str, UniswapTradesSnapshot]] = list()
 
+        # Fetch block details for the epoch range
         try:
             block_details_dict = await get_block_details_in_block_range(
                 min_chain_height,
@@ -82,12 +97,13 @@ class TradesProcessor(GenericProcessorSnapshot):
             )
             block_details_dict = dict()
 
-        # find list of active pools for the epoch
+        # Get list of active pools for the epoch
         active_pool_set_keys_to_fetch = []
         for block_number in range(min_chain_height, max_chain_height + 1):
             key = f"active_pools:{block_number}:{settings.namespace}"
             active_pool_set_keys_to_fetch.append(key)
         
+        # Fetch and process active pool addresses
         active_pool_addresses_bytes = set()
         if active_pool_set_keys_to_fetch:
             active_pool_addresses_bytes = await redis_conn.sunion(*active_pool_set_keys_to_fetch)
@@ -102,20 +118,24 @@ class TradesProcessor(GenericProcessorSnapshot):
             len(active_pool_addresses)
         )
 
+        # Initialize metadata processor and fetch ETH prices
         metadata_processor = MetadataProcessor()
 
+        # Fetch ETH prices for the epoch range
         eth_price_dict = await redis_conn.zrangebyscore(
             name=uniswap_eth_usd_price_zset,
             min=int(min_chain_height),
             max=int(max_chain_height),
         )
 
+        # Process ETH price data into a block number -> price mapping
         eth_price_dict = {
             json.loads(price.decode('utf-8'))['blockHeight']:
             json.loads(price.decode('utf-8'))['price']
             for price in eth_price_dict
         }
 
+        # Process each active pool
         for pool_address in active_pool_addresses:
             self._logger.debug(
                 "[Epoch {}-{}] Processing pool {} | Starting computation",
@@ -133,6 +153,7 @@ class TradesProcessor(GenericProcessorSnapshot):
                 start_time
             )
             
+            # Fetch trade data for the pool
             pair_trade_data = await get_pair_trade_volume(
                 pair_address=pool_address,
                 from_block=min_chain_height,
@@ -146,6 +167,7 @@ class TradesProcessor(GenericProcessorSnapshot):
                 block_details_dict=block_details_dict,
             )
 
+            # Skip if no trade data available
             if not pair_trade_data or not pair_trade_data.get('trades'):
                 self._logger.error(
                     "[Epoch {}-{}] Pool {} | No pool trade data returned or trades list is empty from 'get_pair_trade_volume()'",
@@ -155,8 +177,10 @@ class TradesProcessor(GenericProcessorSnapshot):
                 )
                 continue
 
+            # Process and transform trade logs
             transformed_trades: List[UniswapTrade] = []
             for processed_log in pair_trade_data['trades']: 
+                # Map event name to trade type
                 try:
                     trade_type_enum = TradeType(processed_log.eventName)
                 except ValueError:
@@ -166,6 +190,7 @@ class TradesProcessor(GenericProcessorSnapshot):
                     )
                     continue
                 
+                # Get ETH price for the block
                 eth_price = eth_price_dict.get(processed_log.blockNumber)
                 if not eth_price:
                     self._logger.warning(
@@ -174,6 +199,7 @@ class TradesProcessor(GenericProcessorSnapshot):
                     )
                     eth_price = 0
 
+                # Create raw log component
                 raw_log_component = {
                     "address": processed_log.address,
                     "topics": processed_log.topics,
@@ -187,6 +213,7 @@ class TradesProcessor(GenericProcessorSnapshot):
                     "_score": processed_log.score,
                 }
 
+                # Create decoded data component with calculated values
                 decoded_data_component = {
                     **processed_log.args, 
                     "calculated_token0_amount": processed_log.token0_amount,
@@ -196,6 +223,7 @@ class TradesProcessor(GenericProcessorSnapshot):
                     "calculated_eth_price": eth_price,
                 }
                 
+                # Create and append trade entry
                 uniswap_trade_entry = UniswapTrade(
                     tradeType=trade_type_enum,
                     log=raw_log_component,
@@ -203,8 +231,10 @@ class TradesProcessor(GenericProcessorSnapshot):
                 )
                 transformed_trades.append(uniswap_trade_entry)
             
+            # Create epoch snapshot model
             epoch_snapshot_model = EpochBaseSnapshot(**pair_trade_data['epoch'])
             
+            # Create trades snapshot
             current_trades_snapshot = UniswapTradesSnapshot(
                 address=pair_trade_data['address'], 
                 epoch=epoch_snapshot_model,

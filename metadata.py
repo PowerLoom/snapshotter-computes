@@ -19,10 +19,14 @@ from web3 import Web3
 
 class MetadataProcessor(GenericProcessorSnapshot):
     """
-    Processor for calculating and snapshotting total reserves for Uniswap pairs.
+    Processor for calculating and snapshotting metadata for Uniswap pairs.
+    
+    This class handles the processing and caching of metadata for Uniswap liquidity pools,
+    including retrieving and storing pool information from various sources.
     """
 
     def __init__(self) -> None:
+        """Initialize the MetadataProcessor with a logger instance."""
         self._logger = logger.bind(module="MetadataProcessor")
     
     async def get_pool_metadata(
@@ -34,7 +38,21 @@ class MetadataProcessor(GenericProcessorSnapshot):
         protocol_state_contract,
         task_type: str = 'metadata:{poolAddress}:{Namespace}',
     ) -> Optional[UniswapPoolMetadata]:
-        # check redis cache first
+        """
+        Retrieve metadata for a specific pool, checking cache first then fetching from chain.
+
+        Args:
+            pool_address (str): The address of the pool to get metadata for
+            redis_conn (aioredis.Redis): Redis connection for cache operations
+            anchor_rpc_helper (RpcHelper): RPC helper for blockchain interactions
+            ipfs_reader (AsyncIPFSClient): IPFS client for reading data
+            protocol_state_contract: Contract instance for protocol state
+            task_type (str): Format string for project ID construction
+
+        Returns:
+            Optional[UniswapPoolMetadata]: Pool metadata if found, None otherwise
+        """
+        # Check Redis cache first for existing metadata
         cache_key = f'pool_metadata:{pool_address}'
         cached_data = await redis_conn.get(cache_key)
         if cached_data:
@@ -42,7 +60,7 @@ class MetadataProcessor(GenericProcessorSnapshot):
             return UniswapPoolMetadata(**json.loads(cached_data))
 
         try:
-            # get the latest snapshot
+            # Get the latest snapshot from chain if not in cache
             project_id = task_type.format(poolAddress=pool_address, Namespace=settings.namespace)
             latest_snapshot = await get_project_latest_snapshot(
                 redis_conn, protocol_state_contract, anchor_rpc_helper, ipfs_reader, project_id
@@ -65,28 +83,29 @@ class MetadataProcessor(GenericProcessorSnapshot):
         anchor_rpc_helper: RpcHelper,
     ):
         """
-        Process a single pool asynchronously.
+        Process a single pool asynchronously, checking first epoch and cache.
 
         Args:
+            epoch (SnapshotProcessMessage): Current epoch information
             pool_address (str): The pool address to process
-            task_type (str): The task type format string
-            redis_conn (aioredis.Redis): Redis connection object
-            protocol_state_contract: The protocol state contract
+            task_type (str): Format string for project ID construction
+            redis_conn (aioredis.Redis): Redis connection for cache operations
+            protocol_state_contract: Contract instance for protocol state
             anchor_rpc_helper (RpcHelper): RPC helper for anchor chain
             
         Returns:
-            tuple: A tuple containing project_id and pool metadata snapshot if available
+            Optional[tuple]: Tuple of (project_id, pool_metadata) if successful, None otherwise
         """
         try:
             project_id = task_type.format(poolAddress=pool_address, Namespace=settings.namespace)
             
-            # aggregate project first epoch
+            # Get project's first epoch data
             project_first_epoch = await get_project_first_epoch(
                 redis_conn, protocol_state_contract, anchor_rpc_helper, project_id,
             )
 
             if not project_first_epoch:
-                # Check Redis cache first
+                # If no first epoch, check Redis cache for existing metadata
                 cache_key = f'pool_metadata:{pool_address}'
                 cached_data = await redis_conn.get(cache_key)
 
@@ -97,7 +116,6 @@ class MetadataProcessor(GenericProcessorSnapshot):
             return None
         except Exception as e:
             self._logger.opt(exception=e).error(f"Error processing pool {pool_address}")
-            # Silently ignore any exceptions
             return None
 
     async def compute(
@@ -111,34 +129,40 @@ class MetadataProcessor(GenericProcessorSnapshot):
         task_type: str = None,
     ) -> Optional[Dict[str, Union[int, float]]]:
         """
-        Compute the metadata for a Uniswap pair within the given epoch.
+        Compute metadata for all active Uniswap pools within the given epoch.
 
         Args:
-            epoch (SnapshotProcessMessage): The epoch information.
-            redis_conn (aioredis.Redis): Redis connection object.
-            rpc_helper (RpcHelper): RPC helper object for blockchain interactions.
+            epoch (SnapshotProcessMessage): The epoch information
+            redis_conn (aioredis.Redis): Redis connection for cache operations
+            rpc_helper (RpcHelper): RPC helper for blockchain interactions
+            anchor_rpc_helper (RpcHelper): RPC helper for anchor chain
+            ipfs_reader (AsyncIPFSClient): IPFS client for reading data
+            protocol_state_contract: Contract instance for protocol state
+            task_type (str): Format string for project ID construction
 
         Returns:
-            Optional[Dict[str, Union[int, float]]]: Computed pair metadata snapshot.
+            Optional[Dict[str, Union[int, float]]]: Dictionary of computed pool metadata snapshots
         """
         self._logger.info(f"Computing metadata for epoch {epoch.epochId}")
         min_chain_height = epoch.begin
         max_chain_height = epoch.end
+        
+        # Collect all active pool keys for the epoch range
         keys_to_fetch = []
-        # Collect all keys to fetch
         for block_number in range(min_chain_height, max_chain_height + 1):
             key = f"active_pools:{block_number}:{settings.namespace}"
             keys_to_fetch.append(key)
 
-        # Use sunion to get the union of all sets at once
+        # Get union of all active pools across the epoch
         pools = set()
         if keys_to_fetch:
             pools = await redis_conn.sunion(*keys_to_fetch)
         self._logger.info(f"Found {len(pools)} active pools in the epoch {min_chain_height} to {max_chain_height}")
 
+        # Convert pool addresses to checksum format
         pools = map(lambda x: Web3.to_checksum_address(x.decode('utf-8')), pools)
         
-        # Process all pools in parallel
+        # Create tasks for parallel processing of all pools
         pool_tasks = []
         for pool_address in pools:
             task = self._process_pool(
@@ -151,11 +175,10 @@ class MetadataProcessor(GenericProcessorSnapshot):
             )
             pool_tasks.append(task)
         
-        # Gather results from all tasks, with return_exceptions=False
-        # This will make asyncio.gather() ignore failed tasks and continue with the rest
+        # Execute all pool processing tasks in parallel
         results = await asyncio.gather(*pool_tasks, return_exceptions=False)
         
-        # Filter out None results and add valid snapshots
+        # Filter out failed tasks and collect valid snapshots
         snapshots = [result for result in results if result is not None]
         
         return snapshots

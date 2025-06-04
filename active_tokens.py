@@ -14,10 +14,16 @@ from ipfs_client.main import AsyncIPFSClient
 
 class ActiveTokensProcessor(GenericProcessorSnapshot):
     """
-    Processor for calculating and snapshotting total reserves for Uniswap pairs.
+    Processor for tracking and aggregating active token usage across blockchain blocks.
+    
+    This processor analyzes token activity within specified epochs by:
+    1. Retrieving token usage data from Redis for each block in the epoch
+    2. Aggregating token activity scores across blocks
+    3. Creating snapshots of token activity for the epoch
     """
 
     def __init__(self) -> None:
+        """Initialize the processor with a module-specific logger."""
         self._logger = logger.bind(module="ActiveTokensProcessor")
 
     async def compute(
@@ -28,40 +34,54 @@ class ActiveTokensProcessor(GenericProcessorSnapshot):
         anchor_rpc_helper: RpcHelper,
         ipfs_reader: AsyncIPFSClient,
         protocol_state_contract,
-        # TODO: need clarity on this interface
         task_type: str,
     ) -> List[Tuple[str, ActiveTokensSnapshot]]:
         """
-        Compute the total reserves for a Uniswap pair within the given epoch.
+        Compute active token usage statistics for the given epoch.
 
         Args:
-            epoch (SnapshotProcessMessage): The epoch information.
-            redis_conn (aioredis.Redis): Redis connection object.
-            rpc_helper (RpcHelper): RPC helper object for blockchain interactions.
+            epoch (SnapshotProcessMessage): Epoch information containing begin and end block numbers
+            redis_conn (aioredis.Redis): Redis connection for retrieving token activity data
+            rpc_helper (RpcHelper): RPC helper for blockchain interactions
+            anchor_rpc_helper (RpcHelper): Anchor RPC helper for additional blockchain interactions
+            ipfs_reader (AsyncIPFSClient): IPFS client for data retrieval
+            protocol_state_contract: Contract interface for protocol state queries
+            task_type (str): Format string for task identification
 
         Returns:
-            Optional[Dict[str, Union[int, float]]]: Computed pair total reserves snapshot.
+            List[Tuple[str, ActiveTokensSnapshot]]: List containing a tuple of task identifier and token activity snapshot
         """
         
+        # Extract epoch boundaries
         min_chain_height = epoch.begin
         max_chain_height = epoch.end
         
-        # fetch all active pools for epoch from redis
+        # Initialize dictionary to store aggregated token activity
         active_tokens = {}
+        
+        # Process each block in the epoch
         for block_number in range(min_chain_height, max_chain_height + 1):
-            # pipeline.zincrby(f"active_tokens_per_block:{block_number}:{namespace}", 1, token_address)
+            # Construct Redis key for block's token activity
             key = f"active_tokens_per_block:{block_number}:{settings.namespace}"
-            # get all pools for block with score which is frequency of occurrence
+            
+            # Retrieve token activity data with scores (frequency of occurrence)
             block_active_tokens = await redis_conn.zrange(key, 0, -1, withscores=True)
+            
+            # Process each token's activity in the block
             for token_address, score in block_active_tokens:
+                # Decode and normalize token address
                 token_address = token_address.decode('utf-8')
                 token_address = Web3.to_checksum_address(token_address)
+                
+                # Aggregate token activity scores
                 if token_address not in active_tokens:
                     active_tokens[token_address] = 0
                 active_tokens[token_address] += int(score)
         
-        # sort active pools by score
+        # Log aggregated token activity
         self._logger.info(f"Active tokens: {active_tokens}")
+        
+        # Create snapshot of token activity for the epoch
         snapshot = ActiveTokensSnapshot(
             tokens=active_tokens,
             epoch=EpochBaseSnapshot(
@@ -71,4 +91,5 @@ class ActiveTokensProcessor(GenericProcessorSnapshot):
         )
         self._logger.info(f"Snapshot: {snapshot}")
 
+        # Return task identifier and snapshot
         return [(task_type.format(Namespace=settings.namespace), snapshot)]
