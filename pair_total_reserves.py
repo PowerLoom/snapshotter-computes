@@ -18,9 +18,15 @@ from ipfs_client.main import AsyncIPFSClient
 class PairTotalReservesProcessor(GenericProcessorSnapshot):
     """
     Processor for calculating and snapshotting total reserves for Uniswap pairs.
+    
+    This class handles the computation of total reserves for Uniswap V3 pools within a given epoch.
+    It fetches block details, identifies active pools, and calculates reserves for each pool.
     """
 
     def __init__(self) -> None:
+        """
+        Initialize the processor with a logger instance.
+        """
         self._logger = logger.bind(module="PairTotalReservesProcessor")
 
     async def compute(
@@ -31,25 +37,29 @@ class PairTotalReservesProcessor(GenericProcessorSnapshot):
         anchor_rpc_helper: RpcHelper,
         ipfs_reader: AsyncIPFSClient,
         protocol_state_contract,
-        # TODO: need clarity on this interface
         task_type: str,
     ) -> List[Tuple[str, UniswapBaseSnapshot]]:
         """
-        Compute the total reserves for a Uniswap pair within the given epoch.
+        Compute the total reserves for Uniswap pairs within the given epoch.
 
         Args:
-            epoch (SnapshotProcessMessage): The epoch information.
-            redis_conn (aioredis.Redis): Redis connection object.
-            rpc_helper (RpcHelper): RPC helper object for blockchain interactions.
+            epoch (SnapshotProcessMessage): The epoch information containing begin and end block heights.
+            redis_conn (aioredis.Redis): Redis connection for caching and data storage.
+            rpc_helper (RpcHelper): RPC helper for main blockchain interactions.
+            anchor_rpc_helper (RpcHelper): RPC helper for anchor chain interactions.
+            ipfs_reader (AsyncIPFSClient): IPFS client for reading data.
+            protocol_state_contract: Contract instance for protocol state queries.
+            task_type (str): Format string for task identification.
 
         Returns:
-            Optional[Dict[str, Union[int, float]]]: Computed pair total reserves snapshot.
+            List[Tuple[str, UniswapBaseSnapshot]]: List of tuples containing task identifiers and their corresponding snapshot data.
         """
         
         min_chain_height = epoch.begin
         max_chain_height = epoch.end
         snapshots = list()
-        # Fetch block details once for the entire epoch
+
+        # Fetch block details for the entire epoch range
         try:
             block_details_dict = await get_block_details_in_block_range(
                 min_chain_height,
@@ -72,25 +82,29 @@ class PairTotalReservesProcessor(GenericProcessorSnapshot):
             )
             block_details_dict = dict()
 
-        # find list of active pools for the epoch
+        # Build list of Redis keys for active pools across the epoch
         active_pool_set_keys_to_fetch = []
         for block_number in range(min_chain_height, max_chain_height + 1):
             key = f"active_pools:{block_number}:{settings.namespace}"
             active_pool_set_keys_to_fetch.append(key)
-        # Use sunion to get the union of all sets at once
+
+        # Fetch union of all active pools across the epoch
         active_pool_addresses = set()
         if active_pool_set_keys_to_fetch:
             active_pool_addresses = await redis_conn.sunion(*active_pool_set_keys_to_fetch)
+        
         self._logger.info(
             "[Epoch {}-{}] Starting token pair reserves computation for {} active pools",
             min_chain_height,
             max_chain_height,
             len(active_pool_addresses)
         )
+
+        # Convert pool addresses to checksum format
         active_pool_addresses = map(lambda x: x.decode('utf-8'), active_pool_addresses)
         active_pool_addresses = map(lambda x: Web3.to_checksum_address(x), active_pool_addresses)
         
-        # for each Uniswap V3 pool, fetch reserves of token0 and token1 within them
+        # Process each active pool to compute reserves
         for pool_address in active_pool_addresses:
             self._logger.debug(
                 "[Epoch {}-{}] Processing pool {} | Starting computation",
@@ -107,8 +121,7 @@ class PairTotalReservesProcessor(GenericProcessorSnapshot):
                 time.time()
             )
             
-            # Fetch pair reserves for the entire block range of the epoch
-            # get_pair_reserves now returns a UniswapBaseSnapshot object directly
+            # Fetch and compute reserves for the current pool
             base_snapshot_data: Optional[UniswapBaseSnapshot] = await get_pair_reserves(
                 pair_address=pool_address,
                 from_block=min_chain_height,
@@ -118,7 +131,7 @@ class PairTotalReservesProcessor(GenericProcessorSnapshot):
                 ipfs_reader=ipfs_reader,
                 anchor_rpc_helper=anchor_rpc_helper,
                 protocol_state_contract=protocol_state_contract,
-                block_details_dict=block_details_dict,  # Pass the pre-fetched block details
+                block_details_dict=block_details_dict,
             )
 
             if not base_snapshot_data:
