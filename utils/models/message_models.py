@@ -90,6 +90,15 @@ class ActivePoolsSnapshot(BaseModel):
     previousSnapshots: List[Tuple[int, str]] = []  # Will be filled by snapshot worker
 
 
+class ActiveTokensSnapshot(BaseModel):
+    """
+    Snapshot of active tokens for a Uniswap pair.
+    """
+    tokens: Dict[str, int]  # Dictionary mapping token addresses to frequency of occurrence
+    epoch: EpochBaseSnapshot  # Range of blocks for this snapshot
+    previousSnapshots: List[Tuple[int, str]] = []  # Will be filled by snapshot worker
+
+
 class UniswapPairTotalReservesSnapshot(SnapshotBase):
     """
     Snapshot of total reserves for a Uniswap pair.
