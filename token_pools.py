@@ -1,17 +1,19 @@
-from typing import List, Optional, Tuple
 import asyncio
-
-from redis import asyncio as aioredis
 import json
-from snapshotter.utils.models.message_models import SnapshotProcessMessage
-from snapshotter.utils.callback_helpers import GenericProcessorSnapshot
-from snapshotter.utils.default_logger import logger
-from rpc_helper.rpc import RpcHelper
-from snapshotter.settings.config import settings
+
 from ipfs_client.main import AsyncIPFSClient
-from computes.utils.models.message_models import UniswapPoolMetadata, UniswapTokenPoolsSnapshot
-from snapshotter.utils.data_utils import get_project_latest_snapshot
+from typing import List, Optional, Tuple
+from redis import asyncio as aioredis
+from rpc_helper.rpc import RpcHelper
 from web3 import Web3
+
+from computes.settings.config import settings as worker_settings
+from computes.utils.models.message_models import UniswapPoolMetadata, UniswapTokenPoolsSnapshot
+from snapshotter.settings.config import settings
+from snapshotter.utils.callback_helpers import GenericProcessorSnapshot
+from snapshotter.utils.data_utils import get_project_latest_snapshot
+from snapshotter.utils.default_logger import logger
+from snapshotter.utils.models.message_models import SnapshotProcessMessage
 
 
 class TokenPoolsProcessor(GenericProcessorSnapshot):
@@ -61,7 +63,7 @@ class TokenPoolsProcessor(GenericProcessorSnapshot):
         """
         try:
             # WETH address constant for filtering
-            WETH_ADDRESS = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+            WETH_ADDRESS = worker_settings.contract_addresses.WETH
             metadata_project_id = f"metadata:{pool_address}:{settings.namespace}"
             snapshots = []
 
