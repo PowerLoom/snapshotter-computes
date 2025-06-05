@@ -117,8 +117,8 @@ class EthPricePreloader(GenericPreloader):
 
                 _, eth_price_usd = self.sqrtPriceX96ToTokenPrices(
                     sqrtPriceX96=usdc_eth_sqrt_price_x96,
-                    token0_decimals=self.TOKENS_DECIMALS['USDC'],
-                    token1_decimals=self.TOKENS_DECIMALS['WETH'],
+                    token0_decimals=self.TOKENS_DECIMALS['WETH'],
+                    token1_decimals=self.TOKENS_DECIMALS['USDC'],
                 )
                 # using fixed weightage for now, will use liquidity based weightage later
                 eth_price_usd_dict[block_num] = float(eth_price_usd)
