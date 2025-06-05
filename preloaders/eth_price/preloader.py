@@ -115,7 +115,7 @@ class EthPricePreloader(GenericPreloader):
             for block_count, block_num in enumerate(range(from_block, to_block + 1), start=0):
                 usdc_eth_sqrt_price_x96 = usdc_eth_slot0_list[block_count][0]
 
-                _, eth_price_usd = self.sqrtPriceX96ToTokenPrices(
+                eth_price_usd, _  = self.sqrtPriceX96ToTokenPrices(
                     sqrtPriceX96=usdc_eth_sqrt_price_x96,
                     token0_decimals=self.TOKENS_DECIMALS['WETH'],
                     token1_decimals=self.TOKENS_DECIMALS['USDC'],
