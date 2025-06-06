@@ -1,7 +1,5 @@
 import asyncio
-from distutils import core
 import json
-from functools import reduce
 import time
 from typing import Dict, List, Optional, Any, Tuple
 
@@ -9,7 +7,6 @@ from redis import asyncio as aioredis
 from computes.metadata import MetadataProcessor
 from computes.utils.models.message_models import UniswapBaseSnapshot, UniswapPoolMetadata, EpochBaseSnapshot
 from snapshotter.utils.default_logger import logger
-from rpc_helper.rpc import get_event_sig_and_abi
 from rpc_helper.rpc import RpcHelper
 from snapshotter.utils.snapshot_utils import get_block_details_in_block_range
 from web3 import Web3
@@ -21,12 +18,8 @@ from computes.total_value_locked import get_slot0_data_for_block_range
 from computes.total_value_locked import get_tick_info
 from computes.total_value_locked import get_token0_in_pool
 from computes.total_value_locked import get_token1_in_pool
-from computes.utils.constants import UNISWAP_EVENTS_ABI
-from computes.utils.constants import UNISWAP_TRADE_EVENT_SIGS
-from computes.utils.constants import UNISWAPV3_FEE_DIV
-from computes.utils.helpers import get_events_from_cache, get_pair_metadata
-from computes.utils.models.data_models import UniswapEvent, epoch_event_trade_data, UniswapProcessedLog
-from computes.utils.models.data_models import event_trade_data
+from computes.utils.helpers import get_events_from_cache
+from computes.utils.models.data_models import UniswapEvent, UniswapProcessedLog
 from computes.utils.models.data_models import PairBlockDetail
 from computes.utils.models.data_models import trade_data
 from computes.utils.pricing import get_token_price_in_block_range
@@ -114,7 +107,8 @@ async def get_pair_reserves(
             pair_address
         )
         raise Exception(f'Error attempting to get pair metadata for: {pair_address}')
-
+    
+    # token prices in USD for each block in the range
     token0_price_map, token1_price_map = await asyncio.gather(
         get_token_price_in_block_range(
             token_metadata=pair_per_token_metadata.token0.dict(),
@@ -188,11 +182,17 @@ async def get_pair_reserves(
             to_block=to_block,
         )
     else:
-        # Calculate reserves at the end of the previous block (from_block - 1)
-        initial_reserves, slot0_data_dict = await calculate_reserves(
+        slot0_data_dict_from_to_block = await get_slot0_data_for_block_range(
+            rpc_helper=rpc_helper,
             pair_address=pair_address,
-            from_block=from_block - 1,
+            from_block=from_block,
             to_block=to_block,
+        )
+        # FIXME: this is not correct, we should calculate reserves at the end of the previous block (from_block - 1)
+        #        then add or remove values according to the events in the current block range (from_block - to_block)
+        initial_reserves = await calculate_reserves(
+            pair_address=pair_address,
+            at_block=from_block - 1,
             pair_per_token_metadata=pair_per_token_metadata,
             rpc_helper=rpc_helper,
         )
