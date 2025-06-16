@@ -1,6 +1,6 @@
 import time
 import json
-from typing import List, Tuple
+from typing import List, Tuple, Union
 from ipfs_client.main import AsyncIPFSClient
 from redis import asyncio as aioredis
 from rpc_helper.rpc import RpcHelper
@@ -73,7 +73,8 @@ class TradesProcessor(GenericProcessorSnapshot):
         min_chain_height = epoch.begin
         max_chain_height = epoch.end
         snapshots: List[Tuple[str, UniswapTradesSnapshot]] = list()
-
+        epoch_snapshot_model = EpochBaseSnapshot(**epoch.model_dump())
+        
         # Fetch block details for the epoch range
         try:
             block_details_dict = await get_block_details_in_block_range(
@@ -231,9 +232,6 @@ class TradesProcessor(GenericProcessorSnapshot):
                 )
                 transformed_trades.append(uniswap_trade_entry)
             
-            # Create epoch snapshot model
-            epoch_snapshot_model = EpochBaseSnapshot(**pair_trade_data['epoch'])
-            
             # Create trades snapshot
             current_trades_snapshot = UniswapTradesSnapshot(
                 address=pair_trade_data['address'], 
@@ -252,7 +250,7 @@ class TradesProcessor(GenericProcessorSnapshot):
                 len(transformed_trades),
                 time.time() - start_time
             )
-            
+
         return snapshots
 
         
