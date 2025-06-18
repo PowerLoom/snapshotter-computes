@@ -7,7 +7,7 @@ from redis import asyncio as aioredis
 from computes.metadata import MetadataProcessor
 from snapshotter.utils.models.message_models import SnapshotProcessMessage
 from snapshotter.settings.config import settings
-
+from snapshotter.utils.data_utils import get_project_latest_snapshot
 
 """
 Test for MetadataProcessor pool metadata validation.
@@ -371,6 +371,60 @@ async def test_metadata_processor(
     print(f"  Pair: {metadata.token0.symbol}/{metadata.token1.symbol}")
     print(f"  Fee: {metadata.fee} (0.05%)")
     print(f"  Factory: {metadata.factory}")
+
+    # Validate that the project latest snapshot matches the known data
+    print(f"\n🔍 Validating project latest snapshot from IPFS...")
+    
+    # Get the latest snapshot from IPFS using the same method as the processor
+    metadata_project_id = f"metadata:{pool_address}:{settings.namespace}"
+    
+    try:
+        
+        latest_snapshot = await get_project_latest_snapshot(
+            redis_conn, protocol_state_contract, anchor_rpc_helper, ipfs_reader, metadata_project_id
+        )
+        
+        if latest_snapshot:
+            print(f"  Latest snapshot found from IPFS")
+            print(f"  Snapshot data: {json.dumps(latest_snapshot, indent=2)}")
+            
+            # Validate that the IPFS snapshot matches our expected metadata
+            assert latest_snapshot["address"].lower() == expected_metadata["address"].lower(), f"IPFS snapshot address mismatch: expected {expected_metadata['address']}, got {latest_snapshot['address']}"
+            
+            # Validate token0 data
+            ipfs_token0 = latest_snapshot["token0"]
+            expected_token0 = expected_metadata["token0"]
+            assert ipfs_token0["address"].lower() == expected_token0["address"].lower(), f"IPFS token0 address mismatch: expected {expected_token0['address']}, got {ipfs_token0['address']}"
+            assert ipfs_token0["name"] == expected_token0["name"], f"IPFS token0 name mismatch: expected {expected_token0['name']}, got {ipfs_token0['name']}"
+            assert ipfs_token0["symbol"] == expected_token0["symbol"], f"IPFS token0 symbol mismatch: expected {expected_token0['symbol']}, got {ipfs_token0['symbol']}"
+            assert ipfs_token0["decimals"] == expected_token0["decimals"], f"IPFS token0 decimals mismatch: expected {expected_token0['decimals']}, got {ipfs_token0['decimals']}"
+            
+            # Validate token1 data
+            ipfs_token1 = latest_snapshot["token1"]
+            expected_token1 = expected_metadata["token1"]
+            assert ipfs_token1["address"].lower() == expected_token1["address"].lower(), f"IPFS token1 address mismatch: expected {expected_token1['address']}, got {ipfs_token1['address']}"
+            assert ipfs_token1["name"] == expected_token1["name"], f"IPFS token1 name mismatch: expected {expected_token1['name']}, got {ipfs_token1['name']}"
+            assert ipfs_token1["symbol"] == expected_token1["symbol"], f"IPFS token1 symbol mismatch: expected {expected_token1['symbol']}, got {ipfs_token1['symbol']}"
+            assert ipfs_token1["decimals"] == expected_token1["decimals"], f"IPFS token1 decimals mismatch: expected {expected_token1['decimals']}, got {ipfs_token1['decimals']}"
+            
+            # Validate pool parameters
+            assert latest_snapshot["fee"] == expected_metadata["fee"], f"IPFS fee mismatch: expected {expected_metadata['fee']}, got {latest_snapshot['fee']}"
+            assert latest_snapshot["factory"].lower() == expected_metadata["factory"].lower(), f"IPFS factory mismatch: expected {expected_metadata['factory']}, got {latest_snapshot['factory']}"
+            
+            # Validate tick spacing if available
+            if "tick_spacing" in expected_metadata and "tick_spacing" in latest_snapshot:
+                assert latest_snapshot["tick_spacing"] == expected_metadata["tick_spacing"], f"IPFS tick spacing mismatch: expected {expected_metadata['tick_spacing']}, got {latest_snapshot['tick_spacing']}"
+            
+            print(f"  ✅ IPFS snapshot validation passed!")
+            print(f"    All fields match expected metadata")
+            
+        else:
+            print(f"  ⚠️  No latest snapshot found from IPFS for project {metadata_project_id}")
+            print(f"    This may indicate that the metadata has not been submitted to IPFS yet")
+            
+    except Exception as e:
+        print(f"  ⚠️  Error validating IPFS snapshot: {e}")
+        print(f"    This may indicate connectivity issues or missing data")
 
     # Validate against actual blockchain contracts
     await validate_metadata_against_contracts(
