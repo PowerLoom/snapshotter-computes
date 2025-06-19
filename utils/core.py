@@ -18,6 +18,7 @@ from computes.total_value_locked import get_slot0_data_for_block_range
 from computes.total_value_locked import get_tick_info
 from computes.total_value_locked import get_token0_in_pool
 from computes.total_value_locked import get_token1_in_pool
+from computes.utils.constants import UNISWAPV3_FEE_DIV
 from computes.utils.helpers import get_events_from_cache
 from computes.utils.models.data_models import UniswapEvent, UniswapProcessedLog
 from computes.utils.models.data_models import PairBlockDetail
