@@ -251,26 +251,6 @@ def create_event_key(event: Dict, event_type: str) -> str:
     return f"{event_type}:{tx_hash.lower()}:{log_index}"
 
 
-def parse_scientific(amount_str):
-    """Parse scientific notation by moving decimal point"""
-    if 'e' in amount_str.lower():
-        if 'e+' in amount_str.lower():
-            mantissa, exponent = amount_str.lower().split('e+')
-        else:
-            mantissa, exponent = amount_str.lower().split('e')
-            exponent = '-' + exponent
-        
-        mantissa = mantissa.replace('.', '')
-        target_digits = int(exponent) + 1
-        if len(mantissa) < target_digits:
-            mantissa = mantissa + '0' * (target_digits - len(mantissa))
-        elif len(mantissa) > target_digits:
-            mantissa = mantissa[:target_digits]
-        return int(mantissa)
-    else:
-        return int(float(amount_str))
-
-
 def compare_events(
     snapshot_events: List,
     etherscan_events: List,
@@ -362,9 +342,8 @@ def compare_events(
             print(f"        amount0: snapshot={snapshot_amount0}, etherscan={etherscan_amount0}")
             print(f"        amount1: snapshot={snapshot_amount1}, etherscan={etherscan_amount1}")
             
-            tolerance = 0.0001
-            amount0_match = abs(snapshot_amount0 - etherscan_amount0) / max(snapshot_amount0, etherscan_amount0, 1) <= tolerance
-            amount1_match = abs(snapshot_amount1 - etherscan_amount1) / max(snapshot_amount1, etherscan_amount1, 1) <= tolerance
+            amount0_match = snapshot_amount0 == etherscan_amount0
+            amount1_match = snapshot_amount1 == etherscan_amount1
             
             if not amount0_match:
                 comparison["matches"] = False
@@ -510,14 +489,6 @@ async def test_trades_processor_against_etherscan(
     
     print(f"Found {len(active_pools)} active pools")
     
-    # Debug: Show some pool addresses to understand what we're testing
-    print(f"Sample pool addresses:")
-    for i, pool in enumerate(list(active_pools)[:5]):  # Show first 5 pools
-        print(f"  {i+1}. {pool}")
-    if len(active_pools) > 5:
-        print(f"  ... and {len(active_pools) - 5} more pools")
-    
-    # Test the processor compute method
     print(f"\n🔍 Testing TradesProcessor compute method...")
     epoch = SnapshotProcessMessage(
         begin=from_block,
@@ -584,7 +555,6 @@ async def test_trades_processor_against_etherscan(
         print(f"\nℹ️  No events found in any snapshot. This could be due to:")
         print(f"    - The test block ({from_block}) doesn't contain Uniswap V3 events")
         print(f"    - The active pools don't have trading activity in this block")
-        print(f"    - The block range is too narrow (testing with single block)")
         print(f"    - The pools are not actually Uniswap V3 pools")
         
         # Skip the test if no events found, but don't fail it
