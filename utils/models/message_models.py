@@ -301,3 +301,12 @@ class UniswapTradesSnapshot(BaseModel):
     trades: List[UniswapTrade]   # Sorted by transaction index
     # Previous Snapshot Links
     previousSnapshots: List[Tuple[int, str]] = []  # Will be filled by snapshot worker
+
+
+class AllUniswapTradesSnapshot(BaseModel):
+    """
+    All Uniswap Trades Snapshot Model
+    """
+    epoch: EpochBaseSnapshot     # Range of blocks for this snapshot
+    tradeData: Dict[str, UniswapTradesSnapshot]  # Dictionary mapping pool addresses to trades
+    previousSnapshots: List[Tuple[int, str]] = []  # Will be filled by snapshot worker
