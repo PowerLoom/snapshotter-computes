@@ -583,6 +583,40 @@ async def test_trades_processor_against_etherscan(
     print(f"  Missing mints: {total_missing_mints}")
     print(f"  Missing burns: {total_missing_burns}")
     
+    # Check for extra events in snapshot (events that Etherscan doesn't have)
+    total_extra_swaps = sum(
+        len(result["swap_comparison"]["extra_in_snapshot"]) 
+        for result in all_validation_results
+    )
+    total_extra_mints = sum(
+        len(result["mint_comparison"]["extra_in_snapshot"]) 
+        for result in all_validation_results
+    )
+    total_extra_burns = sum(
+        len(result["burn_comparison"]["extra_in_snapshot"]) 
+        for result in all_validation_results
+    )
+    
+    print(f"  Extra swaps in snapshot: {total_extra_swaps}")
+    print(f"  Extra mints in snapshot: {total_extra_mints}")
+    print(f"  Extra burns in snapshot: {total_extra_burns}")
+    
+    # Log details of extra events if any found
+    if total_extra_swaps > 0 or total_extra_mints > 0 or total_extra_burns > 0:
+        print(f"\n⚠️  Found extra events in snapshot that are not in Etherscan:")
+        for result in all_validation_results:
+            pool_address = result["pool_address"]
+            if result["swap_comparison"]["extra_in_snapshot"]:
+                print(f"    Pool {pool_address} - Extra swaps: {result['swap_comparison']['extra_in_snapshot']}")
+            if result["mint_comparison"]["extra_in_snapshot"]:
+                print(f"    Pool {pool_address} - Extra mints: {result['mint_comparison']['extra_in_snapshot']}")
+            if result["burn_comparison"]["extra_in_snapshot"]:
+                print(f"    Pool {pool_address} - Extra burns: {result['burn_comparison']['extra_in_snapshot']}")
+        print(f"  Note: Extra events could indicate:")
+        print(f"    - Processor found events that Etherscan missed (processor is more comprehensive)")
+        print(f"    - Different event filtering logic between sources")
+        print(f"    - Timing differences in data availability")
+    
     # Check for data mismatches
     total_data_mismatches = 0
     for result in all_validation_results:
@@ -592,6 +626,9 @@ async def test_trades_processor_against_etherscan(
                     total_data_mismatches += 1
     
     print(f"  Data mismatches: {total_data_mismatches}")
+    
+    total_extra_events = total_extra_swaps + total_extra_mints + total_extra_burns
+    print(f"  Total extra events in snapshot: {total_extra_events}")
     
     # Assertions
     assert total_snapshots > 0, "Should have at least one snapshot to validate"
