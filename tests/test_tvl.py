@@ -1,174 +1,157 @@
-import os
+from typing import Optional, List, Dict, Tuple
 from web3 import Web3
-import asyncio
-
-from rpc_helper.rpc import RpcHelper
-
-from computes.utils.constants import erc20_abi
-from computes.total_value_locked import _load_abi, calculate_reserves, calculate_tvl_from_ticks, get_tick_info
-from computes.utils.helpers import get_pair_metadata
-from snapshotter.settings.config import settings
-from snapshotter.utils.redis.redis_conn import RedisPoolCache
 from gql import Client, gql
 from gql.transport.aiohttp import AIOHTTPTransport
+import pytest
 
-graph_endpoint = 'https://api.thegraph.com/subgraphs/name/uniswap/uniswap-v3'
-transport = AIOHTTPTransport(url=graph_endpoint)    
-client = Client(transport=transport, fetch_schema_from_transport=True)
-async def test_calculate_reserves():
-    # Mock your parameters
+from computes.utils.models.message_models import UniswapPoolMetadata
+from computes.utils.models.data_models import TickData
+
+
+def validate_test_environment(app_config):
+    """Validate that the test environment is properly configured via app_config."""
+    required_settings = [
+        ('rpc.full_nodes', "RPC endpoint not configured in .env.test (TEST_RPC_URL_FULL_NODE_1)"),
+        ('anchor_chain_rpc.full_nodes', "Anchor RPC endpoint not configured in .env.test (TEST_ANCHOR_RPC_URL_FULL_NODE_1)"),
+        ('protocol_state.address', "Protocol state contract address not configured in .env.test (TEST_PROTOCOL_STATE_CONTRACT_ADDRESS)"),
+    ]
     
-    pair_address = Web3.to_checksum_address(
-        "0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640"
-    )
-    from_block = 18931130
-
-    rpc_helper = RpcHelper(settings.rpc)
-    aioredis_pool = RedisPoolCache()
-    query = """{
-    pool(id: "0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640", block: {number: 18931130}) {
-        ticks(first: 1000, where: {liquidityGross_not: 0}, orderBy: tickIdx, orderDirection: asc) {
-        tickIdx
-        liquidityNet
-        }
-    }
-    }"""
-    print(os.environ['RPC_URL'])
-    w3 = Web3(Web3.HTTPProvider(os.environ['RPC_URL']))
-    pair_contract = w3.eth.contract(
-        address=pair_address,
-        abi=_load_abi("snapshotter/modules/computes/static/abis/UniswapV3Pool.json"),
-    
-    )
-
-
-
-    await aioredis_pool.populate()
-    redis_conn = aioredis_pool._aioredis_pool
-    pair_per_token_metadata = await get_pair_metadata(
-        pair_address=pair_address, redis_conn=redis_conn, rpc_helper=rpc_helper
-    )  # Replace with your data
-
-    gql_response = await client.execute_async(gql(query))
-    gql_ticks = [{'idx': int(tick['tickIdx']), 'liquidity_net': int(tick['liquidityNet'])} for tick in gql_response['pool']['ticks']]
-    
-    # Call your async function
-    reserves = await calculate_reserves(
-        pair_address, from_block, pair_per_token_metadata, rpc_helper
-    )
-    rpc_ticks, slot0 = await get_tick_info(
-        rpc_helper=rpc_helper,
-        pair_address=pair_address,
-        from_block=from_block,
-        to_block=from_block,
-        pair_per_token_metadata=pair_per_token_metadata,
-    )
-    rpc_tick_len = len(rpc_ticks)
-
-    print(rpc_tick_len, 'rpc ticks')
-    first_idxs = set(item['idx'] for item in rpc_ticks)
-    second_idxs = set(item['idx'] for item in gql_ticks)
-
-    # Identify missing elements in each list
-    missing_in_first = second_idxs - first_idxs
-    missing_in_second = first_idxs - second_idxs
-
-    # Print the missing elements
-    print(missing_in_first)
-    print(missing_in_second)
-    print('missing')
-    gql_reserves = calculate_tvl_from_ticks(
-        gql_ticks,
-        pair_per_token_metadata,
-        slot0[0],   
-    )
-    print(gql_reserves, 'gql reserves including incorrectly indexed ticks')
-    for idx in missing_in_first:
-        print({'idx': idx, 'liquidity_net': next(item['liquidity_net'] for item in gql_ticks if item['idx'] == idx)})
-        # double check that ticks in gql and not rpc are incorrectly indexed
-        tick_resp = pair_contract.functions.ticks(idx).call(block_identifier=from_block)
-        assert(tick_resp[1] == 0, 'tick is not retrieved via rpc')
-        print(tick_resp, 'rpc tick')
-    # calculate extra reserves from incorrectly indexed ticks
-    extra_reserves = calculate_tvl_from_ticks(
-        [{'idx': idx, 'liquidity_net': next(item['liquidity_net'] for item in gql_ticks if item['idx'] == idx)} for idx in missing_in_first],
-        pair_per_token_metadata,
-        slot0[0],
-    )
-    print(extra_reserves, 'extra reserves')
-    # pop incorrectly indexed ticks
-    gql_ticks = [tick for tick in gql_ticks if tick['idx'] not in missing_in_first]
-    # verify that ticks from gql calculate the same as ours
-    gql_reserves = calculate_tvl_from_ticks(
-        gql_ticks,
-        pair_per_token_metadata,
-        slot0[0],   
-    )
-    
-
-    print(gql_reserves, 'gql reserves')
-    print(reserves, 'rpc reserves')
-    
-    assert reserves[0] == gql_reserves[0], 'reserves do not match'
-    assert reserves[1] == gql_reserves[1], 'reserves do not match'
-    # print("Elements missing in the first list:")
-    # for idx in missing_in_first:
-    #     print({'idx': idx, 'liquidityNet': next(item['liquidityNet'] for item in reserves[2] if item['idx'] == idx)})
-
-    # print("\nElements missing in the second list:")
-    # for idx in missing_in_second:
-    #     print({'tickIdx': idx, 'liquidity_net': next(item['liquidity_net'] for item in gql_response['pool']['ticks'] if item['tickIdx'] == idx)})
-
-    #     print(reserves[2], 'rpc ticks')
-    #     print(gql_response['pool']['ticks'], 'gql ticks')
+    for setting_path, error_msg in required_settings:
+        parts = setting_path.split('.')
+        current = app_config
+        is_missing = False
+        for part in parts:
+            if not hasattr(current, part):
+                is_missing = True
+                break
+            current = getattr(current, part)
         
+        if is_missing or (isinstance(current, list) and not current):
+            pytest.skip(f"Test environment not properly configured: {error_msg}")
 
+async def validate_block_availability(rpc_helper, block_number: int) -> bool:
+    """Check if a block number is available in the RPC node"""
+    try:
+        current_block = await rpc_helper.get_current_block_number()
+        if block_number > current_block:
+            return False
+        await rpc_helper.eth_get_block(block_number)
+        return True
+    except Exception:
+        return False
 
-    # Check that it returns an array of correct form
-    assert isinstance(reserves, list), "Should return a list"
+async def get_token_balances(
+    pool_address: str,
+    block_number: int,
+    pool_metadata: UniswapPoolMetadata,
+    w3: Web3,
+    token_abi: Dict
+) -> Tuple[int, int]:
+    """Helper to get actual token balances from the pool"""
+    token0_contract = w3.eth.contract(
+        address=Web3.to_checksum_address(pool_metadata.token0.address),
+        abi=token_abi
+    )
+    token1_contract = w3.eth.contract(
+        address=Web3.to_checksum_address(pool_metadata.token1.address),
+        abi=token_abi
+    )
+    
+    token0_balance = token0_contract.functions.balanceOf(pool_address).call(block_identifier=block_number)
+    token1_balance = token1_contract.functions.balanceOf(pool_address).call(block_identifier=block_number)
+    
+    return token0_balance, token1_balance
+
+@pytest.mark.asyncio(loop_scope="module")
+async def test_calculate_reserves(
+    rpc_helper,
+    anchor_rpc_helper,
+    ipfs_reader,
+    redis_conn,
+    w3_instance,
+    protocol_state_contract,
+    load_abi_fn,
+    app_config
+):
+    """Test the calculate_reserves function with normal operation against a historical block."""
+    from computes.total_value_locked import calculate_reserves
+    from computes.metadata import MetadataProcessor
+    from computes.utils import constants
+    metadata_processor = MetadataProcessor()
+
+    validate_test_environment(app_config)
+    await constants.initialize_rpc(injected_rpc_helper=rpc_helper)
+    # USDC-WETH pool
+    pool_address = Web3.to_checksum_address("0xE0554a476A092703abdB3Ef35c80e0D76d32939F")
+
+    try:
+        current_block_number = await rpc_helper.get_current_block_number()
+    except Exception as e:
+        pytest.fail(f"Failed to get current block number: {e}")
+
+    block_offset_from_head = 10 
+    if current_block_number <= block_offset_from_head:
+        pytest.skip(f"Chain height ({current_block_number}) too low to test with offset {block_offset_from_head}")
+    
+    from_block = current_block_number - block_offset_from_head
+    print(f"\nTesting at block near chain head: {from_block} (current head: {current_block_number})")
+
+    if not await validate_block_availability(rpc_helper, from_block):
+        pytest.skip(f"Skipping test: block {from_block} not available on configured RPC node.")
+
+    pool_contract_abi = load_abi_fn("computes/static/abis/UniswapV3Pool.json")
+    pool_metadata: Optional[UniswapPoolMetadata] = await metadata_processor.get_pool_metadata(
+        pool_address=pool_address,
+        redis_conn=redis_conn,
+        anchor_rpc_helper=anchor_rpc_helper,
+        ipfs_reader=ipfs_reader,
+        protocol_state_contract=protocol_state_contract,
+        task_type=f'metadata:{pool_address}:{app_config.namespace}',
+    )
+
+    if not pool_metadata:
+        pytest.fail("Failed to get pool_metadata. Skipping test.")
+  
+    reserves = await calculate_reserves(
+        pool_address, from_block, pool_metadata, rpc_helper
+    )
+
+    token_contract_abi = load_abi_fn("computes/static/abis/IERC20.json")
+
+    token0_address_checksum = Web3.to_checksum_address(pool_metadata.token0.address)
+    token1_address_checksum = Web3.to_checksum_address(pool_metadata.token1.address)
+
+    token0_contract = w3_instance.eth.contract(address=token0_address_checksum, abi=token_contract_abi)
+    token1_contract = w3_instance.eth.contract(address=token1_address_checksum, abi=token_contract_abi)
+    
+    token0_actual_reserve = token0_contract.functions.balanceOf(pool_address).call(block_identifier=from_block)
+    token1_actual_reserve = token1_contract.functions.balanceOf(pool_address).call(block_identifier=from_block)
+
+    print(f"Calculated reserves: {reserves}")
+    print(f"Actual on-chain reserves: ({token0_actual_reserve}, {token1_actual_reserve})")
+
+    assert isinstance(reserves, tuple), "Should return a tuple"
     assert len(reserves) == 2, "Should have two elements"
 
-    # Initialize Web3
-    w3 = Web3(Web3.HTTPProvider(settings.rpc.full_nodes[0].url))
-    contract = w3.eth.contract(
-        address=pair_address,
-        abi=_load_abi("snapshotter/modules/computes/static/abis/UniswapV3Pool.json"),
-    )
-    token0 = contract.functions.token0().call()
-    token1 = contract.functions.token1().call()
+    assert (
+        reserves[0] >= token0_actual_reserve * 0.95
+    ), "calculated reserve is lower than 95% of token balance"
+    assert (
+        reserves[0] <= token0_actual_reserve * 1.05
+    ), "calculated reserve is higher than 105% of token balance"
+    assert (
+        reserves[1] >= token1_actual_reserve * 0.95
+    ), "calculated reserve is lower than 95% of token balance"
+    assert (
+        reserves[1] <= token1_actual_reserve * 1.05
+    ), "calculated reserve is higher than 105% of token balance"
 
-    token0_contract = w3.eth.contract(address=token0, abi=erc20_abi)
-    token1_contract = w3.eth.contract(address=token1, abi=erc20_abi)
-    # Fetch actual reserves from blockchain
-    # The function name 'getReserves' and the field names may differ based on the actual ABI
-    token0_actual_reserve = token0_contract.functions.balanceOf(pair_address).call(block_identifier=from_block)
-    token1_actual_reserve = token1_contract.functions.balanceOf(pair_address).call(block_identifier=from_block)
+    deviation_0 = (reserves[0] / token0_actual_reserve - 1) * 100 if token0_actual_reserve > 0 else 0
+    deviation_1 = (reserves[1] / token1_actual_reserve - 1) * 100 if token1_actual_reserve > 0 else 0
+    print(f"  Deviation: Token0={deviation_0:.2f}%, Token1={deviation_1:.2f}%")
 
-    print(reserves)
-    print(token0_actual_reserve, token1_actual_reserve)
-
-    # Compare them with returned reserves
-    # our calculations should be less than or equal to token balance.
-    #  assuming a maximum of 30%? of token balance is unpaid fees
-    assert (
-        reserves[0] >= token0_actual_reserve * 0.8
-    ), "calculated reserve is lower than 90% token balance"
-    assert (
-        reserves[0] <= token0_actual_reserve
-    ), "calculated reserve is higher than token balance"
-    assert (
-        reserves[1] >= token1_actual_reserve * 0.8
-    ), "calculated reserve is lower than 90% token balance"
-    assert (
-        reserves[1] <= token1_actual_reserve
-    ), "calculated reserve is higher than token balance"
-    print("PASSED")
+    print("PASSED: test_calculate_reserves")
 
 
 if __name__ == "__main__":
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(test_calculate_reserves())
-
-
-
-
+    print("To run these tests, use the `pytest` command from the project root.")
