@@ -8,7 +8,6 @@ from typing import Optional, Union, List, Tuple, Dict
 from eth_typing import Address
 from eth_typing.evm import Address
 from eth_typing.evm import ChecksumAddress
-from computes.utils.constants import MAX_TICK, MIN_TICK
 from computes.utils.models.message_models import UniswapPoolMetadata
 from computes.utils.models.data_models import TickData, Slot0Data
 from snapshotter.utils.default_logger import logger
@@ -355,13 +354,13 @@ async def get_tick_info(
             num_segments = 1
         
         tick_tasks = []
-        total_range = MAX_TICK - MIN_TICK + 1  # 1774545
+        total_range = constants.MAX_TICK - constants.MIN_TICK + 1  # 1774545
         segment_size = total_range // num_segments
 
         for i in range(num_segments):
-            from_tick = MIN_TICK + i * segment_size
+            from_tick = constants.MIN_TICK + i * segment_size
             if i == num_segments - 1:  # Last segment goes to MAX_TICK
-                to_tick = MAX_TICK
+                to_tick = constants.MAX_TICK
             else:
                 to_tick = from_tick + segment_size - 1
             
