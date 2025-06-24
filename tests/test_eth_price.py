@@ -6,6 +6,7 @@ from redis import asyncio as aioredis
 import os
 
 from computes.eth_price import EthPriceProcessor
+from computes.settings.config import settings as computes_settings
 from computes.utils.models.message_models import UniswapEthPriceSnapshot
 from snapshotter.utils.default_logger import logger
 from snapshotter.utils.models.message_models import SnapshotProcessMessage
@@ -205,14 +206,8 @@ async def test_eth_price_processor(
 
     # Get Chainlink Oracle price data
     print(f"\n🔍 Getting Chainlink Oracle price data...")
-    
-    # Get oracle address from environment variable directly
-    oracle_address = os.getenv('TEST_CHAINLINK_ETH_USD_ORACLE_ADDRESS', '0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419')
-    if not oracle_address:
-        pytest.skip("Oracle address not configured in .env.test (TEST_CHAINLINK_ETH_USD_ORACLE_ADDRESS)")
-    
-    print(f"Using Chainlink Oracle address: {oracle_address}")
-    chainlink_data = await get_chainlink_price_data(rpc_helper, oracle_address)
+    print(f"Using Chainlink Oracle address: {computes_settings.contract_addresses.chainlink_eth_usd_oracle}")
+    chainlink_data = await get_chainlink_price_data(rpc_helper, computes_settings.contract_addresses.chainlink_eth_usd_oracle)
     
     print(f"Chainlink latest round data:")
     print(f"  Round ID: {chainlink_data['round_id']}")
