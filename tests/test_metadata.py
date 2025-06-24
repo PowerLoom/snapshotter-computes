@@ -70,22 +70,22 @@ async def validate_block_availability(rpc_helper, block_number: int) -> bool:
 def get_expected_metadata() -> Dict:
     """Get the expected metadata for the test pool"""
     return {
-        "address": "0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640",
+        "address": "0xd0b53D9277642d899DF5C87A3966A349A798F224",
         "token0": {
-            "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
-            "name": "USD Coin",
-            "symbol": "USDC",
-            "decimals": 6
-        },
-        "token1": {
-            "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+            "address": "0x4200000000000000000000000000000000000006",
             "name": "Wrapped Ether",
             "symbol": "WETH",
             "decimals": 18
         },
+        "token1": {
+            "address": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+            "name": "USD Coin",
+            "symbol": "USDC",
+            "decimals": 6
+        },
         "fee": 500,
         "tick_spacing": 10,
-        "factory": "0x1F98431c8aD98523631AE4a59f267346ea31F984"
+        "factory": "0x33128a8fC17869897dcE68Ed026d694621f6FDfD"
     }
 
 
@@ -291,7 +291,7 @@ async def test_metadata_processor(
     validate_test_environment(app_config)
 
     # Test pool configuration
-    pool_address = "0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640"
+    pool_address = "0xd0b53D9277642d899DF5C87A3966A349A798F224"
     expected_metadata = get_expected_metadata()
     
     print(f"\nTesting MetadataProcessor for pool: {pool_address}")
@@ -369,7 +369,7 @@ async def test_metadata_processor(
     print(f"\n✅ All metadata validations passed!")
     print(f"  Pool: {metadata.address}")
     print(f"  Pair: {metadata.token0.symbol}/{metadata.token1.symbol}")
-    print(f"  Fee: {metadata.fee} (0.05%)")
+    print(f"  Fee: {metadata.fee}")
     print(f"  Factory: {metadata.factory}")
 
     # Validate that the project latest snapshot matches the known data
