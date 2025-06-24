@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 import time
@@ -88,7 +89,7 @@ def get_etherscan_api_key():
     if not api_key:
         pytest.skip(
             "TEST_ETHERSCAN_API_KEY not configured in environment. "
-            "Please get a free API key from https://etherscan.io/apis"
+            "Please get a free API key from https://etherscan.io/apis?id=8453"
         )
     return api_key
 
@@ -146,8 +147,12 @@ async def fetch_uniswap_v3_events_from_etherscan(
         logger.error(f"Error loading pool ABI: {e}")
         return {"swaps": [], "mints": [], "burns": []}
     
-    for event_type, topic in [("swaps", swap_topic), ("mints", mint_topic), ("burns", burn_topic)]:
-        url = "https://api.etherscan.io/api"
+    for i, (event_type, topic) in enumerate([("swaps", swap_topic), ("mints", mint_topic), ("burns", burn_topic)]):
+        # Add delay between requests to avoid rate limiting
+        if i > 0:
+            time.sleep(0.2)  # 200ms delay between requests
+            
+        url = "https://api.basescan.org/api"
         params = {
             "module": "logs",
             "action": "getLogs",
