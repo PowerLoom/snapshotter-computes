@@ -82,7 +82,7 @@ async def test_calculate_reserves(
     validate_test_environment(app_config)
     await constants.initialize_rpc(injected_rpc_helper=rpc_helper)
     # USDC-WETH pool
-    pool_address = Web3.to_checksum_address("0xE0554a476A092703abdB3Ef35c80e0D76d32939F")
+    pool_address = Web3.to_checksum_address("0xd0b53D9277642d899DF5C87A3966A349A798F224")
 
     try:
         current_block_number = await rpc_helper.get_current_block_number()
