@@ -12,6 +12,7 @@ from computes.utils.models.message_models import ActivePoolsSnapshot
 from snapshotter.utils.default_logger import logger
 from snapshotter.utils.models.message_models import SnapshotProcessMessage
 from snapshotter.settings.config import settings
+from computes.settings.config import settings as computes_settings
 
 
 def validate_test_environment(app_config):
@@ -153,7 +154,7 @@ async def verify_redis_data(redis_conn: aioredis.Redis, block_number: int) -> Di
     }
 
 
-async def verify_pool_on_factory(rpc_helper, pool_address: str, factory_address: str = "0x1F98431c8aD98523631AE4a59f267346ea31F984") -> bool:
+async def verify_pool_on_factory(rpc_helper, pool_address: str, factory_address: str) -> bool:
     """Verify if a pool address is actually a Uniswap V3 pool by querying the factory contract"""
     try:
         # Get the path to the factory ABI
@@ -315,7 +316,11 @@ async def test_active_pools_processor(
     for pool_address, frequency in snapshot.pools.items():
         # Verify if this is actually a Uniswap V3 pool
         print(f"\n🔍 Verifying pool on Uniswap V3 factory...")
-        is_valid_pool = await verify_pool_on_factory(rpc_helper, pool_address)
+        is_valid_pool = await verify_pool_on_factory(
+            rpc_helper=rpc_helper, 
+            pool_address=pool_address, 
+            factory_address=computes_settings.contract_addresses.uniswap_v3_factory
+        )
         print(f"  Pool verification result: {'✅ Valid' if is_valid_pool else '❌ Invalid'}")
 
         actual_occurrences, complete_logs = await count_pool_occurrences_in_logs(receipts, pool_address)
