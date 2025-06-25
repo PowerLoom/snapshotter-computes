@@ -343,18 +343,28 @@ async def get_tick_info(
     )
     try:
         fee = int(pair_per_token_metadata.fee)
-        step = (constants.MAX_TICK - constants.MIN_TICK) // 16
-        if fee == 500:
-            step = (constants.MAX_TICK - constants.MIN_TICK) // 4
-        elif fee == 3000:
-            step = constants.MAX_TICK - constants.MIN_TICK // 2 
-        elif fee == 10000:
-            step = constants.MAX_TICK - constants.MIN_TICK
+        
+        if fee < 500:
+            num_segments = 16
+        elif fee >= 500 and fee < 3000:
+            num_segments = 4
+        elif fee >= 3000 and fee < 10000:
+            num_segments = 2
+        elif fee >= 10000:
+            num_segments = 1
+        
         tick_tasks = []
-        for idx in range(constants.MIN_TICK, constants.MAX_TICK + 1, step):
-            tick_tasks.append(
-                ('getTicks', [pair_address, idx, min(idx + step - 1, constants.MAX_TICK)]),
-            )
+        total_range = constants.MAX_TICK - constants.MIN_TICK + 1
+        segment_size = total_range // num_segments
+
+        for i in range(num_segments):
+            from_tick = constants.MIN_TICK + i * segment_size
+            if i == num_segments - 1:
+                to_tick = constants.MAX_TICK
+            else:
+                to_tick = from_tick + segment_size - 1
+            
+            tick_tasks.append(('getTicks', [pair_address, from_tick, to_tick]))
 
         try:
             tickDataResponse = await rpc_helper.web3_call(
