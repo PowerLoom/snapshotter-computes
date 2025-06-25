@@ -146,7 +146,11 @@ async def fetch_uniswap_v3_events_from_etherscan(
         logger.error(f"Error loading pool ABI: {e}")
         return {"swaps": [], "mints": [], "burns": []}
     
-    for event_type, topic in [("swaps", swap_topic), ("mints", mint_topic), ("burns", burn_topic)]:
+    for i, (event_type, topic) in enumerate([("swaps", swap_topic), ("mints", mint_topic), ("burns", burn_topic)]):
+        # Add delay between requests to avoid rate limiting
+        if i > 0:
+            time.sleep(0.2)  # 200ms delay between requests
+        
         url = "https://api.etherscan.io/api"
         params = {
             "module": "logs",

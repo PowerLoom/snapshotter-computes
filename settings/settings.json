@@ -3,6 +3,8 @@
       "uniswap_v3_factory": "0x1F98431c8aD98523631AE4a59f267346ea31F984",
 
       "uniswap_v3_helper": "0x5f05F62e85675778bFb28ed4c2E83eC9C7796809",
+
+      "chainlink_eth_usd_oracle": "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419",
       
       "DAI_WETH_PAIR": "0xC2eFb029Ed7EeCd775C21b53Fa594D5dA2D3febb",
       
