@@ -1,51 +1,95 @@
 import asyncio
+import pytest
 
-from rpc_helper.rpc import RpcHelper
+from computes.utils.core import get_pair_reserves
+from computes.utils.constants import initialize_rpc
 
-from snapshotter.settings.config import settings
-from snapshotter.utils.models.message_models import SnapshotProcessMessage
-from snapshotter.utils.redis.redis_conn import RedisPoolCache
-from snapshotter.utils.redis.redis_keys import source_chain_epoch_size_key
+def validate_test_environment(app_config):
+    """Validate that the test environment is properly configured via app_config."""
+    required_settings = [
+        ('rpc.full_nodes', 
+         "RPC endpoint not configured in .env.test (TEST_RPC_URL_FULL_NODE_1)"),
+        ('anchor_chain_rpc.full_nodes', 
+         "Anchor RPC endpoint not configured in .env.test (TEST_ANCHOR_RPC_URL_FULL_NODE_1)"),
+    ]
+    
+    for setting_path, error_msg in required_settings:
+        parts = setting_path.split('.')
+        current = app_config
+        is_missing = False
+        for part in parts:
+            if not hasattr(current, part):
+                is_missing = True
+                break
+            current = getattr(current, part)
+        
+        if is_missing or (isinstance(current, list) and not current):
+            pytest.skip(f"Test environment not properly configured: {error_msg}")
 
-from computes.pair_total_reserves import PairTotalReservesProcessor
-from computes.utils.models.message_models import UniswapPairTotalReservesSnapshot
+
+async def validate_block_availability(rpc_helper, block_number: int) -> bool:
+    """Check if a block number is available in the RPC node"""
+    try:
+        current_block = await rpc_helper.get_current_block_number()
+        if block_number > current_block:
+            return False
+        await rpc_helper.eth_get_block(block_number)
+        return True
+    except Exception:
+        return False
 
 
-async def test_pair_reserves_processor():
-    # Mock your parameters
-    from_block = 19820300
-    to_block = from_block + 9
-    snapshot_process_message = SnapshotProcessMessage(
-        data_source='0x5796d7ad51583ae2c7297652edb7006bcd90519d',
-        begin=from_block,
-        end=to_block,
-        epochId=1,
-    )
+@pytest.mark.asyncio(loop_scope="module")
+async def test_pair_total_reserves(
+    rpc_helper,
+    anchor_rpc_helper,
+    ipfs_reader,
+    redis_conn,
+    protocol_state_contract,
+    app_config
+):
+    """Test pair total reserves calculation."""
+    validate_test_environment(app_config)
+    await initialize_rpc(rpc_helper._rpc_settings)
+    # Test with a historical block
+    current_block_number = await rpc_helper.get_current_block_number()
+    block_offset_from_head = 10
+    if current_block_number <= block_offset_from_head:
+        pytest.skip(f"Chain height ({current_block_number}) too low to test with offset {block_offset_from_head}")
+    
+    block_num = current_block_number - block_offset_from_head
+    print(f"\nTesting at block near chain head: {block_num} (current head: {current_block_number})")
+    
+    pair_address = "0xE0554a476A092703abdB3Ef35c80e0D76d32939F"
 
-    processor = PairTotalReservesProcessor()
-    rpc_helper = RpcHelper(settings.rpc)
-    aioredis_pool = RedisPoolCache()
-    await aioredis_pool.populate()
-    redis_conn = aioredis_pool._aioredis_pool
+    # Check if the block is available
+    if not await validate_block_availability(rpc_helper, block_num):
+        pytest.skip(f"Skipping test: block {block_num} not available on configured RPC node.")
 
-    await rpc_helper.init(redis_conn=redis_conn)
-
-    # set key for get_block_details_in_block_range
-    await redis_conn.set(
-        source_chain_epoch_size_key(),
-        to_block - from_block,
-    )
-
-    pair_reserves_snapshot = await processor.compute(
-        epoch=snapshot_process_message,
+    # Get pair reserves
+    data = await get_pair_reserves(
+        pair_address,
+        block_num,
+        block_num,
         redis_conn=redis_conn,
         rpc_helper=rpc_helper,
+        anchor_rpc_helper=anchor_rpc_helper,
+        ipfs_reader=ipfs_reader,
+        protocol_state_contract=protocol_state_contract,
     )
+    
+    # Validate the data structure
+    assert data is not None, "Pair reserves data should not be None"
+    assert block_num in data.token0Reserves, f"Block {block_num} should be present in reserves data"
+    
+    print(f"Pair reserves for {pair_address} at block {block_num}:")
+    print(f"  Token0 USD: {data.token0ReservesUSD[block_num]}")
+    print(f"  Token1 USD: {data.token1ReservesUSD[block_num]}")
+    print(f"  Token0 reserves: {data.token0Reserves[block_num]}")
+    print(f"  Token1 reserves: {data.token1Reserves[block_num]}")
+    
+    print("PASSED: test_pair_total_reserves")
 
-    assert isinstance(pair_reserves_snapshot, UniswapPairTotalReservesSnapshot)
 
-    print('PASSED')
-
-if __name__ == '__main__':
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(test_pair_reserves_processor())
+if __name__ == "__main__":
+    print("To run these tests, use the `pytest` command from the project root.")

@@ -11,6 +11,7 @@ class UniswapContractAbis(BaseModel):
 class ContractAddresses(BaseModel):
     uniswap_v3_factory: str
     uniswap_v3_helper: str
+    chainlink_eth_usd_oracle: str
     DAI_WETH_PAIR: str
     USDC_WETH_PAIR: str
     USDT_WETH_PAIR: str
