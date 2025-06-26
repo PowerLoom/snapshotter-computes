@@ -5,7 +5,6 @@ import httpx
 from redis import asyncio as aioredis
 
 from computes.utils.core import get_pair_reserves
-from computes.utils.constants import initialize_rpc
 from snapshotter.utils.redis.redis_conn import provide_async_redis_conn_insta
 
 
@@ -111,8 +110,6 @@ async def test_compare_liquidity(
     
     total_liquidity_usd_graph = 0
     total_liquidity_usd_rpc = 0
-
-    await initialize_rpc(rpc_helper._rpc_settings)
 
     current_block_number = await rpc_helper.get_current_block_number()
     block_offset_from_head = 10

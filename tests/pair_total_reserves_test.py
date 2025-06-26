@@ -2,7 +2,6 @@ import asyncio
 import pytest
 
 from computes.utils.core import get_pair_reserves
-from computes.utils.constants import initialize_rpc
 
 def validate_test_environment(app_config):
     """Validate that the test environment is properly configured via app_config."""
@@ -50,7 +49,6 @@ async def test_pair_total_reserves(
 ):
     """Test pair total reserves calculation."""
     validate_test_environment(app_config)
-    await initialize_rpc(rpc_helper._rpc_settings)
     # Test with a historical block
     current_block_number = await rpc_helper.get_current_block_number()
     block_offset_from_head = 10
