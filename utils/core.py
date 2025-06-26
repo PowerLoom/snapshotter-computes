@@ -163,7 +163,6 @@ async def get_pair_reserves(
             from_block - 1,
             pair_per_token_metadata,
             rpc_helper,
-            redis_conn,
         )
         core_logger.info(
             "[Epoch {}-{}] Pool {} | Calculated initial reserves: token0={}, token1={}",
