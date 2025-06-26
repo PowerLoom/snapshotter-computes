@@ -76,11 +76,9 @@ async def test_calculate_reserves(
     """Test the calculate_reserves function with normal operation against a historical block."""
     from computes.total_value_locked import calculate_reserves
     from computes.metadata import MetadataProcessor
-    from computes.utils import constants
     metadata_processor = MetadataProcessor()
 
     validate_test_environment(app_config)
-    await constants.initialize_rpc(injected_rpc_helper=rpc_helper)
     # USDC-WETH pool
     pool_address = Web3.to_checksum_address("0xE0554a476A092703abdB3Ef35c80e0D76d32939F")
 
