@@ -8,9 +8,9 @@ from snapshotter.utils.default_logger import logger
 from snapshotter.utils.file_utils import read_json_file
 from rpc_helper.rpc import RpcHelper
 from web3 import Web3
+from computes.settings.config import settings as worker_settings
 import asyncio
 import threading
-from ..settings.config import settings as worker_settings
 
 # Maximum gas limit for static calls
 max_gas_static_call = 30_000_000_000
