@@ -1,5 +1,4 @@
 import asyncio
-from distutils import core
 import json
 from functools import reduce
 import time
@@ -7,9 +6,8 @@ from typing import Dict, List, Optional, Any, Tuple
 
 from redis import asyncio as aioredis
 from computes.metadata import MetadataProcessor
-from computes.utils.models.message_models import UniswapBaseSnapshot, UniswapPoolMetadata
+from computes.utils.models.message_models import UniswapPoolMetadata
 from snapshotter.utils.default_logger import logger
-from rpc_helper.rpc import get_event_sig_and_abi
 from rpc_helper.rpc import RpcHelper
 from snapshotter.utils.snapshot_utils import get_block_details_in_block_range
 from web3 import Web3
@@ -20,12 +18,9 @@ from computes.total_value_locked import calculate_reserves
 from computes.total_value_locked import get_tick_info
 from computes.total_value_locked import get_token0_in_pool
 from computes.total_value_locked import get_token1_in_pool
-from computes.utils.constants import UNISWAP_EVENTS_ABI
-from computes.utils.constants import UNISWAP_TRADE_EVENT_SIGS
 from computes.utils.constants import UNISWAPV3_FEE_DIV
-from computes.utils.helpers import get_events_from_cache, get_pair_metadata
-from computes.utils.models.data_models import UniswapEvent, epoch_event_trade_data, UniswapProcessedLog
-from computes.utils.models.data_models import event_trade_data
+from computes.utils.helpers import get_events_from_cache
+from computes.utils.models.data_models import UniswapEvent, UniswapProcessedLog
 from computes.utils.models.data_models import trade_data
 from computes.utils.pricing import get_token_price_in_block_range
 
