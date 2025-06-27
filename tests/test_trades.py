@@ -181,93 +181,115 @@ async def fetch_uniswap_v3_events_from_etherscan(
         logger.error(f"Error loading pool ABI: {e}")
         return {"swaps": [], "mints": [], "burns": []}
     
-    for i, (event_type, topic) in enumerate([("swaps", swap_topic), ("mints", mint_topic), ("burns", burn_topic)]):
-        # Add delay between requests to avoid rate limiting
-        if i > 0:
-            time.sleep(0.2)  # 200ms delay between requests
+    # Fetch all events in a single API call instead of 3 separate calls
+    url = api_url
+    params = {
+        "module": "logs",
+        "action": "getLogs",
+        "address": pool_address,
+        # No topic0 - get ALL events for this contract
+        "fromBlock": start_block,
+        "toBlock": end_block,
+        "apikey": api_key
+    }
+    
+    # Only add chainid for Etherscan v2 API, not for chain-specific APIs
+    if "etherscan.io" in api_url and "/v2" in api_url:
+        params["chainid"] = source_chain_id
+    # Chain-specific APIs (basescan.org, polygonscan.com, etc.) don't need chainid
         
-        url = api_url
-        params = {
-            "module": "logs",
-            "action": "getLogs",
-            "address": pool_address,
-            "topic0": topic,
-            "fromBlock": start_block,
-            "toBlock": end_block,
-            "chainid": source_chain_id,
-            "apikey": api_key
-        }
-        
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=30)) as response:
-                    if response.status != 200:
-                        logger.error(f"Etherscan request failed with status {response.status}")
-                        continue
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=30)) as response:
+                if response.status != 200:
+                    logger.error(f"Etherscan request failed with status {response.status}")
+                    return {"swaps": [], "mints": [], "burns": []}
+                
+                data = await response.json()
+                
+                if data.get("status") != "1":
+                    error_message = data.get('message', 'Unknown error')
+                    logger.warning(f"Etherscan API returned status 0: {error_message}")
                     
-                    data = await response.json()
-                    
-                    if data.get("status") != "1":
-                        error_message = data.get('message', 'Unknown error')
-                        logger.warning(f"Etherscan API returned status 0: {error_message}")
+                    if "No records found" in error_message:
+                        print(f"    ℹ️  No events found for pool {pool_address} in block range {start_block}-{end_block}")
+                        return {"swaps": [], "mints": [], "burns": []}
+                    else:
+                        logger.error(f"Etherscan API error: {error_message}")
+                        return {"swaps": [], "mints": [], "burns": []}
+                
+                logs = data.get("result", [])
+                print(f"    📋 Etherscan returned {len(logs)} total events for pool {pool_address}")
+                
+                # Separate events by type
+                swap_events = []
+                mint_events = []  
+                burn_events = []
+                
+                for log in logs:
+                    try:
+                        # Determine event type from topic
+                        if len(log.get('topics', [])) == 0:
+                            continue  # Skip logs without topics
+                            
+                        topic0 = log['topics'][0]
+                        event_name = None
+                        event_type = None
                         
-                        if "No records found" in error_message:
-                            print(f"    ℹ️  No {event_type} events found for pool {pool_address} in block range {start_block}-{end_block}")
-                            events[event_type] = []
-                            continue
+                        if topic0 == swap_topic:
+                            event_name = "Swap"
+                            event_type = "swaps"
+                        elif topic0 == mint_topic:
+                            event_name = "Mint"  
+                            event_type = "mints"
+                        elif topic0 == burn_topic:
+                            event_name = "Burn"
+                            event_type = "burns"
                         else:
-                            logger.error(f"Etherscan API error: {error_message}")
-                            continue
-                    
-                    logs = data.get("result", [])
-                    print(f"    ✅ Etherscan returned {len(logs)} {event_type} events for pool {pool_address}")
-                    
-                    parsed_events = []
-                    for log in logs:
-                        try:
-                            # Get the appropriate event ABI
-                            event_name = event_type[:-1].capitalize()
-                            event_abi = event_abis.get(event_name)
-                            
-                            if not event_abi:
-                                logger.warning(f"No ABI found for event {event_name}")
-                                continue
-
-                            decoded_event = get_event_data(codec, event_abi, log)
-                            
-                            event = {
-                                "id": f"{log['transactionHash']}_{log['logIndex']}",
-                                "transaction": {"id": log["transactionHash"]},
-                                "logIndex": log["logIndex"],
-                                "blockNumber": int(log["blockNumber"], 16),
-                                "amount0": str(decoded_event['args'].get('amount0', 0)),
-                                "amount1": str(decoded_event['args'].get('amount1', 0)),
-                                "amountUSD": "0"  # Not available in logs
-                            }
-                            
-                            print(f"    🔍 Decoded {event_type}: amount0={event['amount0']}, amount1={event['amount1']}")
-                            
-                        except Exception as e:
-                            logger.warning(f"Error decoding {event_type} log: {e}")
-                            logger.warning(f"Log data: {log['data']}")
-                            # Fallback to default values
-                            event = {
-                                "id": f"{log['transactionHash']}_{log['logIndex']}",
-                                "transaction": {"id": log["transactionHash"]},
-                                "logIndex": log["logIndex"],
-                                "blockNumber": int(log["blockNumber"], 16),
-                                "amount0": "0",
-                                "amount1": "0",
-                                "amountUSD": "0"
-                            }
+                            continue  # Skip non-Uniswap V3 events
                         
-                        parsed_events.append(event)
+                        event_abi = event_abis.get(event_name)
+                        if not event_abi:
+                            logger.warning(f"No ABI found for event {event_name}")
+                            continue
+
+                        decoded_event = get_event_data(codec, event_abi, log)
+                        
+                        event = {
+                            "id": f"{log['transactionHash']}_{log['logIndex']}",
+                            "transaction": {"id": log["transactionHash"]},
+                            "logIndex": log["logIndex"],
+                            "blockNumber": int(log["blockNumber"], 16),
+                            "amount0": str(decoded_event['args'].get('amount0', 0)),
+                            "amount1": str(decoded_event['args'].get('amount1', 0)),
+                            "amountUSD": "0"  # Not available in logs
+                        }
+                        
+                        print(f"    🔍 Decoded {event_type}: amount0={event['amount0']}, amount1={event['amount1']}")
+                        
+                        # Add to appropriate list
+                        if event_type == "swaps":
+                            swap_events.append(event)
+                        elif event_type == "mints":
+                            mint_events.append(event)
+                        elif event_type == "burns":
+                            burn_events.append(event)
+                            
+                    except Exception as e:
+                        logger.warning(f"Error decoding event log: {e}")
+                        logger.warning(f"Log data: {log.get('data', 'No data')}")
+                        continue
+                
+                # Build final events dict
+                events = {
+                    "swaps": swap_events,
+                    "mints": mint_events, 
+                    "burns": burn_events
+                }
                     
-                    events[event_type] = parsed_events
-                    
-        except Exception as e:
-            logger.error(f"Error fetching {event_type} from Etherscan: {e}")
-            continue
+    except Exception as e:
+        logger.error(f"Error fetching events from Etherscan: {e}")
+        return {"swaps": [], "mints": [], "burns": []}
     
     total_events = len(events["swaps"]) + len(events["mints"]) + len(events["burns"])
     print(f"  📊 Total events found: {total_events} (swaps: {len(events['swaps'])}, mints: {len(events['mints'])}, burns: {len(events['burns'])})")
