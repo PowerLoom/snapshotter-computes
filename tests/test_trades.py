@@ -83,21 +83,28 @@ async def get_active_pools_for_block(redis_conn: aioredis.Redis, block_number: i
     return {pool.decode('utf-8') for pool in pools}
 
 
-def get_etherscan_api_key():
-    """Get Etherscan API key from environment variable."""
+def get_etherscan_config():
+    """Get Etherscan configuration from environment variables."""
     api_key = os.getenv('TEST_ETHERSCAN_API_KEY')
-    if not api_key:
-        pytest.skip(
-            "TEST_ETHERSCAN_API_KEY not configured in environment. "
-            "Please get a free API key from https://etherscan.io/apis?id=8453"
-        )
-    return api_key
+    api_url = os.getenv('TEST_ETHERSCAN_URL')
+    
+    if not api_key or not api_url:
+        return None, None  # Skip etherscan validation if missing config
+    
+    # Ensure URL ends with /api if not already present
+    if not api_url.endswith('/api'):
+        api_url = api_url.rstrip('/') + '/api'
+    
+    return api_key, api_url
 
 
 async def fetch_uniswap_v3_events_from_etherscan(
     pool_address: str,
     start_block: int,
-    end_block: int
+    end_block: int,
+    redis_conn=None,
+    protocol_state_contract=None,
+    anchor_rpc_helper=None
 ) -> Dict[str, List]:
     """
     Fetch Uniswap V3 events (swaps, mints, burns) from Etherscan API.
@@ -110,7 +117,34 @@ async def fetch_uniswap_v3_events_from_etherscan(
     Returns:
         Dictionary containing 'swaps', 'mints', and 'burns' lists
     """
-    api_key = get_etherscan_api_key()
+    api_key, api_url = get_etherscan_config()
+    if not api_key or not api_url:
+        return {"swaps": [], "mints": [], "burns": []}  # Return empty dict if missing config
+    
+    # Get source chain ID for Etherscan v2 API (if available)
+    source_chain_id = 1  # Default to Ethereum mainnet
+    if redis_conn and protocol_state_contract and anchor_rpc_helper:
+        try:
+            from snapshotter.utils.redis.redis_keys import source_chain_id_key
+            source_chain_id_data = await redis_conn.get(source_chain_id_key())
+            
+            if source_chain_id_data:
+                source_chain_id = int(source_chain_id_data.decode('utf-8'))
+                print(f"      ℹ️  Using cached source chain ID: {source_chain_id}")
+            else:
+                # If not in cache, fetch from blockchain but don't cache (test mode)
+                [source_chain_id] = await anchor_rpc_helper.web3_call(
+                    tasks=[
+                        ('SOURCE_CHAIN_ID', [Web3.to_checksum_address(settings.data_market)]),
+                    ],
+                    contract_addr=protocol_state_contract.address,
+                    abi=protocol_state_contract.abi,
+                )
+                print(f"      ℹ️  Fetched source chain ID from contract: {source_chain_id}")
+        except Exception as e:
+            print(f"      ⚠️  Could not get source chain ID: {e}")
+            print(f"      ℹ️  Using default Ethereum mainnet (chain ID 1)")
+            source_chain_id = 1
     
     # Uniswap V3 event signatures
     swap_topic = "0xc42079f94a6350d7e6235f29174924f928cc2ac818eb64fed8004e115fbcca67"  # Swap event
@@ -151,8 +185,8 @@ async def fetch_uniswap_v3_events_from_etherscan(
         # Add delay between requests to avoid rate limiting
         if i > 0:
             time.sleep(0.2)  # 200ms delay between requests
-            
-        url = "https://api.basescan.org/api"
+        
+        url = api_url
         params = {
             "module": "logs",
             "action": "getLogs",
@@ -160,6 +194,7 @@ async def fetch_uniswap_v3_events_from_etherscan(
             "topic0": topic,
             "fromBlock": start_block,
             "toBlock": end_block,
+            "chainid": source_chain_id,
             "apikey": api_key
         }
         
@@ -378,7 +413,10 @@ def compare_events(
 
 async def validate_trades_snapshot_against_etherscan(
     trades_snapshot: UniswapTradesSnapshot,
-    pool_address: str
+    pool_address: str,
+    redis_conn=None,
+    protocol_state_contract=None,
+    anchor_rpc_helper=None
 ) -> Dict:
     """
     Validate trades snapshot against Etherscan data.
@@ -398,7 +436,10 @@ async def validate_trades_snapshot_against_etherscan(
     etherscan_data = await fetch_uniswap_v3_events_from_etherscan(
         pool_address,
         trades_snapshot.epoch.begin,
-        trades_snapshot.epoch.end
+        trades_snapshot.epoch.end,
+        redis_conn,
+        protocol_state_contract,
+        anchor_rpc_helper
     )
     
     print(f"  Etherscan data:")
@@ -531,7 +572,10 @@ async def test_trades_processor_against_etherscan(
         
         validation_result = await validate_trades_snapshot_against_etherscan(
             trades_snapshot,
-            pool_address
+            pool_address,
+            redis_conn,
+            protocol_state_contract,
+            anchor_rpc_helper
         )
         all_validation_results.append(validation_result)
     
