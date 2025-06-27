@@ -128,108 +128,105 @@ async def fetch_trade_events_from_etherscan(
         'events_details': []
     }
     
-    # Fetch all relevant events in a single call to reduce API calls and potential missed events
-    all_topics = [swap_topic, mint_topic, burn_topic]
+    # Fetch all events in a single API call (no topic0 filter)
+    url = api_url
+    params = {
+        "module": "logs",
+        "action": "getLogs",
+        "address": pool_address,
+        "fromBlock": block_number,
+        "toBlock": block_number,
+        "apikey": api_key
+    }
     
-    for topic in all_topics:
-        url = api_url
-        params = {
-            "module": "logs",
-            "action": "getLogs",
-            "address": pool_address,
-            "topic0": topic,
-            "fromBlock": block_number,
-            "toBlock": block_number,
-            "chainid": source_chain_id,
-            "apikey": api_key
-        }
-        
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=30)) as response:
-                    if response.status != 200:
-                        continue
-                    
-                    data = await response.json()
-                    
-                    if data.get("status") != "1":
-                        error_message = data.get('message', 'Unknown error')
-                        result = data.get('result', '')
-                        if "No records found" not in error_message:
-                            print(f"      ⚠️  Etherscan API error for topic {topic}: {error_message}")
-                            if result and result != error_message:
-                                print(f"      ⚠️  API result: {result}")
-                            # If it's a rate limit or API key issue, stop trying other topics
-                            if any(phrase in error_message.lower() for phrase in ['rate limit', 'invalid api key', 'notok']):
-                                print(f"      ⚠️  API issue detected, skipping remaining Etherscan validation")
-                                return {}
-                        continue
-                    
-                    logs = data.get("result", [])
-                    
-                    for log in logs:
-                        try:
-                            # Determine event type from topic
-                            event_name = None
-                            if log['topics'][0] == swap_topic:
+    # Only add chainid for Etherscan v2 API, not for chain-specific APIs
+    if "etherscan.io" in api_url and "/v2" in api_url:
+        params["chainid"] = source_chain_id
+    # Chain-specific APIs (basescan.org, polygonscan.com, etc.) don't need chainid
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=30)) as response:
+                if response.status != 200:
+                    print(f"      ⚠️  Etherscan request failed with status {response.status}")
+                    return {}
+                
+                data = await response.json()
+                
+                if data.get("status") != "1":
+                    error_message = data.get('message', 'Unknown error')
+                    result = data.get('result', '')
+                    if "No records found" not in error_message:
+                        print(f"      ⚠️  Etherscan API error: {error_message}")
+                        if result and result != error_message:
+                            print(f"      ⚠️  API result: {result}")
+                    return {}
+                
+                logs = data.get("result", [])
+                print(f"      📋 Etherscan returned {len(logs)} total events for block {block_number}")
+                
+                for log in logs:
+                    try:
+                        # Determine event type from topic (filter to only Uniswap V3 events)
+                        event_name = None
+                        if len(log.get('topics', [])) > 0:
+                            topic0 = log['topics'][0]
+                            if topic0 == swap_topic:
                                 event_name = "Swap"
-                            elif log['topics'][0] == mint_topic:
+                            elif topic0 == mint_topic:
                                 event_name = "Mint"
-                            elif log['topics'][0] == burn_topic:
+                            elif topic0 == burn_topic:
                                 event_name = "Burn"
+                        
+                        if not event_name:
+                            continue  # Skip non-Uniswap V3 events
                             
-                            if not event_name:
-                                continue
-                                
-                            event_abi = event_abis.get(event_name)
-                            if not event_abi:
-                                continue
+                        event_abi = event_abis.get(event_name)
+                        if not event_abi:
+                            continue  # Skip if no ABI found
 
-                            decoded_event = get_event_data(codec, event_abi, log)
-                            amount0 = decoded_event['args'].get('amount0', 0)
-                            amount1 = decoded_event['args'].get('amount1', 0)
+                        decoded_event = get_event_data(codec, event_abi, log)
+                        amount0 = decoded_event['args'].get('amount0', 0)
+                        amount1 = decoded_event['args'].get('amount1', 0)
+                        
+                        # Convert to token units (normalized by decimals)
+                        token0_amount = abs(amount0) / (10 ** int(pool_metadata.token0.decimals))
+                        token1_amount = abs(amount1) / (10 ** int(pool_metadata.token1.decimals))
+                        
+                        # Store event details for debugging
+                        event_detail = {
+                            'event_type': event_name,
+                            'tx_hash': log['transactionHash'],
+                            'log_index': int(log['logIndex'], 16),
+                            'token0_amount': token0_amount,
+                            'token1_amount': token1_amount,
+                            'amount0_raw': amount0,
+                            'amount1_raw': amount1
+                        }
+                        trade_metrics['events_details'].append(event_detail)
+                        
+                        # Accumulate token amounts by event type
+                        if event_name == "Swap":
+                            trade_metrics['swap_count'] += 1
+                            trade_metrics['total_swap_token0_amount'] += token0_amount
+                            trade_metrics['total_swap_token1_amount'] += token1_amount
+                        
+                        elif event_name in ["Mint", "Burn"]:
+                            if event_name == "Mint":
+                                trade_metrics['mint_count'] += 1
+                            else:
+                                trade_metrics['burn_count'] += 1
                             
-                            # Convert to token units (normalized by decimals)
-                            token0_amount = abs(amount0) / (10 ** int(pool_metadata.token0.decimals))
-                            token1_amount = abs(amount1) / (10 ** int(pool_metadata.token1.decimals))
-                            
-                            # Store event details for debugging
-                            event_detail = {
-                                'event_type': event_name,
-                                'tx_hash': log['transactionHash'],
-                                'log_index': int(log['logIndex'], 16),
-                                'token0_amount': token0_amount,
-                                'token1_amount': token1_amount,
-                                'amount0_raw': amount0,
-                                'amount1_raw': amount1
-                            }
-                            trade_metrics['events_details'].append(event_detail)
-                            
-                            # Accumulate token amounts by event type
-                            if event_name == "Swap":
-                                trade_metrics['swap_count'] += 1
-                                trade_metrics['total_swap_token0_amount'] += token0_amount
-                                trade_metrics['total_swap_token1_amount'] += token1_amount
-                            
-                            elif event_name in ["Mint", "Burn"]:
-                                if event_name == "Mint":
-                                    trade_metrics['mint_count'] += 1
-                                else:
-                                    trade_metrics['burn_count'] += 1
-                                
-                                trade_metrics['total_mint_burn_token0_amount'] += token0_amount
-                                trade_metrics['total_mint_burn_token1_amount'] += token1_amount
-                            
-                        except Exception as e:
-                            print(f"      ⚠️  Error decoding event {log.get('transactionHash', 'unknown')}: {e}")
-                            continue  # Skip malformed events
-                            
-        except Exception as e:
-            print(f"      ⚠️  Error fetching events for topic {topic}: {e}")
-            continue  # Skip on network errors
-        
-        # Small delay between requests to respect rate limits
-        await asyncio.sleep(0.2)
+                            trade_metrics['total_mint_burn_token0_amount'] += token0_amount
+                            trade_metrics['total_mint_burn_token1_amount'] += token1_amount
+                        
+                    except Exception as e:
+                        print(f"      ⚠️  Error decoding event {log.get('transactionHash', 'unknown')}: {e}")
+                        continue  # Skip malformed events
+                        
+    except Exception as e:
+        print(f"      ⚠️  Error fetching events from Etherscan: {e}")
+        return {}
     
     return trade_metrics
 
