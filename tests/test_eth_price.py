@@ -207,7 +207,10 @@ async def test_eth_price_processor(
     # Get Chainlink Oracle price data
     print(f"\n🔍 Getting Chainlink Oracle price data...")
     print(f"Using Chainlink Oracle address: {computes_settings.contract_addresses.chainlink_eth_usd_oracle}")
-    chainlink_data = await get_chainlink_price_data(rpc_helper, computes_settings.contract_addresses.chainlink_eth_usd_oracle)
+    chainlink_data = await get_chainlink_price_data(
+        rpc_helper=rpc_helper,
+        oracle_address=computes_settings.contract_addresses.chainlink_eth_usd_oracle
+    )
     
     print(f"Chainlink latest round data:")
     print(f"  Round ID: {chainlink_data['round_id']}")
