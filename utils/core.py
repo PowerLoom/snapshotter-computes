@@ -175,22 +175,7 @@ async def get_pair_reserves(
             initial_reserves[1]
         )
 
-        # Not used for now, here as an example
-        slot0_data_dict = await get_slot0_data_for_block_range(
-            rpc_helper=rpc_helper,
-            pair_address=pair_address,
-            from_block=from_block,
-            to_block=to_block,
-        )
     else:
-        slot0_data_dict_from_to_block = await get_slot0_data_for_block_range(
-            rpc_helper=rpc_helper,
-            pair_address=pair_address,
-            from_block=from_block,
-            to_block=to_block,
-        )
-        # FIXME: this is not correct, we should calculate reserves at the end of the previous block (from_block - 1)
-        #        then add or remove values according to the events in the current block range (from_block - to_block)
         initial_reserves = await calculate_reserves(
             pair_address=pair_address,
             at_block=from_block - 1,
@@ -214,15 +199,6 @@ async def get_pair_reserves(
                 pair_address
             )
             return None
-    
-    # TODO: decide best way to handle failed slot0 data fetch
-    if not slot0_data_dict:
-        core_logger.error(
-            "[Epoch {}-{}] Pool {} | Failed to fetch slot0 data",
-            from_block,
-            to_block,
-            pair_address
-        )
 
     # Initialize accumulators for epoch-wide trade data
     epoch_total_trade_data = trade_data(
