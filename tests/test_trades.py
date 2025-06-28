@@ -82,21 +82,28 @@ async def get_active_pools_for_block(redis_conn: aioredis.Redis, block_number: i
     return {pool.decode('utf-8') for pool in pools}
 
 
-def get_etherscan_api_key():
-    """Get Etherscan API key from environment variable."""
+def get_etherscan_config():
+    """Get Etherscan configuration from environment variables."""
     api_key = os.getenv('TEST_ETHERSCAN_API_KEY')
-    if not api_key:
-        pytest.skip(
-            "TEST_ETHERSCAN_API_KEY not configured in environment. "
-            "Please get a free API key from https://etherscan.io/apis"
-        )
-    return api_key
+    api_url = os.getenv('TEST_ETHERSCAN_URL')
+    
+    if not api_key or not api_url:
+        return None, None  # Skip etherscan validation if missing config
+    
+    # Ensure URL ends with /api if not already present
+    if not api_url.endswith('/api'):
+        api_url = api_url.rstrip('/') + '/api'
+    
+    return api_key, api_url
 
 
 async def fetch_uniswap_v3_events_from_etherscan(
     pool_address: str,
     start_block: int,
-    end_block: int
+    end_block: int,
+    redis_conn=None,
+    protocol_state_contract=None,
+    anchor_rpc_helper=None
 ) -> Dict[str, List]:
     """
     Fetch Uniswap V3 events (swaps, mints, burns) from Etherscan API.
@@ -109,7 +116,34 @@ async def fetch_uniswap_v3_events_from_etherscan(
     Returns:
         Dictionary containing 'swaps', 'mints', and 'burns' lists
     """
-    api_key = get_etherscan_api_key()
+    api_key, api_url = get_etherscan_config()
+    if not api_key or not api_url:
+        return {"swaps": [], "mints": [], "burns": []}  # Return empty dict if missing config
+    
+    # Get source chain ID for Etherscan v2 API (if available)
+    source_chain_id = 1  # Default to Ethereum mainnet
+    if redis_conn and protocol_state_contract and anchor_rpc_helper:
+        try:
+            from snapshotter.utils.redis.redis_keys import source_chain_id_key
+            source_chain_id_data = await redis_conn.get(source_chain_id_key())
+            
+            if source_chain_id_data:
+                source_chain_id = int(source_chain_id_data.decode('utf-8'))
+                print(f"      ℹ️  Using cached source chain ID: {source_chain_id}")
+            else:
+                # If not in cache, fetch from blockchain but don't cache (test mode)
+                [source_chain_id] = await anchor_rpc_helper.web3_call(
+                    tasks=[
+                        ('SOURCE_CHAIN_ID', [Web3.to_checksum_address(settings.data_market)]),
+                    ],
+                    contract_addr=protocol_state_contract.address,
+                    abi=protocol_state_contract.abi,
+                )
+                print(f"      ℹ️  Fetched source chain ID from contract: {source_chain_id}")
+        except Exception as e:
+            print(f"      ⚠️  Could not get source chain ID: {e}")
+            print(f"      ℹ️  Using default Ethereum mainnet (chain ID 1)")
+            source_chain_id = 1
     
     # Uniswap V3 event signatures
     swap_topic = "0xc42079f94a6350d7e6235f29174924f928cc2ac818eb64fed8004e115fbcca67"  # Swap event
@@ -146,92 +180,115 @@ async def fetch_uniswap_v3_events_from_etherscan(
         logger.error(f"Error loading pool ABI: {e}")
         return {"swaps": [], "mints": [], "burns": []}
     
-    for i, (event_type, topic) in enumerate([("swaps", swap_topic), ("mints", mint_topic), ("burns", burn_topic)]):
-        # Add delay between requests to avoid rate limiting
-        if i > 0:
-            time.sleep(0.2)  # 200ms delay between requests
+    # Fetch all events in a single API call instead of 3 separate calls
+    url = api_url
+    params = {
+        "module": "logs",
+        "action": "getLogs",
+        "address": pool_address,
+        # No topic0 - get ALL events for this contract
+        "fromBlock": start_block,
+        "toBlock": end_block,
+        "apikey": api_key
+    }
+    
+    # Only add chainid for Etherscan v2 API, not for chain-specific APIs
+    if "etherscan.io" in api_url and "/v2" in api_url:
+        params["chainid"] = source_chain_id
+    # Chain-specific APIs (basescan.org, polygonscan.com, etc.) don't need chainid
         
-        url = "https://api.etherscan.io/api"
-        params = {
-            "module": "logs",
-            "action": "getLogs",
-            "address": pool_address,
-            "topic0": topic,
-            "fromBlock": start_block,
-            "toBlock": end_block,
-            "apikey": api_key
-        }
-        
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=30)) as response:
-                    if response.status != 200:
-                        logger.error(f"Etherscan request failed with status {response.status}")
-                        continue
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=30)) as response:
+                if response.status != 200:
+                    logger.error(f"Etherscan request failed with status {response.status}")
+                    return {"swaps": [], "mints": [], "burns": []}
+                
+                data = await response.json()
+                
+                if data.get("status") != "1":
+                    error_message = data.get('message', 'Unknown error')
+                    logger.warning(f"Etherscan API returned status 0: {error_message}")
                     
-                    data = await response.json()
-                    
-                    if data.get("status") != "1":
-                        error_message = data.get('message', 'Unknown error')
-                        logger.warning(f"Etherscan API returned status 0: {error_message}")
+                    if "No records found" in error_message:
+                        print(f"    ℹ️  No events found for pool {pool_address} in block range {start_block}-{end_block}")
+                        return {"swaps": [], "mints": [], "burns": []}
+                    else:
+                        logger.error(f"Etherscan API error: {error_message}")
+                        return {"swaps": [], "mints": [], "burns": []}
+                
+                logs = data.get("result", [])
+                print(f"    📋 Etherscan returned {len(logs)} total events for pool {pool_address}")
+                
+                # Separate events by type
+                swap_events = []
+                mint_events = []  
+                burn_events = []
+                
+                for log in logs:
+                    try:
+                        # Determine event type from topic
+                        if len(log.get('topics', [])) == 0:
+                            continue  # Skip logs without topics
+                            
+                        topic0 = log['topics'][0]
+                        event_name = None
+                        event_type = None
                         
-                        if "No records found" in error_message:
-                            print(f"    ℹ️  No {event_type} events found for pool {pool_address} in block range {start_block}-{end_block}")
-                            events[event_type] = []
-                            continue
+                        if topic0 == swap_topic:
+                            event_name = "Swap"
+                            event_type = "swaps"
+                        elif topic0 == mint_topic:
+                            event_name = "Mint"  
+                            event_type = "mints"
+                        elif topic0 == burn_topic:
+                            event_name = "Burn"
+                            event_type = "burns"
                         else:
-                            logger.error(f"Etherscan API error: {error_message}")
-                            continue
-                    
-                    logs = data.get("result", [])
-                    print(f"    ✅ Etherscan returned {len(logs)} {event_type} events for pool {pool_address}")
-                    
-                    parsed_events = []
-                    for log in logs:
-                        try:
-                            # Get the appropriate event ABI
-                            event_name = event_type[:-1].capitalize()
-                            event_abi = event_abis.get(event_name)
-                            
-                            if not event_abi:
-                                logger.warning(f"No ABI found for event {event_name}")
-                                continue
-
-                            decoded_event = get_event_data(codec, event_abi, log)
-                            
-                            event = {
-                                "id": f"{log['transactionHash']}_{log['logIndex']}",
-                                "transaction": {"id": log["transactionHash"]},
-                                "logIndex": log["logIndex"],
-                                "blockNumber": int(log["blockNumber"], 16),
-                                "amount0": str(decoded_event['args'].get('amount0', 0)),
-                                "amount1": str(decoded_event['args'].get('amount1', 0)),
-                                "amountUSD": "0"  # Not available in logs
-                            }
-                            
-                            print(f"    🔍 Decoded {event_type}: amount0={event['amount0']}, amount1={event['amount1']}")
-                            
-                        except Exception as e:
-                            logger.warning(f"Error decoding {event_type} log: {e}")
-                            logger.warning(f"Log data: {log['data']}")
-                            # Fallback to default values
-                            event = {
-                                "id": f"{log['transactionHash']}_{log['logIndex']}",
-                                "transaction": {"id": log["transactionHash"]},
-                                "logIndex": log["logIndex"],
-                                "blockNumber": int(log["blockNumber"], 16),
-                                "amount0": "0",
-                                "amount1": "0",
-                                "amountUSD": "0"
-                            }
+                            continue  # Skip non-Uniswap V3 events
                         
-                        parsed_events.append(event)
+                        event_abi = event_abis.get(event_name)
+                        if not event_abi:
+                            logger.warning(f"No ABI found for event {event_name}")
+                            continue
+
+                        decoded_event = get_event_data(codec, event_abi, log)
+                        
+                        event = {
+                            "id": f"{log['transactionHash']}_{log['logIndex']}",
+                            "transaction": {"id": log["transactionHash"]},
+                            "logIndex": log["logIndex"],
+                            "blockNumber": int(log["blockNumber"], 16),
+                            "amount0": str(decoded_event['args'].get('amount0', 0)),
+                            "amount1": str(decoded_event['args'].get('amount1', 0)),
+                            "amountUSD": "0"  # Not available in logs
+                        }
+                        
+                        print(f"    🔍 Decoded {event_type}: amount0={event['amount0']}, amount1={event['amount1']}")
+                        
+                        # Add to appropriate list
+                        if event_type == "swaps":
+                            swap_events.append(event)
+                        elif event_type == "mints":
+                            mint_events.append(event)
+                        elif event_type == "burns":
+                            burn_events.append(event)
+                            
+                    except Exception as e:
+                        logger.warning(f"Error decoding event log: {e}")
+                        logger.warning(f"Log data: {log.get('data', 'No data')}")
+                        continue
+                
+                # Build final events dict
+                events = {
+                    "swaps": swap_events,
+                    "mints": mint_events, 
+                    "burns": burn_events
+                }
                     
-                    events[event_type] = parsed_events
-                    
-        except Exception as e:
-            logger.error(f"Error fetching {event_type} from Etherscan: {e}")
-            continue
+    except Exception as e:
+        logger.error(f"Error fetching events from Etherscan: {e}")
+        return {"swaps": [], "mints": [], "burns": []}
     
     total_events = len(events["swaps"]) + len(events["mints"]) + len(events["burns"])
     print(f"  📊 Total events found: {total_events} (swaps: {len(events['swaps'])}, mints: {len(events['mints'])}, burns: {len(events['burns'])})")
@@ -377,7 +434,10 @@ def compare_events(
 
 async def validate_trades_snapshot_against_etherscan(
     trades_snapshot: UniswapTradesSnapshot,
-    pool_address: str
+    pool_address: str,
+    redis_conn=None,
+    protocol_state_contract=None,
+    anchor_rpc_helper=None
 ) -> Dict:
     """
     Validate trades snapshot against Etherscan data.
@@ -397,7 +457,10 @@ async def validate_trades_snapshot_against_etherscan(
     etherscan_data = await fetch_uniswap_v3_events_from_etherscan(
         pool_address,
         trades_snapshot.epoch.begin,
-        trades_snapshot.epoch.end
+        trades_snapshot.epoch.end,
+        redis_conn,
+        protocol_state_contract,
+        anchor_rpc_helper
     )
     
     print(f"  Etherscan data:")
@@ -530,7 +593,10 @@ async def test_trades_processor_against_etherscan(
         
         validation_result = await validate_trades_snapshot_against_etherscan(
             trades_snapshot,
-            pool_address
+            pool_address,
+            redis_conn,
+            protocol_state_contract,
+            anchor_rpc_helper
         )
         all_validation_results.append(validation_result)
     
