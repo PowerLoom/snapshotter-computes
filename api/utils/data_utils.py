@@ -235,6 +235,10 @@ async def get_uniswap_v3_token_pools_snapshot(
                                            for the token, or None if not found
     """
     token_address = Web3.to_checksum_address(token_address)
+    # check if weth
+    if token_address == WETH:
+        return UniswapTokenPoolsSnapshot(pools={})
+
     project_id = f"tokenPools:{token_address}:{settings.namespace}"
     result = await get_uniswapv3_snapshot(
         redis_conn=redis_conn,
