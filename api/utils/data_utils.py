@@ -770,21 +770,21 @@ async def get_uniswap_trade_volume_agg(
                 volume = snapshot['totalTrade']
                 if isinstance(volume, (int, float)) and volume > 0:
                     total_trade_volume += volume
-
+    pipeline = redis_conn.pipeline()
     # Set data in redis (same pattern as active pools/tokens)
-    await redis_conn.set(
-        f"trade_volume_data:{project_id:}:{time_interval}:{current_epoch}:{settings.namespace}", 
+    pipeline.set(
+        f"trade_volume_data:{project_id}:{time_interval}:{current_epoch}:{settings.namespace}", 
         str(total_trade_volume)
-    )
-    await redis_conn.set(
+    ).set(
         f"trade_volume_data:{project_id}:{time_interval}:latest:epoch", current_epoch
     )
     # Remove old data
     if last_indexed_epoch > 0:
-        await redis_conn.delete(
+        pipeline.delete(
             f"trade_volume_data:{project_id}:{time_interval}:{last_indexed_epoch}:"
             f"{settings.namespace}"
         )
+    await pipeline.execute()
     
     return {
         'totalTradeVolume': total_trade_volume,
