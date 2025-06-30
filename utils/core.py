@@ -112,7 +112,7 @@ async def get_pair_reserves(
     # token prices in USD for each block in the range
     token0_price_map, token1_price_map = await asyncio.gather(
         get_token_price_in_block_range(
-            token_metadata=pair_per_token_metadata.token0.dict(),
+            token_metadata=pair_per_token_metadata.token0.model_dump(),
             from_block=from_block,
             to_block=to_block,
             redis_conn=redis_conn,
@@ -120,7 +120,7 @@ async def get_pair_reserves(
             debug_log=False,
         ),
         get_token_price_in_block_range(
-            token_metadata=pair_per_token_metadata.token1.dict(),
+            token_metadata=pair_per_token_metadata.token1.model_dump(),
             from_block=from_block,
             to_block=to_block,
             redis_conn=redis_conn,
@@ -867,7 +867,7 @@ async def get_liquidity_depth(
 
     token0_price_map, token1_price_map = await asyncio.gather(
         get_token_price_in_block_range(
-            token_metadata=pair_per_token_metadata.token0.dict(),
+            token_metadata=pair_per_token_metadata.token0.model_dump(),
             from_block=from_block,
             to_block=to_block,
             redis_conn=redis_conn,
@@ -876,7 +876,7 @@ async def get_liquidity_depth(
 
         ),
         get_token_price_in_block_range(
-            token_metadata=pair_per_token_metadata.token1.dict(),
+            token_metadata=pair_per_token_metadata.token1.model_dump(),
             from_block=from_block,
             to_block=to_block,
             redis_conn=redis_conn,
