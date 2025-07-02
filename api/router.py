@@ -12,6 +12,17 @@ from web3 import Web3
 
 from computes.utils.models.message_models import UniswapBaseSnapshot
 from snapshotter.settings.config import settings
+from snapshotter.utils.redis.redis_keys import (
+    agg_snapshot_base_all_pools_key,
+    agg_snapshot_all_trades_key,
+    agg_snapshot_token_prices_key,
+    agg_volume_pool_key,
+    base_snapshot_project_id,
+    trades_snapshot_project_id,
+    token_pools_project_id,
+    all_trades_snapshot_project_id,
+    eth_price_project_id,
+)
 from computes.api.utils.data_utils import (
     get_uniswap_trade_volume_agg,
     get_uniswap_v3_base_snapshot,
@@ -182,14 +193,23 @@ async def get_token_base_snapshots(
         response.status_code = 400
         return {"error": "Invalid token address"}
     
+    cache_key = agg_snapshot_base_all_pools_key(token_address)
     try:
-        base_snapshots = await get_uniswap_v3_base_snapshots_for_token(
-            redis_conn=request.app.state.redis_conn,
-            anchor_rpc_helper=request.app.state.anchor_rpc_helper,
-            ipfs_reader=request.app.state.ipfs_reader_client,
-            protocol_state_contract=request.app.state.protocol_state_contract,
-            token_address=token_address,
-        )
+        base_snapshots = await request.app.state.redis_conn.get(cache_key)
+        if base_snapshots is None:
+            # Fallback to old method if not in cache
+            base_snapshots = await get_uniswap_v3_base_snapshots_for_token(
+                redis_conn=request.app.state.redis_conn,
+                anchor_rpc_helper=request.app.state.anchor_rpc_helper,
+                ipfs_reader=request.app.state.ipfs_reader_client,
+                protocol_state_contract=request.app.state.protocol_state_contract,
+                token_address=token_address,
+            )
+            if base_snapshots:
+                await request.app.state.redis_conn.set(cache_key, json.dumps(base_snapshots), ex=86400*2)
+        else:
+            base_snapshots = json.loads(base_snapshots)
+
         if not base_snapshots:
             response.status_code = 404
             return {"error": "Base snapshots not found"}
@@ -269,14 +289,23 @@ async def get_all_trades_snapshot(
     response: Response,
     block_number: Optional[int] = None,
 ):
+    cache_key = agg_snapshot_all_trades_key()
     try:
-        trades_snapshot = await get_uniswap_v3_all_trades_snapshot(
-            redis_conn=request.app.state.redis_conn,
-            protocol_state_contract=request.app.state.protocol_state_contract,
-            anchor_rpc_helper=request.app.state.anchor_rpc_helper,
-            ipfs_reader=request.app.state.ipfs_reader_client,
-            block_number=block_number,
-        )
+        trades_snapshot = await request.app.state.redis_conn.get(cache_key)
+        if trades_snapshot is None:
+            # Fallback to old method if not in cache
+            trades_snapshot = await get_uniswap_v3_all_trades_snapshot(
+                redis_conn=request.app.state.redis_conn,
+                protocol_state_contract=request.app.state.protocol_state_contract,
+                anchor_rpc_helper=request.app.state.anchor_rpc_helper,
+                ipfs_reader=request.app.state.ipfs_reader_client,
+                block_number=block_number,
+            )
+            if trades_snapshot:
+                await request.app.state.redis_conn.set(cache_key, json.dumps(trades_snapshot), ex=86400*2)
+        else:
+            trades_snapshot = json.loads(trades_snapshot)
+
         if not trades_snapshot:
             response.status_code = 404
             return {"error": "Trades snapshot not found"}
@@ -297,15 +326,24 @@ async def get_token_price_all(
     token_address: str,
     block_number: Optional[int] = None,
 ):
+    cache_key = agg_snapshot_token_prices_key(token_address)
     try:
-        token_prices = await get_uniswap_v3_token_prices_all_snapshot(
-            redis_conn=request.app.state.redis_conn,
-            protocol_state_contract=request.app.state.protocol_state_contract,
-            anchor_rpc_helper=request.app.state.anchor_rpc_helper,
-            ipfs_reader=request.app.state.ipfs_reader_client,
-            token_address=token_address,
-            block_number=block_number,
-        )
+        token_prices = await request.app.state.redis_conn.get(cache_key)
+        if token_prices is None:
+            # Fallback to old method if not in cache
+            token_prices = await get_uniswap_v3_token_prices_all_snapshot(
+                redis_conn=request.app.state.redis_conn,
+                protocol_state_contract=request.app.state.protocol_state_contract,
+                anchor_rpc_helper=request.app.state.anchor_rpc_helper,
+                ipfs_reader=request.app.state.ipfs_reader_client,
+                token_address=token_address,
+                block_number=block_number,
+            )
+            if token_prices:
+                await request.app.state.redis_conn.set(cache_key, json.dumps(token_prices), ex=86400*2)
+        else:
+            token_prices = json.loads(token_prices)
+
         if not token_prices:
             response.status_code = 404
             return {"error": "Token price snapshot not found"}
@@ -360,16 +398,28 @@ async def get_trade_volume_agg(
     time_interval: int,
 ):
     pool_address = Web3.to_checksum_address(pool_address)
-    project_id = f"baseSnapshot:{pool_address}:{settings.namespace}"
+    project_id = base_snapshot_project_id(pool_address)
+    cache_key = agg_volume_pool_key(project_id, time_interval)
     try:
-        trade_volume_agg = await get_uniswap_trade_volume_agg(
-            redis_conn=request.app.state.redis_conn,
-            protocol_state_contract=request.app.state.protocol_state_contract,
-            anchor_rpc_helper=request.app.state.anchor_rpc_helper,
-            ipfs_reader=request.app.state.ipfs_reader_client,
-            project_id=project_id,
-            time_interval=time_interval,
-        )
+        trade_volume_agg = await request.app.state.redis_conn.get(cache_key)
+        if trade_volume_agg is None:
+            # Fallback to old method if not in cache
+            trade_volume_agg = await get_uniswap_trade_volume_agg(
+                redis_conn=request.app.state.redis_conn,
+                protocol_state_contract=request.app.state.protocol_state_contract,
+                anchor_rpc_helper=request.app.state.anchor_rpc_helper,
+                ipfs_reader=request.app.state.ipfs_reader_client,
+                project_id=project_id,
+                time_interval=time_interval,
+            )
+            if trade_volume_agg:
+                await request.app.state.redis_conn.set(cache_key, trade_volume_agg['totalTradeVolume'], ex=time_interval*2)
+        else:
+            trade_volume_agg = {
+                'totalTradeVolume': float(trade_volume_agg),
+                'timeInterval': time_interval,
+            }
+
     except Exception as e:
         rest_logger.opt(exception=True).error(f"Error getting trade volume agg for {pool_address}: {e}")
         response.status_code = 500
@@ -391,7 +441,7 @@ async def get_pool_trades(
     end_timestamp: int,
 ):
     pool_address = Web3.to_checksum_address(pool_address)
-    project_id = f"tradesSnapshot:{pool_address}:{settings.namespace}"
+    project_id = trades_snapshot_project_id(pool_address)
     try:
         pool_trades = await get_uniswap_v3_pool_trades(
             redis_conn=request.app.state.redis_conn,
@@ -428,7 +478,7 @@ async def get_token_price_series(
 ):
     token_address = Web3.to_checksum_address(token_address)
     pool_address = Web3.to_checksum_address(pool_address)
-    project_id = f"baseSnapshot:{pool_address}:{settings.namespace}"
+    project_id = base_snapshot_project_id(pool_address)
     try:
         token_price_series = await get_uniswap_price_series_agg(
             redis_conn=request.app.state.redis_conn,
@@ -626,7 +676,7 @@ async def get_pool_data(
         anchor_rpc_helper=request.app.state.anchor_rpc_helper,
         ipfs_reader=request.app.state.ipfs_reader_client,
         protocol_state_contract=request.app.state.protocol_state_contract,
-        project_id=f"baseSnapshot:{pool_address.lower()}:{settings.namespace}",
+        project_id=base_snapshot_project_id(pool_address.lower()),
         message_model=UniswapBaseSnapshot,
         block_number=block_number,
     )

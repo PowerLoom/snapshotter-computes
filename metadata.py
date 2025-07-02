@@ -9,12 +9,14 @@ from snapshotter.utils.models.message_models import SnapshotProcessMessage
 from snapshotter.utils.callback_helpers import GenericProcessorSnapshot
 from snapshotter.utils.default_logger import logger
 from rpc_helper.rpc import RpcHelper
-from computes.utils.models.message_models import UniswapPoolMetadata
-from snapshotter.settings.config import settings
+from computes.redis_keys import pool_metadata_key, active_pools_per_block_key
+from snapshotter.utils.redis.redis_keys import base_snapshot_project_id
 from ipfs_client.main import AsyncIPFSClient
+from snapshotter.settings.config import settings
 from snapshotter.utils.data_utils import get_project_first_epoch
 from snapshotter.utils.data_utils import get_project_latest_snapshot
 from web3 import Web3
+from computes.utils.models.message_models import UniswapPoolMetadata
 
 
 class MetadataProcessor(GenericProcessorSnapshot):
@@ -53,7 +55,7 @@ class MetadataProcessor(GenericProcessorSnapshot):
             Optional[UniswapPoolMetadata]: Pool metadata if found, None otherwise
         """
         # Check Redis cache first for existing metadata
-        cache_key = f'pool_metadata:{pool_address}'
+        cache_key = pool_metadata_key(pool_address)
         cached_data = await redis_conn.get(cache_key)
         if cached_data:
             self._logger.info(f"Found cached metadata for pool {pool_address}")
@@ -106,7 +108,7 @@ class MetadataProcessor(GenericProcessorSnapshot):
 
             if not project_first_epoch:
                 # If no first epoch, check Redis cache for existing metadata
-                cache_key = f'pool_metadata:{pool_address}'
+                cache_key = pool_metadata_key(pool_address)
                 cached_data = await redis_conn.get(cache_key)
 
                 if cached_data:
@@ -150,7 +152,7 @@ class MetadataProcessor(GenericProcessorSnapshot):
         # Collect all active pool keys for the epoch range
         keys_to_fetch = []
         for block_number in range(min_chain_height, max_chain_height + 1):
-            key = f"active_pools:{block_number}:{settings.namespace}"
+            key = active_pools_per_block_key(block_number, settings.namespace)
             keys_to_fetch.append(key)
 
         # Get union of all active pools across the epoch

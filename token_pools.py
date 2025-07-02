@@ -12,6 +12,8 @@ from ipfs_client.main import AsyncIPFSClient
 from computes.utils.models.message_models import UniswapPoolMetadata, UniswapTokenPoolsSnapshot
 from snapshotter.utils.data_utils import get_project_latest_snapshot
 from web3 import Web3
+from computes.redis_keys import pool_metadata_key, active_pools_per_block_key
+from snapshotter.utils.redis.redis_keys import token_pools_project_id, base_snapshot_project_id
 
 
 class TokenPoolsProcessor(GenericProcessorSnapshot):
@@ -62,7 +64,7 @@ class TokenPoolsProcessor(GenericProcessorSnapshot):
         try:
             # WETH address constant for filtering
             WETH_ADDRESS = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
-            metadata_project_id = f"metadata:{pool_address}:{settings.namespace}"
+            metadata_project_id = base_snapshot_project_id(pool_address)
             snapshots = []
 
             # Attempt to get pool metadata from protocol state
@@ -72,7 +74,7 @@ class TokenPoolsProcessor(GenericProcessorSnapshot):
 
             if not pool_metadata:
                 # Fallback to Redis cache if protocol state doesn't have metadata
-                cache_key = f'pool_metadata:{pool_address}'
+                cache_key = pool_metadata_key(pool_address)
                 cached_data = await redis_conn.get(cache_key)
 
                 if cached_data:
@@ -95,7 +97,7 @@ class TokenPoolsProcessor(GenericProcessorSnapshot):
                 if token_address == WETH_ADDRESS:
                     continue
                     
-                project_id = task_type.format(tokenAddress=token_address, Namespace=settings.namespace)
+                project_id = token_pools_project_id(token_address)
 
                 # Get existing token pools snapshot or create new one
                 token_pools_snapshot = await get_project_latest_snapshot(
@@ -121,7 +123,7 @@ class TokenPoolsProcessor(GenericProcessorSnapshot):
                         continue
                         
                     # Check Redis cache for pool metadata
-                    cache_key = f'pool_metadata:{pool}'
+                    cache_key = pool_metadata_key(pool)
                     cached_data = await redis_conn.get(cache_key)
 
                     if cached_data:
@@ -206,7 +208,7 @@ class TokenPoolsProcessor(GenericProcessorSnapshot):
         # Collect keys for active pools
         keys_to_fetch = []
         for block_number in range(min_chain_height, max_chain_height + 1):
-            key = f"active_pools:{block_number}:{settings.namespace}"
+            key = active_pools_per_block_key(block_number, settings.namespace)
             keys_to_fetch.append(key)
 
         # Get union of all active pools

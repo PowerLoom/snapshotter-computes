@@ -10,6 +10,7 @@ from snapshotter.utils.default_logger import logger
 from snapshotter.settings.config import settings
 from computes.utils.models.message_models import ActivePoolsSnapshot, EpochBaseSnapshot
 from ipfs_client.main import AsyncIPFSClient
+from computes.redis_keys import active_pools_per_block_key
 
 
 class ActivePoolsProcessor(GenericProcessorSnapshot):
@@ -64,7 +65,7 @@ class ActivePoolsProcessor(GenericProcessorSnapshot):
         # Iterate through each block in the epoch
         for block_number in range(min_chain_height, max_chain_height + 1):
             # Construct Redis key for active pools in this block
-            key = f"active_pools_per_block:{block_number}:{settings.namespace}"
+            key = active_pools_per_block_key(block_number, settings.namespace)
             
             # Retrieve all pools and their activity scores for this block
             block_active_pools = await redis_conn.zrange(key, 0, -1, withscores=True)

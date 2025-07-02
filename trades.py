@@ -7,7 +7,7 @@ from rpc_helper.rpc import RpcHelper
 from web3 import Web3
 
 from computes.metadata import MetadataProcessor
-from computes.redis_keys import uniswap_eth_usd_price_zset
+from computes.redis_keys import uniswap_eth_usd_price_zset_key, active_pools_per_block_key
 from computes.utils.core import get_block_details_in_block_range
 from computes.utils.core import get_pair_trade_volume
 from computes.utils.models.message_models import (
@@ -101,7 +101,7 @@ class TradesProcessor(GenericProcessorSnapshot):
         # Get list of active pools for the epoch
         active_pool_set_keys_to_fetch = []
         for block_number in range(min_chain_height, max_chain_height + 1):
-            key = f"active_pools:{block_number}:{settings.namespace}"
+            key = active_pools_per_block_key(block_number, settings.namespace)
             active_pool_set_keys_to_fetch.append(key)
         
         # Fetch and process active pool addresses
@@ -124,7 +124,7 @@ class TradesProcessor(GenericProcessorSnapshot):
 
         # Fetch ETH prices for the epoch range
         eth_price_dict = await redis_conn.zrangebyscore(
-            name=uniswap_eth_usd_price_zset,
+            name=uniswap_eth_usd_price_zset_key(settings.namespace),
             min=int(min_chain_height),
             max=int(max_chain_height),
         )

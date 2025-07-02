@@ -13,6 +13,7 @@ from snapshotter.utils.default_logger import logger
 from snapshotter.settings.config import settings
 from computes.utils.models.message_models import UniswapBaseSnapshot
 from ipfs_client.main import AsyncIPFSClient
+from computes.redis_keys import active_pools_per_block_key
 
 
 class PairTotalReservesProcessor(GenericProcessorSnapshot):
@@ -85,7 +86,7 @@ class PairTotalReservesProcessor(GenericProcessorSnapshot):
         # Build list of Redis keys for active pools across the epoch
         active_pool_set_keys_to_fetch = []
         for block_number in range(min_chain_height, max_chain_height + 1):
-            key = f"active_pools:{block_number}:{settings.namespace}"
+            key = active_pools_per_block_key(block_number, settings.namespace)
             active_pool_set_keys_to_fetch.append(key)
 
         # Fetch union of all active pools across the epoch

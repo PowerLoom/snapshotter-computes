@@ -12,12 +12,24 @@ from rpc_helper.rpc import get_contract_abi_dict
 from rpc_helper.rpc import RpcHelper
 from web3 import Web3
 
-from computes.redis_keys import uniswap_cached_block_height_token_eth_price
-from computes.redis_keys import uniswap_pair_contract_tokens_addresses
-from computes.redis_keys import uniswap_pair_contract_tokens_data
-from computes.redis_keys import uniswap_tokens_pair_map
-from computes.redis_keys import uniswap_v3_best_pair_map
-from computes.redis_keys import uniswap_v3_token_stable_pair_map
+from snapshotter.utils.redis.redis_keys import source_chain_epoch_size_key
+from computes.redis_keys import (
+    uniswap_pair_contract_tokens_addresses_key,
+    uniswap_pair_contract_tokens_data_key,
+    uniswap_tokens_pair_map_key,
+    uniswap_ticks_pair_map_key,
+    uniswap_pair_cached_block_height_token_price_key,
+    uniswap_cached_block_height_token_eth_price_key,
+    uniswap_cached_tick_data_block_height_key,
+    uniswap_pair_cached_block_height_reserves_key,
+    uniswap_v3_monitored_pairs_key,
+    uniswap_v3_best_pair_map_key,
+    uniswap_v3_token_stable_pair_map_key,
+    uniswap_eth_usd_price_zset_key,
+    pool_metadata_key,
+    active_pools_per_block_key,
+    active_tokens_per_block_key,
+)
 from computes.settings.config import settings as worker_settings
 from computes.utils.constants import current_node
 from computes.utils.constants import erc20_abi
@@ -86,7 +98,7 @@ async def get_events_from_cache(
     
     # Get events from Redis zset
     events = await redis_conn.zrangebyscore(
-        name=f"events:{settings.namespace}:address:{pool_address}",
+        name=events_by_pool_address_key(settings.namespace, pool_address),
         min=min_score,
         max=max_score,
         withscores=True
@@ -167,7 +179,7 @@ async def get_pair(
     """
     # check if pair cache exists
     pair_address_cache = await redis_conn.hget(
-        uniswap_tokens_pair_map,
+        uniswap_tokens_pair_map_key(settings.namespace),
         f'{Web3.to_checksum_address(token0)}-{Web3.to_checksum_address(token1)}|{fee}',
     )
     if pair_address_cache:
@@ -186,7 +198,7 @@ async def get_pair(
     pair = result[0]
     # cache the pair address
     await redis_conn.hset(
-        name=uniswap_tokens_pair_map,
+        name=uniswap_tokens_pair_map_key(settings.namespace),
         mapping={
             f'{Web3.to_checksum_address(token0)}-{Web3.to_checksum_address(token1)}|{fee}': Web3.to_checksum_address(
                 pair,
@@ -227,7 +239,7 @@ async def get_token_eth_price_dict(
     # check if cache exists
     token_eth_price_dict = dict()
     cached_token_price_in_eth_json_list = await redis_conn.zrangebyscore(
-        name=uniswap_cached_block_height_token_eth_price.format(token_address),
+        name=uniswap_cached_block_height_token_eth_price_key(settings.namespace, token_address),
         min=from_block,
         max=to_block,
         withscores=False
@@ -274,14 +286,14 @@ async def get_token_eth_price_dict(
             )
             pipeline = redis_conn.pipeline()
             pipeline.zadd(
-                name=uniswap_cached_block_height_token_eth_price.format(
-                        Web3.to_checksum_address(token_address),
+                name=uniswap_cached_block_height_token_eth_price_key(
+                        settings.namespace, Web3.to_checksum_address(token_address),
                     ),
                 mapping=redis_cache_mapping,  # timestamp so zset do not ignore same height on multiple heights
             )
             pipeline.zremrangebyscore(
-                name=uniswap_cached_block_height_token_eth_price.format(
-                    Web3.to_checksum_address(token_address),
+                name=uniswap_cached_block_height_token_eth_price_key(
+                    settings.namespace, Web3.to_checksum_address(token_address),
                     ),
                     min=0,
                 max=int(from_block) - source_chain_epoch_size * 4,
@@ -320,7 +332,7 @@ async def get_token_pair_address_with_fees(
 
     # check if pair cache exists
     pair_address_cache = await redis_conn.hget(
-        uniswap_v3_best_pair_map,
+        uniswap_v3_best_pair_map_key(settings.namespace),
         f'{Web3.to_checksum_address(token0)}-{Web3.to_checksum_address(token1)}',
     )
     if pair_address_cache:
@@ -376,7 +388,7 @@ async def get_token_pair_address_with_fees(
 
     # cache the pair address
     await redis_conn.hset(
-        name=uniswap_v3_best_pair_map,
+        name=uniswap_v3_best_pair_map_key(settings.namespace),
         mapping={
             f'{Web3.to_checksum_address(token0)}-{Web3.to_checksum_address(token1)}':
                 best_pair,
@@ -408,7 +420,7 @@ async def get_token_stable_pair_data(
     """
     # check if pair cache exists
     token_stable_pair_data_cache = await redis_conn.hgetall(
-        uniswap_v3_token_stable_pair_map.format(Web3.to_checksum_address(token)),
+        uniswap_v3_token_stable_pair_map_key(settings.namespace, Web3.to_checksum_address(token)),
     )
     if token_stable_pair_data_cache:
         token0 = token_stable_pair_data_cache[b'token0'].decode(
@@ -464,7 +476,7 @@ async def get_token_stable_pair_data(
 
     # cache the token-stable pair data
     await redis_conn.hset(
-        name=uniswap_v3_token_stable_pair_map.format(Web3.to_checksum_address(token)),
+        name=uniswap_v3_token_stable_pair_map_key(settings.namespace, Web3.to_checksum_address(token)),
         mapping={
             'token0': token0,
             'token1': token1,

@@ -10,6 +10,7 @@ from snapshotter.utils.default_logger import logger
 from snapshotter.settings.config import settings
 from computes.utils.models.message_models import ActiveTokensSnapshot, EpochBaseSnapshot
 from ipfs_client.main import AsyncIPFSClient
+from computes.redis_keys import active_tokens_per_block_key
 
 
 class ActiveTokensProcessor(GenericProcessorSnapshot):
@@ -62,7 +63,7 @@ class ActiveTokensProcessor(GenericProcessorSnapshot):
         # Process each block in the epoch
         for block_number in range(min_chain_height, max_chain_height + 1):
             # Construct Redis key for block's token activity
-            key = f"active_tokens_per_block:{block_number}:{settings.namespace}"
+            key = active_tokens_per_block_key(block_number, settings.namespace)
             
             # Retrieve token activity data with scores (frequency of occurrence)
             block_active_tokens = await redis_conn.zrange(key, 0, -1, withscores=True)

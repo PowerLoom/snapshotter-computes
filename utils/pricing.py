@@ -47,9 +47,7 @@ async def get_token_price_in_block_range(
 
         # Check if cache exists for the given block range
         cached_price_entry_json_list = await redis_conn.zrangebyscore(
-            name=uniswap_pair_cached_block_height_token_price.format(
-                token_address,
-            ),
+            name=uniswap_pair_cached_block_height_token_price_key(settings.namespace, token_address),
             min=int(from_block),
             max=int(to_block),
             withscores=False
@@ -135,14 +133,14 @@ async def get_token_price_in_block_range(
                 raise Exception("source_chain_epoch_size is not set")
             pipeline = redis_conn.pipeline()
             pipeline.zadd(
-                name=uniswap_pair_cached_block_height_token_price.format(
-                        Web3.to_checksum_address(token_metadata["address"]),
+                name=uniswap_pair_cached_block_height_token_price_key(
+                        settings.namespace, Web3.to_checksum_address(token_metadata["address"]),
                     ),
                 mapping=redis_cache_mapping,
             )
             pipeline.zremrangebyscore(
-                name=uniswap_pair_cached_block_height_token_price.format(
-                    Web3.to_checksum_address(token_metadata["address"]),
+                name=uniswap_pair_cached_block_height_token_price_key(
+                    settings.namespace, Web3.to_checksum_address(token_metadata["address"]),
                 ),
                 min=0,
                 max=int(from_block) - source_chain_epoch_size * 4,
