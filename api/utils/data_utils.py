@@ -1,6 +1,7 @@
 import asyncio
 import json
-
+import functools
+from async_lru import alru_cache
 from pydantic import BaseModel
 from redis import asyncio as aioredis
 from rpc_helper.rpc import RpcHelper
@@ -42,6 +43,7 @@ WETH = Web3.to_checksum_address(computes_settings.contract_addresses.WETH)
 
 
 ### UNISWAP V3 SPECIFIC LOGIC ###
+@alru_cache(maxsize=10000)
 async def get_uniswap_v3_pool_metadata(
         pool_address: str, 
         redis_conn: aioredis.Redis, 
@@ -675,6 +677,7 @@ async def get_uniswap_trade_volume_agg(
         last_indexed_epoch = 0
     
     try:
+        
         current_epoch = await get_current_epoch_id(
             anchor_rpc_helper, protocol_state_contract
         )
@@ -783,7 +786,7 @@ async def get_uniswap_trade_volume_agg(
         f"trade_volume_data:{project_id}:{time_interval}:latest:epoch", current_epoch
     )
     # Remove old data
-    if last_indexed_epoch > 0:
+    if last_indexed_epoch > 0 and last_indexed_epoch != current_epoch:
         pipeline.delete(
             f"trade_volume_data:{project_id}:{time_interval}:{last_indexed_epoch}:"
             f"{settings.namespace}"
@@ -845,12 +848,19 @@ async def get_active_pools(
     project_id = f"activePools:{settings.namespace}"
     
     try:
-        current_epoch = await get_current_epoch_id(
-            anchor_rpc_helper, protocol_state_contract
-        )
+        last_submitted_snapshot_data = await get_last_submitted_snapshot_data(redis_conn, project_id)
+        if last_submitted_snapshot_data:
+            last_submitted_epoch = last_submitted_snapshot_data['epochId']
+        else:
+            last_submitted_epoch = await get_project_last_finalized_epoch(
+                redis_conn=redis_conn,
+                state_contract_obj=protocol_state_contract,
+                rpc_helper=anchor_rpc_helper,
+                project_id=project_id,
+            )
         tail_epoch_id, _ = await get_tail_epoch_id(
             redis_conn, protocol_state_contract, anchor_rpc_helper, 
-            current_epoch, time_interval, project_id
+            last_submitted_epoch, time_interval, project_id
         )
     except Exception as e:
         logger.error(f"Failed to get epoch information: {e}")
@@ -858,15 +868,15 @@ async def get_active_pools(
 
     logger.info(
         f"Last indexed epoch: {last_indexed_epoch}, "
-        f"tail epoch id: {tail_epoch_id}, current epoch: {current_epoch}"
+        f"tail epoch id: {tail_epoch_id}, current epoch: {last_submitted_epoch}"
     )
         
     if last_indexed_epoch > tail_epoch_id:
-        epochs_to_correct = current_epoch - last_indexed_epoch
+        epochs_to_correct = last_submitted_epoch - last_indexed_epoch
         # Fetch indexed data
         logger.info(
             f"Correcting indexed data for epochs {last_indexed_epoch} "
-            f"to {current_epoch} for time interval {time_interval}"
+            f"to {last_submitted_epoch} for time interval {time_interval}"
         )
         active_pools_cached = await redis_conn.get(
             f"active_pool_data:{time_interval}:{last_indexed_epoch}:"
@@ -882,7 +892,7 @@ async def get_active_pools(
                 )
                 new_snapshots = await get_project_epoch_snapshot_bulk(
                     redis_conn, protocol_state_contract, anchor_rpc_helper, 
-                    ipfs_reader, last_indexed_epoch + 1, current_epoch, project_id
+                    ipfs_reader, last_indexed_epoch + 1, last_submitted_epoch, project_id
                 )
                 logger.info(
                     f"Fetching old snapshots for epochs "
@@ -915,11 +925,11 @@ async def get_active_pools(
             # No cached data found, fall back to fetching all snapshots
             logger.info(
                 f"No cached data found, fetching all snapshots "
-                f"from {tail_epoch_id} to {current_epoch}"
+                f"from {tail_epoch_id} to {last_submitted_epoch}"
             )
             snapshots = await get_project_epoch_snapshot_bulk(
                 redis_conn, protocol_state_contract, anchor_rpc_helper, 
-                ipfs_reader, tail_epoch_id, current_epoch, project_id
+                ipfs_reader, tail_epoch_id, last_submitted_epoch, project_id
             )
             active_pools = {}
             for snapshot in snapshots:
@@ -931,7 +941,7 @@ async def get_active_pools(
     else:
         snapshots = await get_project_epoch_snapshot_bulk(
             redis_conn, protocol_state_contract, anchor_rpc_helper, 
-            ipfs_reader, tail_epoch_id, current_epoch, project_id
+            ipfs_reader, tail_epoch_id, last_submitted_epoch, project_id
         )
         active_pools = {}
         for snapshot in snapshots:
@@ -943,14 +953,14 @@ async def get_active_pools(
 
     # Set data in redis
     await redis_conn.set(
-        f"active_pool_data:{time_interval}:{current_epoch}:{settings.namespace}", 
+        f"active_pool_data:{time_interval}:{last_submitted_epoch}:{settings.namespace}", 
         json.dumps(active_pools)
     )
     await redis_conn.set(
-        f"active_pool_data:{time_interval}:latest:epoch", current_epoch
+        f"active_pool_data:{time_interval}:latest:epoch", last_submitted_epoch
     )
     # Remove old data
-    if last_indexed_epoch > 0:
+    if last_indexed_epoch > 0 and last_indexed_epoch != last_submitted_epoch:
         await redis_conn.delete(
             f"active_pool_data:{time_interval}:{last_indexed_epoch}:"
             f"{settings.namespace}"
@@ -1022,6 +1032,7 @@ async def get_active_pools(
     return pools_data, total_pools
 
 
+@alru_cache(maxsize=10000)
 async def get_token_metadata(
     redis_conn: aioredis.Redis,
     protocol_state_contract,
@@ -1030,12 +1041,21 @@ async def get_token_metadata(
     token_address: str,
 ):
     """
-    Get token metadata from the IPFS reader.
+    Get token metadata from cache, Redis, or IPFS with LRU caching.
+    
+    This function implements a three-tier caching strategy:
+    1. In-memory LRU cache (fastest)
+    2. Redis cache (fast)
+    3. IPFS fetch (slowest, but most comprehensive)
     """
+    # Normalize token address for consistent caching
+    token_address = Web3.to_checksum_address(token_address)
+    
     # Check if data is in redis
     token_metadata = await redis_conn.get(f'erc20_metadata:{token_address}')
     if token_metadata:
-        return json.loads(token_metadata)
+        parsed_metadata = json.loads(token_metadata)
+        return parsed_metadata
     else:
         # Fetch from ipfs
         token_metadata = await get_uniswap_v3_token_pools_snapshot(
@@ -1043,7 +1063,7 @@ async def get_token_metadata(
             protocol_state_contract=protocol_state_contract,
             anchor_rpc_helper=anchor_rpc_helper,
             ipfs_reader=ipfs_reader,
-            token_address=Web3.to_checksum_address(token_address),
+            token_address=token_address,
         )
         if token_metadata:
             token_pool_metadata = next(iter(token_metadata.pools.values()))
@@ -1056,12 +1076,14 @@ async def get_token_metadata(
             token_metadata = None
 
         if token_metadata:
+            metadata_dict = token_metadata.__dict__
             # Cache in redis
             await redis_conn.set(
                 f'erc20_metadata:{token_address}', 
-                json.dumps(token_metadata.__dict__), 
+                json.dumps(metadata_dict), 
                 ex=86400
             )
+            return metadata_dict
 
         return token_metadata
     
@@ -1115,12 +1137,20 @@ async def get_active_tokens(
     project_id = f"activeTokens:{settings.namespace}"
     
     try:
-        current_epoch = await get_current_epoch_id(
-            anchor_rpc_helper, protocol_state_contract
-        )
+        last_submitted_snapshot_data = await get_last_submitted_snapshot_data(redis_conn, project_id)
+        if last_submitted_snapshot_data:
+            last_submitted_epoch = last_submitted_snapshot_data['epochId']
+        else:
+            last_submitted_epoch = await get_project_last_finalized_epoch(
+                redis_conn=redis_conn,
+                state_contract_obj=protocol_state_contract,
+                rpc_helper=anchor_rpc_helper,
+                project_id=project_id,
+            )
+
         tail_epoch_id, _ = await get_tail_epoch_id(
             redis_conn, protocol_state_contract, anchor_rpc_helper, 
-            current_epoch, time_interval, project_id
+            last_submitted_epoch, time_interval, project_id
         )
     except Exception as e:
         logger.error(f"Failed to get epoch information: {e}")
@@ -1128,15 +1158,15 @@ async def get_active_tokens(
 
     logger.info(
         f"Last indexed epoch: {last_indexed_epoch}, "
-        f"tail epoch id: {tail_epoch_id}, current epoch: {current_epoch}"
+        f"tail epoch id: {tail_epoch_id}, current epoch: {last_submitted_epoch}"
     )
 
     if last_indexed_epoch > tail_epoch_id:
-        epochs_to_correct = current_epoch - last_indexed_epoch
+        epochs_to_correct = last_submitted_epoch - last_indexed_epoch
         # Fetch indexed data
         logger.info(
             f"Correcting indexed data for epochs {last_indexed_epoch} "
-            f"to {current_epoch} for time interval {time_interval}"
+            f"to {last_submitted_epoch} for time interval {time_interval}"
         )
         active_tokens_cached = await redis_conn.get(
             f"active_token_data:{time_interval}:{last_indexed_epoch}:"
@@ -1152,7 +1182,7 @@ async def get_active_tokens(
                 )
                 new_snapshots = await get_project_epoch_snapshot_bulk(
                     redis_conn, protocol_state_contract, anchor_rpc_helper, 
-                    ipfs_reader, last_indexed_epoch + 1, current_epoch, project_id
+                    ipfs_reader, last_indexed_epoch + 1, last_submitted_epoch, project_id
                 )
                 logger.info(
                     f"Fetching old snapshots for epochs "
@@ -1185,11 +1215,11 @@ async def get_active_tokens(
             # No cached data found, fall back to fetching all snapshots
             logger.info(
                 f"No cached data found, fetching all snapshots "
-                f"from {tail_epoch_id} to {current_epoch}"
+                f"from {tail_epoch_id} to {last_submitted_epoch}"
             )
             snapshots = await get_project_epoch_snapshot_bulk(
                 redis_conn, protocol_state_contract, anchor_rpc_helper, 
-                ipfs_reader, tail_epoch_id, current_epoch, project_id
+                ipfs_reader, tail_epoch_id, last_submitted_epoch, project_id
             )
             active_tokens = {}
             for snapshot in snapshots:
@@ -1201,7 +1231,7 @@ async def get_active_tokens(
     else:    
         snapshots = await get_project_epoch_snapshot_bulk(
             redis_conn, protocol_state_contract, anchor_rpc_helper, 
-            ipfs_reader, tail_epoch_id, current_epoch, project_id
+            ipfs_reader, tail_epoch_id, last_submitted_epoch, project_id
         )
         active_tokens = {}
         for snapshot in snapshots:
@@ -1213,14 +1243,14 @@ async def get_active_tokens(
 
     # Set data in redis
     await redis_conn.set(
-        f"active_token_data:{time_interval}:{current_epoch}:{settings.namespace}", 
+        f"active_token_data:{time_interval}:{last_submitted_epoch}:{settings.namespace}", 
         json.dumps(active_tokens)
     )
     await redis_conn.set(
-        f"active_token_data:{time_interval}:latest:epoch", current_epoch
+        f"active_token_data:{time_interval}:latest:epoch", last_submitted_epoch
     )
     # Remove old data
-    if last_indexed_epoch > 0:
+    if last_indexed_epoch > 0 and last_indexed_epoch != last_submitted_epoch:
         await redis_conn.delete(
             f"active_token_data:{time_interval}:{last_indexed_epoch}:"
             f"{settings.namespace}"
