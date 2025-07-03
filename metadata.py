@@ -9,8 +9,7 @@ from snapshotter.utils.models.message_models import SnapshotProcessMessage
 from snapshotter.utils.callback_helpers import GenericProcessorSnapshot
 from snapshotter.utils.default_logger import logger
 from rpc_helper.rpc import RpcHelper
-from computes.redis_keys import pool_metadata_key, active_pools_per_block_key
-from snapshotter.utils.redis.redis_keys import base_snapshot_project_id
+from computes.redis_keys import pool_metadata_key, active_pools_key
 from ipfs_client.main import AsyncIPFSClient
 from snapshotter.settings.config import settings
 from snapshotter.utils.data_utils import get_project_first_epoch
@@ -152,7 +151,7 @@ class MetadataProcessor(GenericProcessorSnapshot):
         # Collect all active pool keys for the epoch range
         keys_to_fetch = []
         for block_number in range(min_chain_height, max_chain_height + 1):
-            key = active_pools_per_block_key(block_number, settings.namespace)
+            key = active_pools_key(block_number, settings.namespace)
             keys_to_fetch.append(key)
 
         # Get union of all active pools across the epoch

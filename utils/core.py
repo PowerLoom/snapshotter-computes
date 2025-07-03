@@ -12,7 +12,7 @@ from snapshotter.utils.snapshot_utils import get_block_details_in_block_range
 from web3 import Web3
 from ipfs_client.main import AsyncIPFSClient
 
-from computes.redis_keys import uniswap_pair_cached_block_height_reserves
+from computes.redis_keys import uniswap_pair_cached_block_height_reserves_key as uniswap_pair_cached_block_height_reserves
 from computes.total_value_locked import calculate_reserves
 from computes.total_value_locked import get_tick_info
 from computes.total_value_locked import get_token0_in_pool
@@ -23,6 +23,7 @@ from computes.utils.models.data_models import UniswapEvent, UniswapProcessedLog
 from computes.utils.models.data_models import PairBlockDetail
 from computes.utils.models.data_models import trade_data
 from computes.utils.pricing import get_token_price_in_block_range
+from snapshotter.settings.config import settings
 
 core_logger = logger.bind(module='PowerLoom|UniswapCore')
 
@@ -139,9 +140,7 @@ async def get_pair_reserves(
 
     # attempt to fetch previous epoch end block reserves from redis
     cached_reserves_dict = await redis_conn.zrangebyscore(
-        name=uniswap_pair_cached_block_height_reserves.format(
-            Web3.to_checksum_address(pair_address),
-        ),
+        name=uniswap_pair_cached_block_height_reserves(settings.namespace, Web3.to_checksum_address(pair_address)),
         min=int(from_block - 1),
         max=int(from_block - 1),
     )
@@ -381,13 +380,11 @@ async def get_pair_reserves(
         }
         pipeline = redis_conn.pipeline()
         pipeline.zadd(
-            name=uniswap_pair_cached_block_height_reserves.format(Web3.to_checksum_address(pair_address)),
+            name=uniswap_pair_cached_block_height_reserves(settings.namespace, Web3.to_checksum_address(pair_address)),
             mapping=redis_cache_mapping,
         )
         pipeline.zremrangebyscore(
-            name=uniswap_pair_cached_block_height_reserves.format(
-                Web3.to_checksum_address(pair_address),
-            ),
+            name=uniswap_pair_cached_block_height_reserves(settings.namespace, Web3.to_checksum_address(pair_address)),
             min=0,
             max=to_block - 20,
         )

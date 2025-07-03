@@ -10,9 +10,10 @@ from snapshotter.utils.data_utils import get_source_chain_block_time
 from snapshotter.utils.default_logger import logger
 from snapshotter.utils.models.message_models import EpochBase
 from snapshotter.utils.file_utils import read_json_file
-from computes.redis_keys import uniswap_eth_usd_price_zset
+from computes.redis_keys import uniswap_eth_usd_price_zset_key as uniswap_eth_usd_price_zset
 from snapshotter.utils.redis.redis_keys import source_chain_block_time_key
 from computes.settings.config import settings as worker_settings
+from snapshotter.settings.config import settings
 
 SECONDS_IN_7_DAYS = 7 * 24 * 60 * 60
 
@@ -88,7 +89,7 @@ class EthPricePreloader(GenericPreloader):
 
             # Check if prices are already cached in Redis
             cached_price_dict = await redis_conn.zrangebyscore(
-                name=uniswap_eth_usd_price_zset,
+                name=uniswap_eth_usd_price_zset(settings.namespace),
                 min=int(from_block),
                 max=int(to_block),
             )
@@ -140,11 +141,11 @@ class EthPricePreloader(GenericPreloader):
 
             await asyncio.gather(
                 redis_conn.zadd(
-                    name=uniswap_eth_usd_price_zset,
+                    name=uniswap_eth_usd_price_zset(settings.namespace),
                     mapping=redis_cache_mapping,
                 ),
                 redis_conn.zremrangebyscore(
-                    name=uniswap_eth_usd_price_zset,
+                    name=uniswap_eth_usd_price_zset(settings.namespace),
                     min=0,
                     max=pruning_max_score,
                 ),

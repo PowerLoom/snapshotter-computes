@@ -8,7 +8,7 @@ from typing import List, Optional, Tuple, Type, Dict, Any
 from web3 import Web3
 from ipfs_client.main import AsyncIPFSClient
 
-from computes.redis_keys import uniswap_eth_usd_price_zset
+from computes.redis_keys import uniswap_eth_usd_price_zset_key as uniswap_eth_usd_price_zset
 from computes.settings.config import settings as computes_settings
 from computes.utils.models.message_models import UniswapBaseSnapshot, UniswapTradesSnapshot, TradeType, AllUniswapTradesSnapshot
 from computes.api.models.data_models import (
@@ -1228,7 +1228,7 @@ async def _fetch_eth_prices(
     
     try:
         eth_prices_raw = await redis_conn.zrangebyscore(
-            uniswap_eth_usd_price_zset,
+            uniswap_eth_usd_price_zset(settings.namespace),
             min=eth_price_min_block,
             max=eth_price_max_block,
             withscores=False

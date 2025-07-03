@@ -84,6 +84,12 @@ def active_pools_per_block_key(block_number: int, namespace: str) -> str:
     """
     return f"active_pools_per_block:{block_number}:{namespace}"
 
+def active_pools_key(block_number: int, namespace: str) -> str:
+    """
+    Generate Redis key for active pools.
+    """
+    return f"active_pools:{block_number}:{namespace}"
+
 def active_tokens_per_block_key(block_number: int, namespace: str) -> str:
     """
     Generate Redis key for active tokens per block.

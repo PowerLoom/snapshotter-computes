@@ -29,6 +29,7 @@ from computes.redis_keys import (
     pool_metadata_key,
     active_pools_per_block_key,
     active_tokens_per_block_key,
+    events_by_pool_address_key,
 )
 from computes.settings.config import settings as worker_settings
 from computes.utils.constants import current_node

@@ -7,11 +7,11 @@ from web3 import Web3
 
 from computes.preloaders.eth_price.preloader import eth_price_preloader
 from computes.utils.helpers import get_token_eth_price_dict
-from computes.redis_keys import uniswap_pair_cached_block_height_token_price
+from computes.redis_keys import uniswap_pair_cached_block_height_token_price_key
 from computes.settings.config import settings as worker_settings
 from snapshotter.utils.default_logger import logger
 from snapshotter.utils.redis.redis_keys import source_chain_epoch_size_key
-
+from snapshotter.settings.config import settings
 
 pricing_logger = logger.bind(module="PowerLoom|Uniswap|Pricing")
 
@@ -133,9 +133,7 @@ async def get_token_price_in_block_range(
                 raise Exception("source_chain_epoch_size is not set")
             pipeline = redis_conn.pipeline()
             pipeline.zadd(
-                name=uniswap_pair_cached_block_height_token_price_key(
-                        settings.namespace, Web3.to_checksum_address(token_metadata["address"]),
-                    ),
+                name=uniswap_pair_cached_block_height_token_price_key(settings.namespace, Web3.to_checksum_address(token_metadata["address"])),
                 mapping=redis_cache_mapping,
             )
             pipeline.zremrangebyscore(

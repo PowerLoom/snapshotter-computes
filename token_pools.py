@@ -12,8 +12,8 @@ from ipfs_client.main import AsyncIPFSClient
 from computes.utils.models.message_models import UniswapPoolMetadata, UniswapTokenPoolsSnapshot
 from snapshotter.utils.data_utils import get_project_latest_snapshot
 from web3 import Web3
-from computes.redis_keys import pool_metadata_key, active_pools_per_block_key
-from snapshotter.utils.redis.redis_keys import token_pools_project_id, base_snapshot_project_id
+from computes.redis_keys import pool_metadata_key, active_pools_key
+from snapshotter.utils.redis.redis_keys import token_pools_project_id, metadata_project_id as metadata_project_id_key
 
 
 class TokenPoolsProcessor(GenericProcessorSnapshot):
@@ -64,7 +64,7 @@ class TokenPoolsProcessor(GenericProcessorSnapshot):
         try:
             # WETH address constant for filtering
             WETH_ADDRESS = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
-            metadata_project_id = base_snapshot_project_id(pool_address)
+            metadata_project_id = metadata_project_id_key(pool_address)
             snapshots = []
 
             # Attempt to get pool metadata from protocol state
@@ -87,6 +87,9 @@ class TokenPoolsProcessor(GenericProcessorSnapshot):
                         pool_address
                     )
                     return None
+
+            if isinstance(pool_metadata, str):
+                pool_metadata = json.loads(pool_metadata)
             
             # Process token addresses and ensure checksum format
             token_addresses = [pool_metadata["token0"]["address"], pool_metadata["token1"]["address"]]
@@ -208,7 +211,7 @@ class TokenPoolsProcessor(GenericProcessorSnapshot):
         # Collect keys for active pools
         keys_to_fetch = []
         for block_number in range(min_chain_height, max_chain_height + 1):
-            key = active_pools_per_block_key(block_number, settings.namespace)
+            key = active_pools_key(block_number, settings.namespace)
             keys_to_fetch.append(key)
 
         # Get union of all active pools
