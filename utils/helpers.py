@@ -589,21 +589,36 @@ async def get_token_eth_quote_from_uniswap(
                 token1_decimals = token_stable_pair_data['token1_decimals']
 
                 sqrtP_list = [slot0[0] for slot0 in response]
-                sqrtP_eth_list = [block_price for block_price in eth_usd_price_dict.values()]
                 token_eth_quote = []
 
-                for i in range(len(sqrtP_list)):
-                    sqrtP = sqrtP_list[i]
-                    eth_price = sqrtP_eth_list[i]
+                for i, sqrtP in enumerate(sqrtP_list):
                     price0, price1 = eth_price_preloader.sqrtPriceX96ToTokenPrices(
                         sqrtP,
                         token0_decimals,
                         token1_decimals,
                     )
+                    
+                    # Determine which price corresponds to our token
                     if token0.lower() == token_address.lower():
-                        token_eth_quote.append((price0 / eth_price,))
+                        token_price_in_stable = price0
                     else:
-                        token_eth_quote.append((price1 / eth_price,))
+                        token_price_in_stable = price1
+                    
+                    block_height = from_block + i
+                    eth_price_usd = eth_usd_price_dict.get(block_height, 0)
+                    
+                    if eth_price_usd > 0 and token_price_in_stable > 0:
+                        token_price_in_eth = token_price_in_stable / eth_price_usd
+                    else:
+                        token_price_in_eth = 0
+                    
+                    if i == 0:
+                        helper_logger.debug(
+                            f"Token/stable pair pricing: token_price_in_stable={token_price_in_stable}, "
+                            f"eth_price_usd={eth_price_usd}, token_price_in_eth={token_price_in_eth}"
+                        )
+                    
+                    token_eth_quote.append((token_price_in_eth,))
 
                 return token_eth_quote
             else:
