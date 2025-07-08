@@ -954,10 +954,12 @@ async def get_active_pools(
     # Set data in redis
     await redis_conn.set(
         f"active_pool_data:{time_interval}:{last_submitted_epoch}:{settings.namespace}", 
-        json.dumps(active_pools)
+        json.dumps(active_pools),
+        ex=3600
     )
     await redis_conn.set(
-        f"active_pool_data:{time_interval}:latest:epoch", last_submitted_epoch
+        f"active_pool_data:{time_interval}:latest:epoch", last_submitted_epoch,
+        ex=3600
     )
     # Remove old data
     if last_indexed_epoch > 0 and last_indexed_epoch != last_submitted_epoch:
@@ -1244,10 +1246,12 @@ async def get_active_tokens(
     # Set data in redis
     await redis_conn.set(
         f"active_token_data:{time_interval}:{last_submitted_epoch}:{settings.namespace}", 
-        json.dumps(active_tokens)
+        json.dumps(active_tokens), 
+        ex=3600
     )
     await redis_conn.set(
-        f"active_token_data:{time_interval}:latest:epoch", last_submitted_epoch
+        f"active_token_data:{time_interval}:latest:epoch", last_submitted_epoch,
+        ex=3600
     )
     # Remove old data
     if last_indexed_epoch > 0 and last_indexed_epoch != last_submitted_epoch:
