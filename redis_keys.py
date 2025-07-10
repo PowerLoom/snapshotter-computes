@@ -62,3 +62,8 @@ uniswap_eth_usd_price_zset = (
 def get_pool_metadata_key(pool_address: str) -> str:
     return f'pool_metadata:{pool_address}'
 
+# Redis key for Uniswap best pair map
+uniswap_v3_best_pool_map = (
+    "uniswap:pairContract:" + settings.namespace + ":bestPoolMap"
+)
+

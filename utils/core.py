@@ -1,4 +1,3 @@
-import asyncio
 import json
 import time
 from typing import Dict, List, Optional, Any, Tuple
@@ -22,7 +21,7 @@ from computes.utils.helpers import get_events_from_cache
 from computes.utils.models.data_models import UniswapEvent, UniswapProcessedLog
 from computes.utils.models.data_models import PairBlockDetail
 from computes.utils.models.data_models import trade_data
-from computes.utils.pricing import get_token_price_in_block_range
+from computes.utils.helpers import get_token_price_in_usd_in_block_range
 
 core_logger = logger.bind(module='PowerLoom|UniswapCore')
 
@@ -99,6 +98,8 @@ async def get_pair_reserves(
         protocol_state_contract=protocol_state_contract,
     )
 
+    core_logger.info('Epoch {}-{} | Pool {} | Pair metadata: {}', from_block, to_block, pair_address, pair_per_token_metadata)
+
     if not pair_per_token_metadata:
         core_logger.error(
             "[Epoch {}-{}] Pool {} | Failed to fetch pair metadata",
@@ -108,29 +109,18 @@ async def get_pair_reserves(
         )
         raise Exception(f'Error attempting to get pair metadata for: {pair_address}')
 
-    # token USD prices
-    token0_price_map, token1_price_map = await asyncio.gather(
-        get_token_price_in_block_range(
-            token_metadata=pair_per_token_metadata.token0.model_dump(),
-            from_block=from_block,
-            to_block=to_block,
-            redis_conn=redis_conn,
-            rpc_helper=rpc_helper,
-            debug_log=False,
-        ),
-        get_token_price_in_block_range(
-            token_metadata=pair_per_token_metadata.token1.model_dump(),
-            from_block=from_block,
-            to_block=to_block,
-            redis_conn=redis_conn,
-            rpc_helper=rpc_helper,
-            debug_log=False,
-        ),
-        return_exceptions=True
+    token0_price_raw, token1_price_raw, token0_price_map, token1_price_map = await get_token_price_in_usd_in_block_range(
+        pair_metadata=pair_per_token_metadata,
+        from_block=from_block,
+        to_block=to_block,
+        redis_conn=redis_conn,
+        anchor_rpc_helper=anchor_rpc_helper,
+        ipfs_reader=ipfs_reader,
+        protocol_state_contract=protocol_state_contract,
+        rpc_helper=rpc_helper,
     )
-    core_logger.debug('Epoch {}-{} | Pool {} | Token prices fetch results: {}', from_block, to_block, pair_address, [token0_price_map, token1_price_map])
 
-    core_logger.debug(
+    core_logger.info(
         "[Epoch {}-{}] Pool {} | Token prices fetched successfully",
         from_block,
         to_block,
@@ -221,8 +211,8 @@ async def get_pair_reserves(
         token0ReservesUSD = token0AmountNormalized * current_token0_usd_price
         token1ReservesUSD = token1AmountNormalized * current_token1_usd_price
 
-        token0_price_in_token1 = current_token0_usd_price / current_token1_usd_price if current_token1_usd_price != 0 else 0.0
-        token1_price_in_token0 = current_token1_usd_price / current_token0_usd_price if current_token0_usd_price != 0 else 0.0
+        token0_price_in_token1 = token0_price_raw.get(block_num, 0)
+        token1_price_in_token0 = token1_price_raw.get(block_num, 0)
 
         pair_reserves_dict[block_num] = PairBlockDetail(
             token0ReservesNormalized=token0AmountNormalized,
@@ -691,23 +681,15 @@ async def get_pair_trade_volume(
         )
         raise Exception(f'Error attempting to get pair metadata for: {pair_address}')
 
-    token0_price_map, token1_price_map = await asyncio.gather(
-        get_token_price_in_block_range(
-            token_metadata=pair_per_token_metadata.token0.model_dump(),
-            from_block=from_block,
-            to_block=to_block,
-            redis_conn=redis_conn,
-            rpc_helper=rpc_helper,
-            debug_log=False,
-        ),
-        get_token_price_in_block_range(
-            token_metadata=pair_per_token_metadata.token1.model_dump(),
-            from_block=from_block,
-            to_block=to_block,
-            redis_conn=redis_conn,
-            rpc_helper=rpc_helper,
-            debug_log=False,
-        ),
+    _, _, token0_price_map, token1_price_map = await get_token_price_in_usd_in_block_range(
+        pair_metadata=pair_per_token_metadata,
+        from_block=from_block,
+        to_block=to_block,
+        redis_conn=redis_conn,
+        anchor_rpc_helper=anchor_rpc_helper,
+        ipfs_reader=ipfs_reader,
+        protocol_state_contract=protocol_state_contract,
+        rpc_helper=rpc_helper,
     )
 
     core_logger.debug(
@@ -803,6 +785,7 @@ async def get_liquidity_depth(
     to_block,
     redis_conn: aioredis.Redis,
     rpc_helper: RpcHelper,
+    anchor_rpc_helper: RpcHelper,
     ipfs_reader: AsyncIPFSClient,
     protocol_state_contract,
     fetch_timestamp=False,
@@ -865,25 +848,15 @@ async def get_liquidity_depth(
         )
         raise Exception(f'Error attempting to get pair metadata for: {pair_address}')
 
-    token0_price_map, token1_price_map = await asyncio.gather(
-        get_token_price_in_block_range(
-            token_metadata=pair_per_token_metadata.token0.model_dump(),
-            from_block=from_block,
-            to_block=to_block,
-            redis_conn=redis_conn,
-            rpc_helper=rpc_helper,
-            debug_log=False,
-
-        ),
-        get_token_price_in_block_range(
-            token_metadata=pair_per_token_metadata.token1.model_dump(),
-            from_block=from_block,
-            to_block=to_block,
-            redis_conn=redis_conn,
-            rpc_helper=rpc_helper,
-            debug_log=False,
-
-        ),
+    _, _, token0_price_map, token1_price_map = await get_token_price_in_usd_in_block_range(
+        pair_metadata=pair_per_token_metadata,
+        from_block=from_block,
+        to_block=to_block,
+        redis_conn=redis_conn,
+        rpc_helper=rpc_helper,
+        anchor_rpc_helper=anchor_rpc_helper,
+        ipfs_reader=ipfs_reader,
+        protocol_state_contract=protocol_state_contract,
     )
 
     core_logger.debug('grabbed pair per token metadata for liquidity depth')

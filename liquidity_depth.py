@@ -39,6 +39,7 @@ class LiquidityDepthProcessor(SnapshotProcessMessage):
             to_block=epoch.end,
             redis_conn=redis_conn,
             rpc_helper=rpc_helper,
+            anchor_rpc_helper=anchor_rpc_helper,
             ipfs_reader=ipfs_reader,
             protocol_state_contract=protocol_state_contract,
         )
