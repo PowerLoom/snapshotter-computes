@@ -30,6 +30,11 @@ uniswap_cached_block_height_token_eth_price = (
     "uniswap:pairContract:" + settings.namespace + ":{}:cachedBlockHeightTokenEthPrice"
 )
 
+# Caches token-ETH prices at specific block heights (for multi-protocol use)
+uniswap_pair_cached_block_height_token_price_raw = (
+    "uniswap:pairContract:" + settings.namespace + ":{}:cachedBlockHeightTokenPriceRaw"
+)
+
 # Caches tick data at specific block heights for Uniswap pairs
 uniswap_cached_tick_data_block_height = (
     "uniswap:pairContract:" + settings.namespace + ":{}:cachedBlockHeightTickData"
