@@ -112,7 +112,7 @@ async def get_chainlink_price_data(rpc_helper, oracle_address: str = "0x5f4eC3Df
 
 async def verify_redis_price_data(redis_conn: aioredis.Redis, block_number: int) -> Dict:
     """Verify and return Redis price data for a specific block"""
-    from computes.redis_keys import uniswap_eth_usd_price_zset
+    from computes.utils.redis_keys import uniswap_eth_usd_price_zset
     
     # Get price data for the specific block
     price_data = await redis_conn.zrangebyscore(

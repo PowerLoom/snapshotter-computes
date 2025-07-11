@@ -17,7 +17,6 @@ class UniswapEvent(BaseModel):
     score: Optional[int] = Field(None, alias='_score')
 
 
-
 class UniswapProcessedLog(UniswapEvent):
     """
     Represents a processed log from a Uniswap event, along with calculated trade data.
@@ -29,7 +28,7 @@ class UniswapProcessedLog(UniswapEvent):
     timestamp: Optional[int] = None
 
 
-class trade_data(BaseModel):
+class TradeData(BaseModel):
     """
     Represents trading data for a pair of tokens.
 
@@ -41,25 +40,25 @@ class trade_data(BaseModel):
         token0TradeVolumeUSD (float): Trading volume for token0 in USD.
         token1TradeVolumeUSD (float): Trading volume for token1 in USD.
     """
-    totalTradesUSD: float
+    totalTradesUSD: float = 0
     totalTradesMintBurnUSD: float = 0
-    totalFeeUSD: float
+    totalFeeUSD: float = 0
     token0MintBurnVolume: float = 0
     token1MintBurnVolume: float = 0
     token0MintBurnVolumeUSD: float = 0
     token1MintBurnVolumeUSD: float = 0
-    token0TradeVolume: float
-    token1TradeVolume: float
-    token0TradeVolumeUSD: float
-    token1TradeVolumeUSD: float
+    token0TradeVolume: float = 0
+    token1TradeVolume: float = 0
+    token0TradeVolumeUSD: float = 0
+    token1TradeVolumeUSD: float = 0
 
-    def __add__(self, other: "trade_data") -> "trade_data":
+    def __add__(self, other: "TradeData") -> "TradeData":
         """
-        Add trading data from another trade_data object.
+        Add trading data from another TradeData object.
         Args:
-            other (trade_data): Another trade_data object to add.
+            other (TradeData): Another TradeData object to add.
         Returns:
-            trade_data: The updated trade_data object.
+            TradeData: The updated TradeData object.
         """
         self.totalTradesUSD += other.totalTradesUSD
         self.totalFeeUSD += other.totalFeeUSD
@@ -73,13 +72,13 @@ class trade_data(BaseModel):
         self.token1MintBurnVolumeUSD += other.token1MintBurnVolumeUSD
         return self
 
-    def __sub__(self, other: "trade_data") -> "trade_data":
+    def __sub__(self, other: "TradeData") -> "TradeData":
         """
-        Subtract trading data from another trade_data object.
+        Subtract trading data from another TradeData object.
         Args:
-            other (trade_data): Another trade_data object to subtract.
+            other (TradeData): Another TradeData object to subtract.
         Returns:
-            trade_data: The updated trade_data object.
+            TradeData: The updated TradeData object.
         """
         self.totalTradesUSD -= other.totalTradesUSD
         self.totalFeeUSD -= other.totalFeeUSD
@@ -93,11 +92,11 @@ class trade_data(BaseModel):
         self.token1MintBurnVolumeUSD -= other.token1MintBurnVolumeUSD
         return self
 
-    def __abs__(self) -> "trade_data":
+    def __abs__(self) -> "TradeData":
         """
         Calculate the absolute values of all trading data.
         Returns:
-            trade_data: A new trade_data object with absolute values.
+            TradeData: A new TradeData object with absolute values.
         """
         self.totalTradesUSD = abs(self.totalTradesUSD)
         self.totalFeeUSD = abs(self.totalFeeUSD)
@@ -112,30 +111,30 @@ class trade_data(BaseModel):
         return self
 
 
-class event_trade_data(BaseModel):
+class EventTradeData(BaseModel):
     """
     Represents trade data for a specific event.
     Attributes:
         logs (List[Dict]): List of log dictionaries associated with the event.
-        trades (trade_data): Trading data for the event.
+        trades (TradeData): Trading data for the event.
     """
     logs: List[Dict]
-    trades: trade_data
+    trades: TradeData
 
 
-class epoch_event_trade_data(BaseModel):
+class EpochEventTradeData(BaseModel):
     """
     Represents trade data for different types of events within an epoch.
     Attributes:
-        Swap (event_trade_data): Trade data for Swap events.
-        Mint (event_trade_data): Trade data for Mint events.
-        Burn (event_trade_data): Trade data for Burn events.
-        Trades (trade_data): Aggregated trade data for all events.
+        Swap (EventTradeData): Trade data for Swap events.
+        Mint (EventTradeData): Trade data for Mint events.
+        Burn (EventTradeData): Trade data for Burn events.
+        Trades (TradeData): Aggregated trade data for all events.
     """
-    Swap: event_trade_data
-    Mint: event_trade_data
-    Burn: event_trade_data
-    Trades: trade_data
+    Swap: EventTradeData
+    Mint: EventTradeData
+    Burn: EventTradeData
+    Trades: TradeData
 
 
 # --- New Models for Tick and Slot0 Data ---

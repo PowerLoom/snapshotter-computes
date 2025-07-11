@@ -7,7 +7,7 @@ from rpc_helper.rpc import RpcHelper
 from web3 import Web3
 
 from computes.metadata import MetadataProcessor
-from computes.redis_keys import uniswap_eth_usd_price_zset
+from computes.utils.redis_keys import uniswap_eth_usd_price_zset
 from computes.utils.core import get_block_details_in_block_range
 from computes.utils.core import get_pair_trade_volume
 from computes.utils.models.message_models import (

@@ -9,7 +9,7 @@ from typing import List, Optional, Tuple, Type, Dict, Any
 from web3 import Web3
 from ipfs_client.main import AsyncIPFSClient
 
-from computes.redis_keys import uniswap_eth_usd_price_zset
+from computes.utils.redis_keys import uniswap_eth_usd_price_zset
 from computes.settings.config import settings as computes_settings
 from computes.utils.models.message_models import UniswapBaseSnapshot, UniswapTradesSnapshot, TradeType, AllUniswapTradesSnapshot
 from computes.api.models.data_models import (
