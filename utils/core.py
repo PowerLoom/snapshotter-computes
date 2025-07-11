@@ -239,23 +239,23 @@ async def generate_pair_reserves_dict_and_trade_data(
             token0AmountNormalized = token0Amount / (10 ** int(pair_per_token_metadata.token0.decimals))
             token1AmountNormalized = token1Amount / (10 ** int(pair_per_token_metadata.token1.decimals))
 
-            # Get block details (e.g., timestamp)
-            current_block_details = block_details_dict.get(block_num, {})
+        # Get block details (e.g., timestamp)
+        current_block_details = block_details_dict.get(block_num, {})
 
-            # Store reserves and price data for this block
-            pair_reserves_dict[block_num] = PairBlockDetail(
-                token0ReservesNormalized=token0AmountNormalized,
-                token1ReservesNormalized=token1AmountNormalized,
-                token0Reserves=token0Amount,
-                token1Reserves=token1Amount,
-                token0ReservesUSD=token0AmountNormalized * token0_price_map.get(block_num, 0),
-                token1ReservesUSD=token1AmountNormalized * token1_price_map.get(block_num, 0),
-                token0Price=token0_price_map.get(block_num, 0),
-                token1Price=token1_price_map.get(block_num, 0),
-                token0PriceInToken1=token0_price_raw.get(block_num, 0),
-                token1PriceInToken0=token1_price_raw.get(block_num, 0),
-                timestamp=current_block_details.get('timestamp', 0),
-            )
+        # Store reserves and price data for this block
+        pair_reserves_dict[block_num] = PairBlockDetail(
+            token0ReservesNormalized=token0AmountNormalized,
+            token1ReservesNormalized=token1AmountNormalized,
+            token0Reserves=token0Amount,
+            token1Reserves=token1Amount,
+            token0ReservesUSD=token0AmountNormalized * token0_price_map.get(block_num, 0),
+            token1ReservesUSD=token1AmountNormalized * token1_price_map.get(block_num, 0),
+            token0Price=token0_price_map.get(block_num, 0),
+            token1Price=token1_price_map.get(block_num, 0),
+            token0PriceInToken1=token0_price_raw.get(block_num, 0),
+            token1PriceInToken0=token1_price_raw.get(block_num, 0),
+            timestamp=current_block_details.get('timestamp', 0),
+        )
         
         # Cache the reserves for the final block of the epoch
         await _cache_pair_reserves_for_final_block(
@@ -264,6 +264,22 @@ async def generate_pair_reserves_dict_and_trade_data(
             pair_reserves_dict=pair_reserves_dict,
             to_block=to_block,
         )
+
+    core_logger.info(
+        "[Epoch {}-{}] Pool {} | Pair reserves dict: {}",
+        from_block,
+        to_block,
+        pair_address,
+        pair_reserves_dict
+    )
+
+    core_logger.info(
+        "[Epoch {}-{}] Pool {} | Epoch total trade data: {}",
+        from_block,
+        to_block,
+        pair_address,
+        epoch_total_trade_data
+    )
 
     return pair_reserves_dict, epoch_total_trade_data
 
@@ -740,169 +756,3 @@ def extract_trade_volume_log(
     )
 
     return trade_data_obj, processed_log
-
-
-# asynchronously get trades on a pair contract
-async def get_pair_trade_volume(
-    pair_address,
-    from_block,
-    to_block,
-    redis_conn: aioredis.Redis,
-    rpc_helper: RpcHelper,
-    anchor_rpc_helper: RpcHelper,
-    ipfs_reader: AsyncIPFSClient,
-    protocol_state_contract,
-    block_details_dict: dict = dict(),
-):
-    """
-    Fetch and calculate trade volume for a given Uniswap V3 pool contract address over a block range.
-    """
-    core_logger.info(
-        "[Epoch {}-{}] Pool {} | Starting trade volume computation",
-        from_block,
-        to_block,
-        pair_address
-    )
-
-    # Ensure consistent address casing for cache lookups and further processing
-    pair_address = Web3.to_checksum_address(pair_address)
-
-    # Only fetch block details if not provided
-    if not block_details_dict:
-        try:
-            block_details_dict = await get_block_details_in_block_range(
-                from_block,
-                to_block,
-                redis_conn=redis_conn,
-                rpc_helper=rpc_helper,
-            )
-        except Exception as err:
-            core_logger.opt(exception=True).error(
-                "[Epoch {}-{}] Pool {} | Failed to fetch block details: {}",
-                from_block,
-                to_block,
-                pair_address,
-                err
-            )
-            raise err
-
-        core_logger.debug(
-            "[Epoch {}-{}] Pool {} | Block details fetched successfully",
-            from_block,
-            to_block,
-            pair_address
-        )
-
-    pair_per_token_metadata = await get_pool_metadata(
-        pool_address=pair_address,
-        redis_conn=redis_conn,
-        anchor_rpc_helper=anchor_rpc_helper,
-        ipfs_reader=ipfs_reader,
-        protocol_state_contract=protocol_state_contract,
-    )
-
-    if not pair_per_token_metadata:
-        core_logger.error(
-            "[Epoch {}-{}] Pool {} | Failed to fetch pair metadata",
-            from_block,
-            to_block,
-            pair_address
-        )
-        raise Exception(f'Error attempting to get pair metadata for: {pair_address}')
-
-    _, _, token0_price_map, token1_price_map = await get_token_price_in_usd_in_block_range(
-        pair_metadata=pair_per_token_metadata,
-        from_block=from_block,
-        to_block=to_block,
-        redis_conn=redis_conn,
-        anchor_rpc_helper=anchor_rpc_helper,
-        ipfs_reader=ipfs_reader,
-        protocol_state_contract=protocol_state_contract,
-        rpc_helper=rpc_helper,
-    )
-
-    core_logger.debug(
-        "[Epoch {}-{}] Pool {} | Token prices fetched successfully",
-        from_block,
-        to_block,
-        pair_address
-    )
-
-    events_by_block = await get_events_from_cache(
-        pool_address=pair_address,
-        from_block=from_block,
-        to_block=to_block,
-        redis_conn=redis_conn,
-    )
-    core_logger.info(
-        "[Epoch {}-{}] Pool {} | Found {} events_by_block entries to process",
-        from_block,
-        to_block,
-        pair_address,
-        len(events_by_block)
-    )
-
-    # Process events and calculate trade volumes
-    processed_trades_list: List[UniswapProcessedLog] = []
-    total_events_attempted = 0
-    for block_num, events_in_block in events_by_block.items(): 
-        core_logger.debug(
-            "[Epoch {}-{}] Pool {} | Block {} | Found {} events in this block to attempt processing.",
-            from_block, to_block, pair_address, block_num, len(events_in_block)
-        )
-        total_events_attempted += len(events_in_block)
-        for event_to_process in events_in_block: 
-            core_logger.info(
-                "[Epoch {}-{}] Pool {} | Block {} | Processing event: {}",
-                from_block, to_block, pair_address, block_num, event_to_process.model_dump_json(indent=2)
-            )
-            try:
-                returned_trade_data, processed_log_event_candidate = extract_trade_volume_log(
-                    event_name=event_to_process.eventName,
-                    log=event_to_process,
-                    pair_per_token_metadata=pair_per_token_metadata,
-                    token0_price_map=token0_price_map,
-                    token1_price_map=token1_price_map,
-                    block_details_dict=block_details_dict,
-                )
-                core_logger.info(
-                    "[Epoch {}-{}] Pool {} | Block {} | extract_trade_volume_log returned: trade_data={}, processed_log_event={}",
-                    from_block, to_block, pair_address, block_num,
-                    returned_trade_data.model_dump_json(indent=2) if returned_trade_data else "None",
-                    processed_log_event_candidate.model_dump_json(indent=2) if processed_log_event_candidate else "None"
-                )
-
-                if processed_log_event_candidate:
-                    processed_trades_list.append(processed_log_event_candidate)
-                else:
-                    core_logger.warning(
-                        "[Epoch {}-{}] Pool {} | Block {} | Event {} with name '{}' processed by extract_trade_volume_log but resulted in no UniswapProcessedLog object (was None). Skipping.",
-                        from_block, to_block, pair_address, block_num, event_to_process.txHash, event_to_process.eventName
-                    )
-            except Exception as e_extract:
-                core_logger.opt(exception=True).error(
-                    "[Epoch {}-{}] Pool {} | Block {} | Exception during extract_trade_volume_log for event {} with name '{}': {}",
-                    from_block, to_block, pair_address, block_num, event_to_process.txHash, event_to_process.eventName, e_extract
-                )
-
-    # More precise initial log based on total events found across all blocks in events_by_block
-    if total_events_attempted > 0 and not processed_trades_list:
-        core_logger.warning(
-            "[Epoch {}-{}] Pool {} | Attempted to process {} events from cache, but none resulted in a UniswapProcessedLog.",
-            from_block, to_block, pair_address, total_events_attempted
-        )
-    
-    core_logger.info(
-        "[Epoch {}-{}] Pool {} | Trade volume computation completed | Processed {} trades (from {} events attempted in cache)",
-        from_block,
-        to_block,
-        pair_address,
-        len(processed_trades_list),
-        total_events_attempted
-    )
-
-    return {
-        "address": pair_address,
-        "epoch": {"begin": from_block, "end": to_block},
-        "trades": processed_trades_list,
-    }
