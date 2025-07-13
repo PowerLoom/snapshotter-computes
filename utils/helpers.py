@@ -11,14 +11,11 @@ from typing import Optional, Union, List, Tuple, Dict
 from redis import asyncio as aioredis
 from computes.utils.models.data_models import UniswapEvent
 from snapshotter.utils.default_logger import logger
-from snapshotter.utils.redis.redis_keys import source_chain_epoch_size_key
 from rpc_helper.rpc import get_contract_abi_dict
 from rpc_helper.rpc import RpcHelper
 from web3 import Web3
 from ipfs_client.main import AsyncIPFSClient
 
-from computes.utils.redis_keys import uniswap_cached_block_height_token_eth_price
-from computes.utils.redis_keys import uniswap_pool_cached_block_height_token_price_raw
 from computes.utils.redis_keys import uniswap_tokens_pair_map
 from computes.settings.config import settings as worker_settings
 from computes.utils.constants import current_node
@@ -536,35 +533,6 @@ async def get_token_price_in_block_range(
             - token0_price: Mapping from block number to token0 price.
             - token1_price: Mapping from block number to token1 price.
     """
-    # Try to fetch cached prices for token0 and token1 for the block range
-    token0_price_cache = await redis_conn.zrangebyscore(
-        name=uniswap_pool_cached_block_height_token_price_raw.format(
-            Web3.to_checksum_address(pair_metadata.token0.address),
-        ),
-        min=from_block,
-        max=to_block,
-    )
-    token1_price_cache = await redis_conn.zrangebyscore(
-        name=uniswap_pool_cached_block_height_token_price_raw.format(
-            Web3.to_checksum_address(pair_metadata.token1.address),
-        ),
-        min=from_block,
-        max=to_block,
-    )
-
-    # If both token0 and token1 prices are fully cached for the block range, use the cached values.
-    if token0_price_cache and token1_price_cache and len(token0_price_cache) == to_block - from_block + 1 and len(token1_price_cache) == to_block - from_block + 1:
-        token0_price_cache = [json.loads(data.decode('utf-8')) for data in token0_price_cache]
-        token1_price_cache = [json.loads(data.decode('utf-8')) for data in token1_price_cache]
-        token0_price = {
-            int(data['blockHeight']): float(data['price']) for data in token0_price_cache
-        }
-        token1_price = {
-            int(data['blockHeight']): float(data['price']) for data in token1_price_cache
-        }
-        return token0_price, token1_price
-
-    # Otherwise, fetch slot0 data for each block in the range and compute prices
     response = await rpc_helper.batch_eth_call_on_block_range(
         abi_dict=get_contract_abi_dict(
             abi=pair_contract_abi,
@@ -648,25 +616,6 @@ async def get_token_price_in_usd_in_block_range(
             Dict[int, float],  # token1_price: token1 price in USD for each block
         ]
     """
-    # Check if token prices are already present in Redis cache for the given block range.
-    token0_price_cache = await redis_conn.zrangebyscore(
-        name=uniswap_cached_block_height_token_eth_price.format(
-            Web3.to_checksum_address(pair_metadata.token0.address),
-        ),
-        min=from_block,
-        max=to_block,
-    )
-    token1_price_cache = await redis_conn.zrangebyscore(
-        name=uniswap_cached_block_height_token_eth_price.format(
-            Web3.to_checksum_address(pair_metadata.token1.address),
-        ),
-        min=from_block,
-        max=to_block,
-    )
-    helper_logger.info(f"Token0 price cache: {token0_price_cache}, length: {len(token0_price_cache)}, from_block: {from_block}, to_block: {to_block}")
-    helper_logger.info(f"Token1 price cache: {token1_price_cache}, length: {len(token1_price_cache)}, from_block: {from_block}, to_block: {to_block}")
-
-    # If not cached, fetch raw token prices (in terms of each other) for the block range.
     token0_price_raw, token1_price_raw = await get_token_price_in_block_range(
         pair_metadata=pair_metadata,
         from_block=from_block,
@@ -674,20 +623,7 @@ async def get_token_price_in_usd_in_block_range(
         redis_conn=redis_conn,
         rpc_helper=rpc_helper,
     )
-    # If both token0 and token1 prices are fully cached for the block range, use the cached values.
-    # Example cache entry: [b'{"blockHeight": 22888493, "price": 110868.32322378595}']
-    if token0_price_cache and token1_price_cache and len(token0_price_cache) == to_block - from_block + 1 and len(token1_price_cache) == to_block - from_block + 1:
-        token0_price_cache = [json.loads(data.decode('utf-8')) for data in token0_price_cache]
-        token1_price_cache = [json.loads(data.decode('utf-8')) for data in token1_price_cache]
-        token0_price = {
-            int(data['blockHeight']): float(data['price']) for data in token0_price_cache
-        }
-        token1_price = {
-            int(data['blockHeight']): float(data['price']) for data in token1_price_cache
-        }
-        helper_logger.info("Using cached token prices")
-        return token0_price_raw, token1_price_raw, token0_price, token1_price
-
+ 
     # If either token0 or token1 is WETH, use ETH/USD price for conversion.
     if Web3.to_checksum_address(pair_metadata.token0.address) == WETH_ADDRESS or Web3.to_checksum_address(pair_metadata.token1.address) == WETH_ADDRESS:
         # Fetch ETH/USD price for the block range.
@@ -784,145 +720,7 @@ async def get_token_price_in_usd_in_block_range(
             }
             token1_price = reference_token_price_usd
 
-    # Cache the computed token prices at each block height in Redis for future use.
-    await cache_token_price_at_height(
-        token0_address=pair_metadata.token0.address, token0_price_dict=token0_price, token1_address=pair_metadata.token1.address, token1_price_dict=token1_price, redis_conn=redis_conn
-    )
-
     return token0_price_raw, token1_price_raw, token0_price, token1_price
-
-
-async def cache_token_price_raw_at_height(
-    token0_address: str,
-    token0_price_dict: Dict[int, float],
-    token1_address: str,
-    token1_price_dict: Dict[int, float],
-    redis_conn: aioredis.Redis,
-):
-    """
-    Cache the token price at each block height in Redis as a sorted set.
-
-    Each entry is stored as a JSON string with the block height and price, and the block height is used as the score.
-
-    Args:
-        token_address (str): The address of the token.
-        token_price_dict (Dict[int, float]): Mapping from block height to token price.
-        redis_conn (aioredis.Redis): Redis connection object.
-    """
-    # Only proceed if there are prices to cache.
-    if len(token0_price_dict) > 0 and len(token1_price_dict) > 0 and len(token0_price_dict) == len(token1_price_dict):
-        max_block_height = max(list(token0_price_dict.keys()) + list(token1_price_dict.keys()))
-
-        # Prepare the mapping for Redis ZADD: {json_string: block_height}
-        token0_redis_cache_mapping = {
-            json.dumps({'blockHeight': height, 'price': price}): int(height)
-            for height, price in token0_price_dict.items()
-        }
-        token1_redis_cache_mapping = {
-            json.dumps({'blockHeight': height, 'price': price}): int(height)
-            for height, price in token1_price_dict.items()
-        }
-
-        # Get the epoch size for the source chain to determine how much history to keep.
-        source_chain_epoch_size = int(
-            await redis_conn.get(source_chain_epoch_size_key()),
-        )
-        pipeline = redis_conn.pipeline()
-        # Add the new prices to the sorted set.
-        pipeline.zadd(
-            name=uniswap_pool_cached_block_height_token_price_raw.format(
-                Web3.to_checksum_address(token0_address),
-            ),
-            mapping=token0_redis_cache_mapping,  # Use block height as score.
-        )
-        pipeline.zadd(
-            name=uniswap_pool_cached_block_height_token_price_raw.format(
-                Web3.to_checksum_address(token1_address),
-            ),
-            mapping=token1_redis_cache_mapping,  # Use block height as score.
-        )
-        # Remove old entries outside the retention window.
-        pipeline.zremrangebyscore(
-            name=uniswap_pool_cached_block_height_token_price_raw.format(
-                Web3.to_checksum_address(token0_address),
-            ),
-            min=0,
-            max=int(max_block_height) - source_chain_epoch_size * 4,
-        )
-        pipeline.zremrangebyscore(
-            name=uniswap_pool_cached_block_height_token_price_raw.format(
-                Web3.to_checksum_address(token1_address),
-            ),
-            min=0,
-            max=int(max_block_height) - source_chain_epoch_size * 4,
-        )
-        await pipeline.execute()
-
-
-async def cache_token_price_at_height(
-    token0_address: str,
-    token0_price_dict: Dict[int, float],
-    token1_address: str,
-    token1_price_dict: Dict[int, float],
-    redis_conn: aioredis.Redis,
-):
-    """
-    Cache the token price at each block height in Redis as a sorted set.
-
-    Each entry is stored as a JSON string with the block height and price, and the block height is used as the score.
-
-    Args:
-        token_address (str): The address of the token.
-        token_price_dict (Dict[int, float]): Mapping from block height to token price.
-        redis_conn (aioredis.Redis): Redis connection object.
-    """
-    # Only proceed if there are prices to cache.
-    if len(token0_price_dict) > 0 and len(token1_price_dict) > 0 and len(token0_price_dict) == len(token1_price_dict):
-        max_block_height = max(list(token0_price_dict.keys()) + list(token1_price_dict.keys()))
-
-        token0_redis_cache_mapping = {
-            json.dumps({'blockHeight': height, 'price': price}): int(height)
-            for height, price in token0_price_dict.items()
-        }
-        token1_redis_cache_mapping = {
-            json.dumps({'blockHeight': height, 'price': price}): int(height)
-            for height, price in token1_price_dict.items()
-        }
-
-        # Get the epoch size for the source chain to determine how much history to keep.
-        source_chain_epoch_size = int(
-            await redis_conn.get(source_chain_epoch_size_key()),
-        )
-        pipeline = redis_conn.pipeline()
-        # Add the new prices to the sorted set.
-        pipeline.zadd(
-            name=uniswap_cached_block_height_token_eth_price.format(
-                Web3.to_checksum_address(token0_address),
-            ),
-            mapping=token0_redis_cache_mapping,  # Use block height as score.
-        )
-        pipeline.zadd(
-            name=uniswap_cached_block_height_token_eth_price.format(
-                Web3.to_checksum_address(token1_address),
-            ),
-            mapping=token1_redis_cache_mapping,  # Use block height as score.
-        )
-        # Remove old entries outside the retention window.
-        pipeline.zremrangebyscore(
-            name=uniswap_cached_block_height_token_eth_price.format(
-                Web3.to_checksum_address(token0_address),
-            ),
-            min=0,
-            max=int(max_block_height) - source_chain_epoch_size * 4,
-        )
-        pipeline.zremrangebyscore(
-            name=uniswap_cached_block_height_token_eth_price.format(
-                Web3.to_checksum_address(token1_address),
-            ),
-            min=0,
-            max=int(max_block_height) - source_chain_epoch_size * 4,
-        )
-        await pipeline.execute()
 
 
 async def identify_best_liquidity_pool(
