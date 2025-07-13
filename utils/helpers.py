@@ -672,7 +672,7 @@ async def get_token_price_in_usd_in_block_range(
     )
     # If both token0 and token1 prices are fully cached for the block range, use the cached values.
     # Example cache entry: [b'{"blockHeight": 22888493, "price": 110868.32322378595}']
-    if token0_price_cache and token1_price_cache and len(token0_price_cache) == len(token1_price_cache) == to_block - from_block + 1:
+    if token0_price_cache and token1_price_cache and len(token0_price_cache) == to_block - from_block + 1 and len(token1_price_cache) == to_block - from_block + 1:
         token0_price_cache = [json.loads(data.decode('utf-8')) for data in token0_price_cache]
         token1_price_cache = [json.loads(data.decode('utf-8')) for data in token1_price_cache]
         token0_price = {
