@@ -325,11 +325,6 @@ async def get_trade_volume_agg_all_pools(
     token_address: str,
     time_interval: int,
 ):  
-    token_address = Web3.to_checksum_address(token_address)
-    tokens_to_ignore = [compute_settings.contract_addresses.WETH]
-    if token_address in tokens_to_ignore:
-        response.status_code = 400
-        return {"error": "Invalid token address"}
     
     try:
         trade_volume_agg = await get_uniswap_trade_volume_agg_all_pools(
@@ -341,6 +336,9 @@ async def get_trade_volume_agg_all_pools(
             token_address=token_address,
         )
     except Exception as e:
+        if "Too many pools found for token" in str(e):
+            response.status_code = 400
+            return {"error": f"Too many pools found for Token: {token_address}, aggregation over volume not supported yet! Please use the tradeVolume/{pool_address}/{time_interval} endpoint instead."}
         rest_logger.opt(exception=True).error(f"Error getting trade volume agg for {token_address}: {e}")
         response.status_code = 500
         return {"error": "Trade volume agg not found"}

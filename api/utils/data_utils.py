@@ -1373,6 +1373,9 @@ async def get_uniswap_trade_volume_agg_all_pools(
     if not token_pools:
         logger.error(f"No token pools found for token {token_address}")
         return None
+
+    if len(token_pools.pools) > 20:
+        raise Exception(f"Too many pools found for token {token_address}")
     
     for pool in token_pools.pools:
         tasks.append(get_uniswap_trade_volume_agg(
