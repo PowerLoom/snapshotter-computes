@@ -568,15 +568,6 @@ async def get_token_price_in_block_range(
         token0_price[block_num] = price0
         token1_price[block_num] = price1
 
-    # Cache the raw prices for future use
-    await cache_token_price_raw_at_height(
-        token0_address=pair_metadata.token0.address,
-        token0_price_dict=token0_price,
-        token1_address=pair_metadata.token1.address,
-        token1_price_dict=token1_price,
-        redis_conn=redis_conn,
-    )
-
     # Return the price mappings for token0 and token1.
     return token0_price, token1_price
 
