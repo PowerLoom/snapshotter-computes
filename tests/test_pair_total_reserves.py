@@ -171,10 +171,12 @@ async def fetch_trade_events_from_etherscan(
                                 event_name = "Burn"
                         
                         if not event_name:
+                            print(f"      ⚠️  No event name found for log {log}")
                             continue  # Skip non-Uniswap V3 events
                             
                         event_abi = event_abis.get(event_name)
                         if not event_abi:
+                            print(f"      ⚠️  No ABI found for event {event_name}")
                             continue  # Skip if no ABI found
 
                         decoded_event = get_event_data(codec, event_abi, log)
@@ -923,7 +925,7 @@ async def test_pair_total_reserves_processor(
     except Exception as e:
         pytest.fail(f"Failed to get current block number: {e}")
 
-    block_offset_from_head = 5
+    block_offset_from_head = 3
     if current_block_number <= block_offset_from_head:
         pytest.skip(f"Chain height ({current_block_number}) too low to test with offset {block_offset_from_head}")
     
@@ -934,18 +936,6 @@ async def test_pair_total_reserves_processor(
 
     if not await validate_block_availability(rpc_helper, from_block):
         pytest.skip(f"Skipping test: block {from_block} not available on configured RPC node.")
-
-    # Get active pools from Redis for the test block
-    active_pools = await get_active_pools_from_redis(redis_conn, from_block, app_config.namespace)
-    
-    if not active_pools:
-        pytest.skip(f"No active pools found in Redis for block {from_block} and namespace {app_config.namespace}")
-    
-    print(f"Found {len(active_pools)} active pools in Redis for block {from_block}")
-    for i, pool in enumerate(active_pools[:5]):  # Print first 5 pools
-        print(f"  Pool {i+1}: {pool}")
-    if len(active_pools) > 5:
-        print(f"  ... and {len(active_pools) - 5} more pools")
 
     # Get source chain ID for Etherscan v2 API (read-only, don't cache in Redis for tests)
     try:
@@ -977,6 +967,7 @@ async def test_pair_total_reserves_processor(
         timestamp=int(time.time())
     )
 
+    active_pools = []
     pools_to_process = eval(os.getenv('POOLS_TO_TEST', '[]'))
     if pools_to_process:
         pools_to_process = [Web3.to_checksum_address(pool) for pool in pools_to_process]
@@ -1007,8 +998,20 @@ async def test_pair_total_reserves_processor(
             results.append((f"baseSnapshot:{pool}:{app_config.namespace}", base_snapshot_data))
 
     else:
-        # Run the processor
-        print(f"\nRunning PairTotalReservesProcessor.compute()...")
+        # Get active pools from Redis for the test block
+        active_pools = await get_active_pools_from_redis(redis_conn, from_block, app_config.namespace)
+
+        if not active_pools:
+            pytest.skip(f"No active pools found in Redis for block {from_block} and namespace {app_config.namespace}")
+
+        print(f"Found {len(active_pools)} active pools in Redis for block {from_block}")
+        for i, pool in enumerate(active_pools[:5]):  # Print first 5 pools
+            print(f"  Pool {i+1}: {pool}")
+        if len(active_pools) > 5:
+            print(f"  ... and {len(active_pools) - 5} more pools")
+            # Run the processor
+            print(f"\nRunning PairTotalReservesProcessor.compute()...")
+
         start_time = time.time()
         
         results = await processor.compute(
@@ -1135,9 +1138,9 @@ async def test_pair_total_reserves_processor(
                 rpc_helper=rpc_helper
             )
             
-            print(f"  🔍 Validating prices against CoinMarketCap...")
             tolerance = os.getenv('COINMARKETCAP_API_PRICE_TOLERANCE', 2)
             tolerance = float(tolerance) / 100
+            print(f"    🔍 Validating prices against CoinMarketCap with tolerance: {tolerance}")
             cmc_validation = await validate_prices_against_coinmarketcap(
                 snapshot=snapshot,
                 pool_metadata=pool_metadata,
