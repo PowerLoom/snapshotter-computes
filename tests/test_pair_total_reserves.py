@@ -342,14 +342,10 @@ async def validate_trade_data_against_etherscan(
                     error_msg = f"{token_name} swap volume mismatch: snapshot={snapshot_vol}, etherscan={etherscan_vol} (relative diff: {relative_diff:.2%}, tolerance: {tolerance:.2%})"
                     print(f"       ❌ VALIDATION ERROR: {error_msg}")
                     validation_result['validation_errors'].append(error_msg)
-                else:
-                    print(f"       ✅ {token_name} swap volume validation passed")
             elif snapshot_vol != 0:
                 error_msg = f"{token_name} swap volume mismatch: snapshot={snapshot_vol}, etherscan={etherscan_vol}"
                 print(f"       ❌ VALIDATION ERROR: {error_msg}")
                 validation_result['validation_errors'].append(error_msg)
-            else:
-                print(f"       ✅ {token_name} swap volume validation passed (both zero)")
     
     # Check mint/burn volume discrepancies  
     if etherscan_data['mint_count'] > 0 or etherscan_data['burn_count'] > 0:
@@ -493,8 +489,6 @@ def validate_price_differences(
         # Validate with tolerance
         if token0_diff_pct / 100 > tolerance:
             print(f"         ⚠️  Price difference ({token0_diff_pct:.3f}%) exceeds tolerance ({tolerance:.1%})")
-        else:
-            print(f"         ✅ Price difference within tolerance")
     
     # Log comparison results and validate Token1
     print(f"       Token1 ({pool_metadata.token1.symbol}) USD Price:")
@@ -508,8 +502,6 @@ def validate_price_differences(
         # Validate with tolerance
         if token1_diff_pct / 100 > tolerance:
             print(f"         ⚠️  Price difference ({token1_diff_pct:.3f}%) exceeds tolerance ({tolerance:.1%})")
-        else:
-            print(f"         ✅ Price difference within tolerance")
     
     # Collect validation errors/warnings instead of asserting immediately
     if cmc_token0_usd > 0 and snapshot_token0_usd > 0:
@@ -519,15 +511,11 @@ def validate_price_differences(
                 error_msg = f"Token0 USD price mismatch: snapshot=${snapshot_token0_usd:.6f}, cmc=${cmc_token0_usd:.6f} (relative diff: {token0_usd_diff:.2%}, tolerance: {tolerance:.2%})"
                 print(f"         ❌ VALIDATION ERROR: {error_msg}")
                 validation_errors.append(error_msg)
-            else:
-                print(f"         ✅ Token0 price validation passed")
         else:
             if token0_usd_diff > tolerance:
                 warning_msg = f"Token0 USD price difference ({token0_usd_diff:.2%}) exceeds tolerance but data is stale"
                 print(f"         ⚠️  WARNING: {warning_msg}")
                 validation_warnings.append(warning_msg)
-            else:
-                print(f"         ✅ Token0 price validation passed (stale data within tolerance)")
     
     if cmc_token1_usd > 0 and snapshot_token1_usd > 0:
         token1_usd_diff = abs(snapshot_token1_usd - cmc_token1_usd) / cmc_token1_usd
@@ -536,15 +524,11 @@ def validate_price_differences(
                 error_msg = f"Token1 USD price mismatch: snapshot=${snapshot_token1_usd:.6f}, cmc=${cmc_token1_usd:.6f} (relative diff: {token1_usd_diff:.2%}, tolerance: {tolerance:.2%})"
                 print(f"         ❌ VALIDATION ERROR: {error_msg}")
                 validation_errors.append(error_msg)
-            else:
-                print(f"         ✅ Token1 price validation passed")
         else:
             if token1_usd_diff > tolerance:
                 warning_msg = f"Token1 USD price difference ({token1_usd_diff:.2%}) exceeds tolerance but data is stale"
                 print(f"         ⚠️  WARNING: {warning_msg}")
                 validation_warnings.append(warning_msg)
-            else:
-                print(f"         ✅ Token1 price validation passed (stale data within tolerance)")
     
     return validation_warnings, validation_errors
 
@@ -948,7 +932,7 @@ async def test_pair_total_reserves_processor(
     except Exception as e:
         pytest.fail(f"Failed to get current block number: {e}")
 
-    block_offset_from_head = 3
+    block_offset_from_head = 1
     if current_block_number <= block_offset_from_head:
         pytest.skip(f"Chain height ({current_block_number}) too low to test with offset {block_offset_from_head}")
     
@@ -1069,7 +1053,7 @@ async def test_pair_total_reserves_processor(
     
     # Validate each snapshot
     for i, (task_key, snapshot) in enumerate(results):
-        print(f"\n📊 Validating snapshot {i+1}/{len(results)}")
+        print(f"\n📊 Validating snapshot {i+1}/{len(results)} for pool {snapshot.address}")
         
         snapshot_validation_errors = []
         snapshot_warnings = []
@@ -1132,14 +1116,6 @@ async def test_pair_total_reserves_processor(
         assert snapshot.totalTrade >= 0, f"totalTrade should be non-negative, got {snapshot.totalTrade}"
         assert snapshot.totalFee >= 0, f"totalFee should be non-negative, got {snapshot.totalFee}"
         
-        print(f"  ✅ Pool {snapshot.address}: Valid snapshot")
-        print(f"     Token0 Reserve: {token0_reserve}")
-        print(f"     Token1 Reserve: {token1_reserve}")
-        print(f"     Token0 USD: ${token0_usd:.2f}")
-        print(f"     Token1 USD: ${token1_usd:.2f}")
-        print(f"     Total Trade: ${snapshot.totalTrade:.2f}")
-        print(f"     Total Fee: ${snapshot.totalFee:.2f}")
-        
         # Validate trade data against Etherscan if API key is available
         print(f"  🔍 Validating trade data against Etherscan...")
         
@@ -1177,8 +1153,6 @@ async def test_pair_total_reserves_processor(
                 if onchain_errors:
                     print(f"       ❌ On-chain price validation errors: {len(onchain_errors)}")
                     etherscan_validation_errors.extend(onchain_errors)
-                else:
-                    print(f"       ✅ On-chain price validation passed")
             except Exception as e:
                 error_msg = f"On-chain price validation failed: {str(e)}"
                 print(f"       ❌ {error_msg}")
