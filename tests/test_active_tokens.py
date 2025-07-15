@@ -1,3 +1,4 @@
+import aiohttp
 import asyncio
 import json
 import os
@@ -178,7 +179,6 @@ async def extract_tokens_from_etherscan_detailed(
         - Dictionary mapping token addresses to their frequency of occurrence
         - Dictionary mapping token addresses to the events that caused them to be active
     """
-    import aiohttp
     
     api_key = get_etherscan_api_key()
     
@@ -188,16 +188,11 @@ async def extract_tokens_from_etherscan_detailed(
     burn_topic = "0x0c396cd989a39f4459b5fa1aed6a9a8dcdbc45908acfd67e028cd568da98982c"
     
     print(f"\n🔍 Extracting detailed token frequencies from Etherscan for blocks {start_block} to {end_block}")
-    weth_address = Web3.to_checksum_address(computes_settings.contract_addresses.WETH)
-    print(f"  📍 WETH Address: {weth_address}")
-    print(f"  📍 Only counting pools that contain WETH as token0 or token1")
     
     token_frequencies = {}
     token_event_details = {}  # Track which events each token came from
     verified_pools_cache = {}
     total_events_processed = 0
-    weth_pools_found = 0
-    non_weth_pools_skipped = 0
     
     # Fetch events for each type and count token occurrences
     for event_type, topic in [("swap", swap_topic), ("mint", mint_topic), ("burn", burn_topic)]:
@@ -256,16 +251,6 @@ async def extract_tokens_from_etherscan_detailed(
                                 token0 = pool_info['token0']
                                 token1 = pool_info['token1']
                                 
-                                # Only process pools that have WETH as one of the tokens
-                                if token0 != weth_address and token1 != weth_address:
-                                    non_weth_pools_skipped += 1
-                                    print(f"      ⏭️  Skipping pool {pool_address} - no WETH token")
-                                    print(f"         Tokens: {token0} & {token1}")
-                                    print(f"         WETH: {weth_address}")
-                                    continue
-                                
-                                weth_pools_found += 1
-                                
                                 # Create event detail record
                                 event_detail = {
                                     'event_type': event_type,
@@ -312,8 +297,6 @@ async def extract_tokens_from_etherscan_detailed(
     
     print(f"\n  📊 ETHERSCAN PROCESSING SUMMARY:")
     print(f"     Total events processed: {total_events_processed}")
-    print(f"     WETH pools found: {weth_pools_found}")
-    print(f"     Non-WETH pools skipped: {non_weth_pools_skipped}")
     print(f"     Unique tokens in WETH pools: {len(token_frequencies)}")
     print(f"  📊 Final detailed token frequencies: {token_frequencies}")
     return token_frequencies, token_event_details
