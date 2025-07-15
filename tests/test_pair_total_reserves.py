@@ -23,15 +23,15 @@ from snapshotter.settings.config import settings
 
 
 def sqrtPriceX96ToTokenPrices(sqrtPriceX96, token0_decimals, token1_decimals):
-        # https://blog.uniswap.org/uniswap-v3-math-primer
+    # https://blog.uniswap.org/uniswap-v3-math-primer
 
-        price0 = ((sqrtPriceX96 / (2**96))** 2) / (10 ** token1_decimals / 10 ** token0_decimals)
-        price1 = 1 / price0
+    price0 = ((sqrtPriceX96 / (2**96))** 2) / (10 ** token1_decimals / 10 ** token0_decimals)
+    price1 = 1 / price0
 
-        price0 = round(price0, token0_decimals)
-        price1 = round(price1, token1_decimals)
+    price0 = round(price0, token0_decimals)
+    price1 = round(price1, token1_decimals)
 
-        return price0, price1
+    return price0, price1
 
 
 async def get_active_pools_from_redis(redis_conn, block_number: int, namespace: str) -> List[str]:
@@ -680,18 +680,10 @@ async def validate_prices_against_coinmarketcap(
             
             if is_token0_base:
                 # If token0 is base:
-                # - cmc_raw_price is token0/token1 ratio
-                # - cmc_base_usd is token0's USD price
-                cmc_token0_price = float(cmc_raw_price_decimal)
-                cmc_token1_price = float(1 / cmc_raw_price_decimal) if cmc_raw_price_decimal else 0
                 cmc_token0_usd = float(cmc_base_usd_decimal)
                 cmc_token1_usd = float(cmc_base_usd_decimal / cmc_raw_price_decimal) if cmc_raw_price_decimal else 0
             else:
                 # If token1 is base:
-                # - cmc_raw_price is token1/token0 ratio
-                # - cmc_base_usd is token1's USD price
-                cmc_token0_price = float(1 / cmc_raw_price_decimal) if cmc_raw_price_decimal else 0
-                cmc_token1_price = float(cmc_raw_price_decimal)
                 cmc_token0_usd = float(cmc_base_usd_decimal * cmc_raw_price_decimal) if cmc_raw_price_decimal else 0
                 cmc_token1_usd = float(cmc_base_usd_decimal)
             
@@ -931,7 +923,7 @@ async def test_pair_total_reserves_processor(
     except Exception as e:
         pytest.fail(f"Failed to get current block number: {e}")
 
-    block_offset_from_head = 10
+    block_offset_from_head = 5
     if current_block_number <= block_offset_from_head:
         pytest.skip(f"Chain height ({current_block_number}) too low to test with offset {block_offset_from_head}")
     
