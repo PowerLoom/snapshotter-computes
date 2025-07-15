@@ -234,7 +234,7 @@ async def validate_trade_data_against_etherscan(
     """
     Validate snapshot trade data against Etherscan by comparing raw token amounts.
     
-    Returns validation results with comparison data.
+    Returns validation results with comparison data and any validation errors.
     """
     etherscan_data = await fetch_trade_events_from_etherscan(
         snapshot.address, block_number, pool_metadata, source_chain_id
@@ -243,13 +243,9 @@ async def validate_trade_data_against_etherscan(
     if not etherscan_data:
         return {
             'etherscan_available': False,
-            'reason': 'No Etherscan API key/URL configured or fetch failed'
+            'reason': 'No Etherscan API key/URL configured or fetch failed',
+            'validation_errors': []
         }
-    
-    # Extract snapshot trade data (USD values for reference only)
-    snapshot_swap_volume_usd = snapshot.totalTrade
-    snapshot_fees_usd = snapshot.totalFee
-    snapshot_mint_burn_volume_usd = getattr(snapshot, 'totalTradeMintBurn', 0)
     
     # Extract snapshot raw token amounts - first log what we actually get
     token0_trade_vol = getattr(snapshot, 'token0TradeVolume', None)
@@ -282,6 +278,7 @@ async def validate_trade_data_against_etherscan(
         'etherscan_available': True,
         'pool_address': snapshot.address,
         'block_number': block_number,
+        'validation_errors': [],  # Collect errors instead of asserting
         'comparison': {
             'swap_volume_token0': {
                 'snapshot': snapshot_swap_token0_amount,
@@ -304,12 +301,6 @@ async def validate_trade_data_against_etherscan(
                 'etherscan': etherscan_data['total_mint_burn_token1_amount'],
                 'mint_count_etherscan': etherscan_data['mint_count'],
                 'burn_count_etherscan': etherscan_data['burn_count']
-            },
-            # Include USD values from snapshot for reference only
-            'usd_values_reference': {
-                'snapshot_swap_volume_usd': snapshot_swap_volume_usd,
-                'snapshot_fees_usd': snapshot_fees_usd,
-                'snapshot_mint_burn_volume_usd': snapshot_mint_burn_volume_usd
             },
             'events_details': etherscan_data.get('events_details', [])
         }
@@ -335,7 +326,7 @@ async def validate_trade_data_against_etherscan(
     print(f"       Token0 Mint/Burn - Snapshot: {snapshot_mint_burn_token0_amount:.6f}, Etherscan: {etherscan_data['total_mint_burn_token0_amount']:.6f} ({etherscan_data['mint_count']} mints, {etherscan_data['burn_count']} burns)")
     print(f"       Token1 Mint/Burn - Snapshot: {snapshot_mint_burn_token1_amount:.6f}, Etherscan: {etherscan_data['total_mint_burn_token1_amount']:.6f}")
 
-    # Add assertions to ensure test fails on discrepancies
+    # Collect validation errors instead of asserting immediately
     tolerance = 0.01  # 1% tolerance for floating point precision
     print(f"     🔧 Validating with {tolerance:.1%} tolerance...")
     
@@ -347,11 +338,18 @@ async def validate_trade_data_against_etherscan(
         ]:
             if etherscan_vol > 0:
                 relative_diff = abs(snapshot_vol - etherscan_vol) / etherscan_vol
-                assert relative_diff <= tolerance, \
-                    f"{token_name} swap volume mismatch: snapshot={snapshot_vol}, etherscan={etherscan_vol} " \
-                    f"(relative diff: {relative_diff:.2%}, tolerance: {tolerance:.2%})"
+                if relative_diff > tolerance:
+                    error_msg = f"{token_name} swap volume mismatch: snapshot={snapshot_vol}, etherscan={etherscan_vol} (relative diff: {relative_diff:.2%}, tolerance: {tolerance:.2%})"
+                    print(f"       ❌ VALIDATION ERROR: {error_msg}")
+                    validation_result['validation_errors'].append(error_msg)
+                else:
+                    print(f"       ✅ {token_name} swap volume validation passed")
             elif snapshot_vol != 0:
-                assert False, f"{token_name} swap volume mismatch: snapshot={snapshot_vol}, etherscan={etherscan_vol}"
+                error_msg = f"{token_name} swap volume mismatch: snapshot={snapshot_vol}, etherscan={etherscan_vol}"
+                print(f"       ❌ VALIDATION ERROR: {error_msg}")
+                validation_result['validation_errors'].append(error_msg)
+            else:
+                print(f"       ✅ {token_name} swap volume validation passed (both zero)")
     
     # Check mint/burn volume discrepancies  
     if etherscan_data['mint_count'] > 0 or etherscan_data['burn_count'] > 0:
@@ -361,11 +359,20 @@ async def validate_trade_data_against_etherscan(
         ]:
             if etherscan_vol > 0:
                 relative_diff = abs(snapshot_vol - etherscan_vol) / etherscan_vol
-                assert relative_diff <= tolerance, \
-                    f"{token_name} mint/burn volume mismatch: snapshot={snapshot_vol}, etherscan={etherscan_vol} " \
-                    f"(relative diff: {relative_diff:.2%}, tolerance: {tolerance:.2%})"
+                if relative_diff > tolerance:
+                    error_msg = f"{token_name} mint/burn volume mismatch: snapshot={snapshot_vol}, etherscan={etherscan_vol} (relative diff: {relative_diff:.2%}, tolerance: {tolerance:.2%})"
+                    print(f"       ❌ VALIDATION ERROR: {error_msg}")
+                    validation_result['validation_errors'].append(error_msg)
+                else:
+                    print(f"       ✅ {token_name} mint/burn volume validation passed")
             elif snapshot_vol != 0:
-                assert False, f"{token_name} mint/burn volume mismatch: snapshot={snapshot_vol}, etherscan={etherscan_vol}"
+                error_msg = f"{token_name} mint/burn volume mismatch: snapshot={snapshot_vol}, etherscan={etherscan_vol}"
+                print(f"       ❌ VALIDATION ERROR: {error_msg}")
+                validation_result['validation_errors'].append(error_msg)
+            else:
+                print(f"       ✅ {token_name} mint/burn volume validation passed (both zero)")
+    else:
+        print(f"       ℹ️  No mint/burn events found - skipping mint/burn validation")
     
     return validation_result
 
@@ -455,7 +462,7 @@ def validate_price_differences(
     pool_metadata: UniswapPoolMetadata,
     data_is_fresh: bool,
     tolerance: float
-) -> List[str]:
+) -> Tuple[List[str], List[str]]:
     """
     Validate price differences between snapshot and CoinMarketCap data.
     
@@ -469,9 +476,10 @@ def validate_price_differences(
         tolerance: Tolerance level for price differences (e.g., 0.01 for 1%)
         
     Returns:
-        List of warning messages for stale data that exceeds tolerance
+        Tuple of (validation_warnings, validation_errors) for stale/fresh data that exceeds tolerance
     """
     validation_warnings = []
+    validation_errors = []
     
     # Log comparison results and validate Token0
     print(f"       Token0 ({pool_metadata.token0.symbol}) USD Price:")
@@ -503,32 +511,42 @@ def validate_price_differences(
         else:
             print(f"         ✅ Price difference within tolerance")
     
-    # Perform validation assertions only if data is fresh
+    # Collect validation errors/warnings instead of asserting immediately
     if cmc_token0_usd > 0 and snapshot_token0_usd > 0:
         token0_usd_diff = abs(snapshot_token0_usd - cmc_token0_usd) / cmc_token0_usd
         if data_is_fresh:
-            assert token0_usd_diff <= tolerance, \
-                f"Token0 USD price mismatch: snapshot=${snapshot_token0_usd:.6f}, cmc=${cmc_token0_usd:.6f} " \
-                f"(relative diff: {token0_usd_diff:.2%}, tolerance: {tolerance:.2%})"
+            if token0_usd_diff > tolerance:
+                error_msg = f"Token0 USD price mismatch: snapshot=${snapshot_token0_usd:.6f}, cmc=${cmc_token0_usd:.6f} (relative diff: {token0_usd_diff:.2%}, tolerance: {tolerance:.2%})"
+                print(f"         ❌ VALIDATION ERROR: {error_msg}")
+                validation_errors.append(error_msg)
+            else:
+                print(f"         ✅ Token0 price validation passed")
         else:
             if token0_usd_diff > tolerance:
                 warning_msg = f"Token0 USD price difference ({token0_usd_diff:.2%}) exceeds tolerance but data is stale"
                 print(f"         ⚠️  WARNING: {warning_msg}")
                 validation_warnings.append(warning_msg)
+            else:
+                print(f"         ✅ Token0 price validation passed (stale data within tolerance)")
     
     if cmc_token1_usd > 0 and snapshot_token1_usd > 0:
         token1_usd_diff = abs(snapshot_token1_usd - cmc_token1_usd) / cmc_token1_usd
         if data_is_fresh:
-            assert token1_usd_diff <= tolerance, \
-                f"Token1 USD price mismatch: snapshot=${snapshot_token1_usd:.6f}, cmc=${cmc_token1_usd:.6f} " \
-                f"(relative diff: {token1_usd_diff:.2%}, tolerance: {tolerance:.2%})"
+            if token1_usd_diff > tolerance:
+                error_msg = f"Token1 USD price mismatch: snapshot=${snapshot_token1_usd:.6f}, cmc=${cmc_token1_usd:.6f} (relative diff: {token1_usd_diff:.2%}, tolerance: {tolerance:.2%})"
+                print(f"         ❌ VALIDATION ERROR: {error_msg}")
+                validation_errors.append(error_msg)
+            else:
+                print(f"         ✅ Token1 price validation passed")
         else:
             if token1_usd_diff > tolerance:
                 warning_msg = f"Token1 USD price difference ({token1_usd_diff:.2%}) exceeds tolerance but data is stale"
                 print(f"         ⚠️  WARNING: {warning_msg}")
                 validation_warnings.append(warning_msg)
+            else:
+                print(f"         ✅ Token1 price validation passed (stale data within tolerance)")
     
-    return validation_warnings
+    return validation_warnings, validation_errors
 
 
 async def validate_prices_against_coinmarketcap(
@@ -694,6 +712,7 @@ async def validate_prices_against_coinmarketcap(
                 'pool_address': pool_address,
                 'block_number': block_number,
                 'warnings': warnings,
+                'validation_errors': [],  # Will be populated by validate_price_differences
                 'timestamp_validation': {
                     'block_timestamp': block_timestamp,
                     'cmc_last_updated': last_updated_ts,
@@ -733,7 +752,7 @@ async def validate_prices_against_coinmarketcap(
             print(f"       Market Data: Price=${quote.get('price', 0):.2f}, Liquidity=${quote.get('liquidity', 0):,.2f}")
             print(f"       24h Volume: ${quote.get('volume_24h', 0):,.2f}, 24h Change: {quote.get('percent_change_price_24h', 0):.2f}%")
             
-            price_validation_warnings = validate_price_differences(
+            price_validation_warnings, price_validation_errors = validate_price_differences(
                 snapshot_token0_usd=snapshot_token0_usd,
                 snapshot_token1_usd=snapshot_token1_usd,
                 cmc_token0_usd=cmc_token0_usd,
@@ -743,6 +762,9 @@ async def validate_prices_against_coinmarketcap(
                 tolerance=tolerance
             )
             warnings.extend(price_validation_warnings)
+            
+            # Add validation errors to the result
+            validation_result['validation_errors'] = price_validation_errors
             
             return validation_result
 
@@ -766,7 +788,7 @@ async def validate_raw_token_prices_from_onchain_data(
         rpc_helper: RPC helper for blockchain queries
     
     Returns:
-        Validation results with comparison data
+        Validation results with comparison data and validation errors
     """
     # Extract reported prices from snapshot
     token0_price_reported = snapshot.token0Prices.get(block_number, 0)
@@ -792,6 +814,7 @@ async def validate_raw_token_prices_from_onchain_data(
         'block_number': block_number,
         'onchain_data_available': True,
         'sqrt_price_x96': sqrt_price_x96,
+        'validation_errors': [],
         'token0_price_comparison': {
             'reported': token0_price_reported,
             'onchain': token0_price_onchain,
@@ -802,20 +825,20 @@ async def validate_raw_token_prices_from_onchain_data(
         }
     }
     
-    # Add validation assertions
+    # Collect validation errors instead of asserting
     tolerance = 0.01  # 1% tolerance
     
     if token0_price_onchain > 0 and token0_price_reported > 0:
         token0_relative_diff = abs(token0_price_reported - token0_price_onchain) / token0_price_onchain
-        assert token0_relative_diff <= tolerance, \
-            f"Token0 price mismatch: reported={token0_price_reported:.10f}, on-chain={token0_price_onchain:.10f} " \
-            f"(relative diff: {token0_relative_diff:.2%}, tolerance: {tolerance:.2%})"
+        if token0_relative_diff > tolerance:
+            error_msg = f"Token0 price mismatch: reported={token0_price_reported:.10f}, on-chain={token0_price_onchain:.10f} (relative diff: {token0_relative_diff:.2%}, tolerance: {tolerance:.2%})"
+            validation_result['validation_errors'].append(error_msg)
     
     if token1_price_onchain > 0 and token1_price_reported > 0:
         token1_relative_diff = abs(token1_price_reported - token1_price_onchain) / token1_price_onchain
-        assert token1_relative_diff <= tolerance, \
-            f"Token1 price mismatch: reported={token1_price_reported:.10f}, on-chain={token1_price_onchain:.10f} " \
-            f"(relative diff: {token1_relative_diff:.2%}, tolerance: {tolerance:.2%})"
+        if token1_relative_diff > tolerance:
+            error_msg = f"Token1 price mismatch: reported={token1_price_reported:.10f}, on-chain={token1_price_onchain:.10f} (relative diff: {token1_relative_diff:.2%}, tolerance: {tolerance:.2%})"
+            validation_result['validation_errors'].append(error_msg)
     
     return validation_result
 
@@ -1038,12 +1061,18 @@ async def test_pair_total_reserves_processor(
             print("    - No events found for the test block")
             pytest.skip("No snapshots returned from processor")
 
-    # Collect all warnings from validation
+    # Collect all warnings and validation errors from validation
     all_warnings = []
+    all_validation_errors = []
+    all_structural_errors = []
+    validation_results = []
     
     # Validate each snapshot
     for i, (task_key, snapshot) in enumerate(results):
         print(f"\n📊 Validating snapshot {i+1}/{len(results)}")
+        
+        snapshot_validation_errors = []
+        snapshot_warnings = []
         
         # Validate task key format
         assert isinstance(task_key, str), f"Task key should be string, got {type(task_key)}"
@@ -1122,6 +1151,9 @@ async def test_pair_total_reserves_processor(
             protocol_state_contract=protocol_state_contract,
         )
         
+        etherscan_validation_errors = []
+        cmc_validation_errors = []
+        
         if pool_metadata:
             trade_validation = await validate_trade_data_against_etherscan(
                 snapshot=snapshot,
@@ -1130,13 +1162,27 @@ async def test_pair_total_reserves_processor(
                 source_chain_id=source_chain_id
             )
             
+            # Collect Etherscan validation errors
+            etherscan_validation_errors = trade_validation.get('validation_errors', [])
+            
             # not that useful but a sanity check
-            raw_price_validation = await validate_raw_token_prices_from_onchain_data(
-                snapshot=snapshot,
-                pool_metadata=pool_metadata,
-                block_number=from_block,
-                rpc_helper=rpc_helper
-            )
+            try:
+                raw_price_validation = await validate_raw_token_prices_from_onchain_data(
+                    snapshot=snapshot,
+                    pool_metadata=pool_metadata,
+                    block_number=from_block,
+                    rpc_helper=rpc_helper
+                )
+                onchain_errors = raw_price_validation.get('validation_errors', [])
+                if onchain_errors:
+                    print(f"       ❌ On-chain price validation errors: {len(onchain_errors)}")
+                    etherscan_validation_errors.extend(onchain_errors)
+                else:
+                    print(f"       ✅ On-chain price validation passed")
+            except Exception as e:
+                error_msg = f"On-chain price validation failed: {str(e)}"
+                print(f"       ❌ {error_msg}")
+                etherscan_validation_errors.append(error_msg)
             
             tolerance = os.getenv('COINMARKETCAP_API_PRICE_TOLERANCE', 2)
             tolerance = float(tolerance) / 100
@@ -1149,112 +1195,66 @@ async def test_pair_total_reserves_processor(
                 tolerance=tolerance
             )
 
-            if cmc_validation.get('warnings'):
-                print(f"     ⚠️  CMC VALIDATION WARNINGS ({len(cmc_validation.get('warnings', []))} total):")
-                for i, warning in enumerate(cmc_validation.get('warnings', []), 1):
+            # Collect CMC validation results
+            cmc_warnings = cmc_validation.get('warnings', [])
+            cmc_validation_errors = cmc_validation.get('validation_errors', [])
+            
+            if cmc_warnings:
+                print(f"     ⚠️  CMC VALIDATION WARNINGS ({len(cmc_warnings)} total):")
+                for i, warning in enumerate(cmc_warnings, 1):
                     print(f"       {i}. {warning}")
-                print(f"     ⚠️  Test passed with warnings - manual review recommended")
-                
-                # Emit pytest warnings so they appear in final test output
-                all_warnings.extend(cmc_validation.get('warnings', []))
+                snapshot_warnings.extend(cmc_warnings)
+            
+            if cmc_validation_errors:
+                print(f"     ❌ CMC VALIDATION ERRORS ({len(cmc_validation_errors)} total):")
+                for i, error in enumerate(cmc_validation_errors, 1):
+                    print(f"       {i}. {error}")
             
             if cmc_validation.get('cmc_available'):
-                print(f"     ✅ CoinMarketCap validation passed")
+                if not cmc_validation_errors and not cmc_warnings:
+                    print(f"     ✅ CoinMarketCap validation passed")
             else:
                 reason = cmc_validation.get('reason', 'Unknown')
                 print(f"     ℹ️  CoinMarketCap validation skipped: {reason}")
             
-            if trade_validation.get('etherscan_available'):
-                comparison = trade_validation['comparison']
-                
-                # Token0 swap volume comparison
-                snap_swap_t0 = comparison['swap_volume_token0']['snapshot']
-                eth_swap_t0 = comparison['swap_volume_token0']['etherscan']
-                swap_count = comparison['swap_volume_token0']['count_etherscan']
-                
-                # Token1 swap volume comparison
-                snap_swap_t1 = comparison['swap_volume_token1']['snapshot']
-                eth_swap_t1 = comparison['swap_volume_token1']['etherscan']
-                
-                # Token0 mint/burn comparison
-                snap_mb_t0 = comparison['mint_burn_volume_token0']['snapshot']
-                eth_mb_t0 = comparison['mint_burn_volume_token0']['etherscan']
-                mint_count = comparison['mint_burn_volume_token0']['mint_count_etherscan']
-                burn_count = comparison['mint_burn_volume_token0']['burn_count_etherscan']
-                
-                # Token1 mint/burn comparison
-                snap_mb_t1 = comparison['mint_burn_volume_token1']['snapshot']
-                eth_mb_t1 = comparison['mint_burn_volume_token1']['etherscan']
-                
-                # Validation using raw token amounts with reasonable tolerance
-                total_events = swap_count + mint_count + burn_count
-                if total_events > 0:
-                    # Token0 swap validation
-                    if snap_swap_t0 > 0.000001 and eth_swap_t0 > 0.000001:  # Only validate if both have meaningful amounts
-                        token0_swap_ratio = min(snap_swap_t0, eth_swap_t0) / max(snap_swap_t0, eth_swap_t0)
-                        if token0_swap_ratio < 0.5:  # More than 2x difference
-                            print(f"       ⚠️  Significant discrepancy in Token0 swap volumes (ratio: {token0_swap_ratio:.3f})")
-                    
-                    # Token1 swap validation
-                    if snap_swap_t1 > 0.000001 and eth_swap_t1 > 0.000001:
-                        token1_swap_ratio = min(snap_swap_t1, eth_swap_t1) / max(snap_swap_t1, eth_swap_t1)
-                        if token1_swap_ratio < 0.5:  # More than 2x difference
-                            print(f"       ⚠️  Significant discrepancy in Token1 swap volumes (ratio: {token1_swap_ratio:.3f})")
-                    
-                    # Token0 mint/burn validation
-                    if snap_mb_t0 > 0.000001 and eth_mb_t0 > 0.000001:
-                        token0_mb_ratio = min(snap_mb_t0, eth_mb_t0) / max(snap_mb_t0, eth_mb_t0)
-                        if token0_mb_ratio < 0.5:
-                            print(f"       ⚠️  Significant discrepancy in Token0 mint/burn volumes (ratio: {token0_mb_ratio:.3f})")
-                    
-                    # Token1 mint/burn validation
-                    if snap_mb_t1 > 0.000001 and eth_mb_t1 > 0.000001:
-                        token1_mb_ratio = min(snap_mb_t1, eth_mb_t1) / max(snap_mb_t1, eth_mb_t1)
-                        if token1_mb_ratio < 0.5:
-                            print(f"       ⚠️  Significant discrepancy in Token1 mint/burn volumes (ratio: {token1_mb_ratio:.3f})")
-                            
-                    # Show detailed event information if available
-                    events_details = comparison.get('events_details', [])
-                    if events_details:
-                        print(f"     🔍 Etherscan Events Details ({len(events_details)} events):")
-                        
-                        # Check for any discrepancies to determine if we should show more details
-                        has_discrepancy = (
-                            (abs(snap_swap_t0 - eth_swap_t0) > 0.000001) or
-                            (abs(snap_swap_t1 - eth_swap_t1) > 0.000001) or
-                            (abs(snap_mb_t0 - eth_mb_t0) > 0.000001) or
-                            (abs(snap_mb_t1 - eth_mb_t1) > 0.000001)
-                        )
-                        
-                        # Show all events if there's a discrepancy, otherwise just the first few
-                        events_to_show = events_details if has_discrepancy else events_details[:3]
-                        
-                        for i, event in enumerate(events_to_show):
-                            tx_hash = event['tx_hash']
-                            event_type = event['event_type']
-                            token0_amt = event['token0_amount']
-                            token1_amt = event['token1_amount']
-                            log_idx = event['log_index']
-                            print(f"       Event {i+1}: {event_type} - Tx: {tx_hash} (LogIdx: {log_idx})")
-                            print(f"         Token0: {token0_amt:.6f}, Token1: {token1_amt:.6f}")
-                            
-                        if not has_discrepancy and len(events_details) > 3:
-                            print(f"       ... and {len(events_details) - 3} more events")
-                        elif has_discrepancy:
-                            print(f"     ⚠️  DISCREPANCY DETECTED - Showing all {len(events_details)} Etherscan events above")
-                else:
-                    print(f"       ℹ️  No trades found in this block")
+            # Log Etherscan validation results
+            if etherscan_validation_errors:
+                print(f"     ❌ ETHERSCAN VALIDATION ERRORS ({len(etherscan_validation_errors)} total):")
+                for i, error in enumerate(etherscan_validation_errors, 1):
+                    print(f"       {i}. {error}")
+            elif trade_validation.get('etherscan_available'):
+                print(f"     ✅ Etherscan validation passed")
             else:
                 reason = trade_validation.get('reason', 'Unknown')
                 print(f"     ℹ️  Etherscan validation skipped: {reason}")
+        else:
+            etherscan_validation_errors.append("Could not fetch pool metadata for validation")
+            print(f"     ❌ Could not fetch pool metadata for validation")
+        
+        # Store validation results for this snapshot
+        validation_results.append({
+            'pool_address': snapshot.address,
+            'structural_errors': snapshot_validation_errors,
+            'etherscan_errors': etherscan_validation_errors,
+            'cmc_errors': cmc_validation_errors,
+            'warnings': snapshot_warnings
+        })
+        
+        # Collect all errors and warnings
+        all_structural_errors.extend(snapshot_validation_errors)
+        all_validation_errors.extend(etherscan_validation_errors)
+        all_validation_errors.extend(cmc_validation_errors)
+        all_warnings.extend(snapshot_warnings)
 
     # Validate that we processed some of the active pools
     processed_pool_addresses = {snapshot.address for _, snapshot in results}
     active_pool_addresses = {Web3.to_checksum_address(pool) for pool in active_pools}
     
-    # Check if processed pools are subset of active pools
-    assert processed_pool_addresses.issubset(active_pool_addresses), \
-        f"Processed pools should be subset of active pools. Extra pools: {processed_pool_addresses - active_pool_addresses}"
+    # Collect basic processing errors instead of asserting immediately
+    processing_errors = []
+    if not processed_pool_addresses.issubset(active_pool_addresses):
+        extra_pools = processed_pool_addresses - active_pool_addresses
+        processing_errors.append(f"Processed pools should be subset of active pools. Extra pools: {extra_pools}")
     
     coverage_ratio = len(processed_pool_addresses) / len(active_pool_addresses)
     print(f"\n📈 Processing Coverage: {len(processed_pool_addresses)}/{len(active_pool_addresses)} pools ({coverage_ratio:.1%})")
@@ -1265,17 +1265,67 @@ async def test_pair_total_reserves_processor(
         print("    - Pools have no liquidity/events in this block")
         print("    - RPC or network issues during processing")
 
-    # Final warning summary
+    # Comprehensive test result summary
+    print(f"\n{'='*80}")
+    print(f"🔍 COMPREHENSIVE VALIDATION SUMMARY")
+    print(f"{'='*80}")
+    
+    print(f"📊 Snapshots Processed: {len(results)}")
+    print(f"✅ Valid Snapshots: {len([r for r in validation_results if not r['structural_errors']])}")
+    print(f"❌ Invalid Snapshots: {len([r for r in validation_results if r['structural_errors']])}")
+    print(f"⚠️  Total Warnings: {len(all_warnings)}")
+    print(f"🚨 Total Validation Errors: {len(all_validation_errors) + len(all_structural_errors) + len(processing_errors)}")
+    
+    # Show detailed breakdown by pool
+    if validation_results:
+        print(f"\n📋 Detailed Results by Pool:")
+        for result in validation_results:
+            pool = result['pool_address']
+            structural_errors = len(result['structural_errors'])
+            etherscan_errors = len(result['etherscan_errors'])
+            cmc_errors = len(result['cmc_errors'])
+            warnings = len(result['warnings'])
+            
+            status = "✅ PASS" if structural_errors == 0 and etherscan_errors == 0 and cmc_errors == 0 else "❌ FAIL"
+            print(f"   {status} {pool}: {structural_errors} structural, {etherscan_errors} etherscan, {cmc_errors} cmc errors, {warnings} warnings")
+    
+    # Show all validation errors if any exist
+    all_errors = all_structural_errors + all_validation_errors + processing_errors
+    if all_errors:
+        print(f"\n🚨 VALIDATION ERRORS ({len(all_errors)} total):")
+        for i, error in enumerate(all_errors, 1):
+            print(f"    {i}. {error}")
+    
+    # Show all warnings if any exist
     if all_warnings:
-        print(f"\n⚠️  TEST COMPLETED WITH {len(all_warnings)} WARNINGS:")
+        print(f"\n⚠️  VALIDATION WARNINGS ({len(all_warnings)} total):")
         for i, warning in enumerate(all_warnings, 1):
             print(f"    {i}. {warning}")
-        print(f"⚠️  Manual review recommended for pools with warnings")
         
-        # Emit a summary warning
+        # Emit pytest warnings so they appear in final test output
         emit_pytest_warnings([f"Test completed with {len(all_warnings)} validation warnings"], "test_summary")
+    
+    print(f"\n{'='*80}")
+    
+    # Final assertions - test fails ONLY if there are validation errors
+    if all_errors:
+        print(f"❌ TEST FAILED: {len(all_errors)} validation errors found")
+        print(f"   - {len(all_structural_errors)} structural errors")
+        print(f"   - {len(all_validation_errors)} external validation errors") 
+        print(f"   - {len(processing_errors)} processing errors")
+        
+        # Create a comprehensive error message
+        error_summary = f"Test failed with {len(all_errors)} validation errors across {len(results)} snapshots"
+        if all_warnings:
+            error_summary += f" and {len(all_warnings)} warnings"
+        
+        # Assert at the end with all collected errors
+        assert False, error_summary
     else:
-        print(f"\n✅ TEST COMPLETED WITH NO WARNINGS")
+        if all_warnings:
+            print(f"✅ TEST PASSED WITH WARNINGS: {len(all_warnings)} warnings found but no validation errors")
+        else:
+            print(f"✅ TEST PASSED: No validation errors or warnings found")
 
     print("PASSED: test_pair_total_reserves_processor")
 
