@@ -1,20 +1,37 @@
-import asyncio
 import json
 import time
 import os
+import warnings
+from datetime import datetime, timezone
 from typing import Optional, List, Dict, Tuple
 from web3 import Web3
 from web3._utils.events import get_event_data
 from eth_abi.codec import ABICodec
 from eth_abi.registry import registry as default_abi_registry
+from rpc_helper.rpc import RpcHelper
 import aiohttp
 import pytest
 
 from computes.pair_total_reserves import PairTotalReservesProcessor
+from computes.utils.core import base_snapshot_from_block_range, get_block_details_in_block_range
 from computes.utils.models.message_models import UniswapPoolMetadata, UniswapBaseSnapshot
+from computes.utils.helpers import calculate_reserves, get_pool_metadata
+
 from snapshotter.utils.models.message_models import SnapshotProcessMessage
+from snapshotter.utils.redis.redis_keys import source_chain_id_key
 from snapshotter.settings.config import settings
-from computes.settings.config import settings as compute_settings
+
+
+def sqrtPriceX96ToTokenPrices(sqrtPriceX96, token0_decimals, token1_decimals):
+        # https://blog.uniswap.org/uniswap-v3-math-primer
+
+        price0 = ((sqrtPriceX96 / (2**96))** 2) / (10 ** token1_decimals / 10 ** token0_decimals)
+        price1 = 1 / price0
+
+        price0 = round(price0, token0_decimals)
+        price1 = round(price1, token1_decimals)
+
+        return price0, price1
 
 
 async def get_active_pools_from_redis(redis_conn, block_number: int, namespace: str) -> List[str]:
@@ -43,9 +60,7 @@ async def fetch_trade_events_from_etherscan(
     pool_address: str,
     block_number: int,
     pool_metadata: UniswapPoolMetadata,
-    redis_conn,
-    protocol_state_contract,
-    anchor_rpc_helper
+    source_chain_id: int,
 ) -> Dict[str, any]:
     """
     Fetch trade events from Etherscan and calculate raw token amounts.
@@ -65,29 +80,6 @@ async def fetch_trade_events_from_etherscan(
     api_key, api_url = get_etherscan_config()
     if not api_key or not api_url:
         return {}  # Return empty dict if missing config
-    
-    # Get source chain ID for Etherscan v2 API (read-only, don't cache in Redis for tests)
-    try:
-        from snapshotter.utils.redis.redis_keys import source_chain_id_key
-        source_chain_id_data = await redis_conn.get(source_chain_id_key())
-        
-        if source_chain_id_data:
-            source_chain_id = int(source_chain_id_data.decode('utf-8'))
-            print(f"      ℹ️  Using cached source chain ID: {source_chain_id}")
-        else:
-            # If not in cache, fetch from blockchain but don't cache (test mode)
-            [source_chain_id] = await anchor_rpc_helper.web3_call(
-                tasks=[
-                    ('SOURCE_CHAIN_ID', [Web3.to_checksum_address(settings.data_market)]),
-                ],
-                contract_addr=protocol_state_contract.address,
-                abi=protocol_state_contract.abi,
-            )
-            print(f"      ℹ️  Fetched source chain ID from contract: {source_chain_id}")
-    except Exception as e:
-        print(f"      ⚠️  Could not get source chain ID: {e}")
-        print(f"      ⚠️  Defaulting to Ethereum mainnet (chain ID 1) for Etherscan API")
-        return {}
     
     # Uniswap V3 event signatures
     swap_topic = "0xc42079f94a6350d7e6235f29174924f928cc2ac818eb64fed8004e115fbcca67"
@@ -235,9 +227,7 @@ async def validate_trade_data_against_etherscan(
     snapshot: UniswapBaseSnapshot,
     pool_metadata: UniswapPoolMetadata,
     block_number: int,
-    redis_conn,
-    protocol_state_contract,
-    anchor_rpc_helper
+    source_chain_id: int,
 ) -> Dict[str, any]:
     """
     Validate snapshot trade data against Etherscan by comparing raw token amounts.
@@ -245,7 +235,7 @@ async def validate_trade_data_against_etherscan(
     Returns validation results with comparison data.
     """
     etherscan_data = await fetch_trade_events_from_etherscan(
-        snapshot.address, block_number, pool_metadata, redis_conn, protocol_state_contract, anchor_rpc_helper
+        snapshot.address, block_number, pool_metadata, source_chain_id
     )
     
     if not etherscan_data:
@@ -264,12 +254,6 @@ async def validate_trade_data_against_etherscan(
     token1_trade_vol = getattr(snapshot, 'token1TradeVolume', None)
     token0_mb_vol = getattr(snapshot, 'token0MintBurnVolume', None)
     token1_mb_vol = getattr(snapshot, 'token1MintBurnVolume', None)
-    
-    print(f"      🔍 Snapshot token volumes:")
-    print(f"        token0TradeVolume: {type(token0_trade_vol)} = {token0_trade_vol}")
-    print(f"        token1TradeVolume: {type(token1_trade_vol)} = {token1_trade_vol}")
-    print(f"        token0MintBurnVolume: {type(token0_mb_vol)} = {token0_mb_vol}")
-    print(f"        token1MintBurnVolume: {type(token1_mb_vol)} = {token1_mb_vol}")
     
     if token0_trade_vol:
         snapshot_swap_token0_amount = float(token0_trade_vol)
@@ -438,6 +422,410 @@ async def get_token_balances(
     
     return token0_balance, token1_balance
 
+def get_coinmarketcap_config():
+    """Get CoinMarketCap configuration from environment variables."""
+    api_key = os.getenv('COINMARKETCAP_API_KEY')
+    api_url = os.getenv('COINMARKETCAP_API_URL', 'https://pro-api.coinmarketcap.com')
+    
+    if not api_key:
+        return None, None  # Skip CMC validation if missing API key
+    
+    return api_key, api_url
+
+
+def emit_pytest_warnings(warning_messages: List[str], test_name: str = "price_validation") -> None:
+    """
+    Emit pytest warnings that will appear in the final test output.
+    
+    Args:
+        warning_messages: List of warning messages to emit
+        test_name: Name of the test for context
+    """
+    for warning_msg in warning_messages:
+        warnings.warn(f"[{test_name}] {warning_msg}", UserWarning, stacklevel=2)
+
+
+def validate_price_differences(
+    snapshot_token0_usd: float,
+    snapshot_token1_usd: float,
+    cmc_token0_usd: float,
+    cmc_token1_usd: float,
+    pool_metadata: UniswapPoolMetadata,
+    data_is_fresh: bool,
+    tolerance: float
+) -> List[str]:
+    """
+    Validate price differences between snapshot and CoinMarketCap data.
+    
+    Args:
+        snapshot_token0_usd: Token0 USD price from snapshot
+        snapshot_token1_usd: Token1 USD price from snapshot
+        cmc_token0_usd: Token0 USD price from CoinMarketCap
+        cmc_token1_usd: Token1 USD price from CoinMarketCap
+        pool_metadata: Pool metadata containing token symbols
+        data_is_fresh: Whether the CMC data is fresh (within time threshold)
+        tolerance: Tolerance level for price differences (e.g., 0.01 for 1%)
+        
+    Returns:
+        List of warning messages for stale data that exceeds tolerance
+    """
+    validation_warnings = []
+    
+    # Log comparison results and validate Token0
+    print(f"       Token0 ({pool_metadata.token0.symbol}) USD Price:")
+    print(f"         Snapshot: ${snapshot_token0_usd:.6f}")
+    print(f"         CMC: ${cmc_token0_usd:.6f}")
+    
+    if cmc_token0_usd > 0 and snapshot_token0_usd > 0:
+        token0_diff_pct = abs(snapshot_token0_usd - cmc_token0_usd) / cmc_token0_usd * 100
+        print(f"         Difference: {token0_diff_pct:.3f}%")
+        
+        # Validate with tolerance
+        if token0_diff_pct / 100 > tolerance:
+            print(f"         ⚠️  Price difference ({token0_diff_pct:.3f}%) exceeds tolerance ({tolerance:.1%})")
+        else:
+            print(f"         ✅ Price difference within tolerance")
+    
+    # Log comparison results and validate Token1
+    print(f"       Token1 ({pool_metadata.token1.symbol}) USD Price:")
+    print(f"         Snapshot: ${snapshot_token1_usd:.6f}")
+    print(f"         CMC: ${cmc_token1_usd:.6f}")
+    
+    if cmc_token1_usd > 0 and snapshot_token1_usd > 0:
+        token1_diff_pct = abs(snapshot_token1_usd - cmc_token1_usd) / cmc_token1_usd * 100
+        print(f"         Difference: {token1_diff_pct:.3f}%")
+        
+        # Validate with tolerance
+        if token1_diff_pct / 100 > tolerance:
+            print(f"         ⚠️  Price difference ({token1_diff_pct:.3f}%) exceeds tolerance ({tolerance:.1%})")
+        else:
+            print(f"         ✅ Price difference within tolerance")
+    
+    # Perform validation assertions only if data is fresh
+    if cmc_token0_usd > 0 and snapshot_token0_usd > 0:
+        token0_usd_diff = abs(snapshot_token0_usd - cmc_token0_usd) / cmc_token0_usd
+        if data_is_fresh:
+            assert token0_usd_diff <= tolerance, \
+                f"Token0 USD price mismatch: snapshot=${snapshot_token0_usd:.6f}, cmc=${cmc_token0_usd:.6f} " \
+                f"(relative diff: {token0_usd_diff:.2%}, tolerance: {tolerance:.2%})"
+        else:
+            if token0_usd_diff > tolerance:
+                warning_msg = f"Token0 USD price difference ({token0_usd_diff:.2%}) exceeds tolerance but data is stale"
+                print(f"         ⚠️  WARNING: {warning_msg}")
+                validation_warnings.append(warning_msg)
+    
+    if cmc_token1_usd > 0 and snapshot_token1_usd > 0:
+        token1_usd_diff = abs(snapshot_token1_usd - cmc_token1_usd) / cmc_token1_usd
+        if data_is_fresh:
+            assert token1_usd_diff <= tolerance, \
+                f"Token1 USD price mismatch: snapshot=${snapshot_token1_usd:.6f}, cmc=${cmc_token1_usd:.6f} " \
+                f"(relative diff: {token1_usd_diff:.2%}, tolerance: {tolerance:.2%})"
+        else:
+            if token1_usd_diff > tolerance:
+                warning_msg = f"Token1 USD price difference ({token1_usd_diff:.2%}) exceeds tolerance but data is stale"
+                print(f"         ⚠️  WARNING: {warning_msg}")
+                validation_warnings.append(warning_msg)
+    
+    return validation_warnings
+
+
+async def validate_prices_against_coinmarketcap(
+    snapshot: UniswapBaseSnapshot,
+    pool_metadata: UniswapPoolMetadata,
+    block_number: int,
+    source_chain_id: int,
+    tolerance: float = 0.01
+) -> Dict[str, any]:
+    """
+    Validate snapshot prices against CoinMarketCap's DEX historical OHLCV API.
+    
+    Args:
+        snapshot: The UniswapBaseSnapshot to validate
+        pool_metadata: Pool metadata containing token info
+        block_number: Block number for validation
+        source_chain_id: Chain ID for network selection
+        
+    Returns:
+        Validation results with comparison data
+    """
+    # Initialize warnings list
+    warnings = []
+    
+    api_key, api_url = get_coinmarketcap_config()
+    if not api_key or not api_url:
+        return {
+            'cmc_available': False,
+            'reason': 'No CoinMarketCap API key configured'
+        }
+    
+    # Get pool address in checksum format
+    pool_address = Web3.to_checksum_address(snapshot.address)
+    
+    # Get block timestamp from snapshot
+    block_timestamp = snapshot.timestamps.get(block_number)
+    if not block_timestamp:
+        return {
+            'cmc_available': False,
+            'reason': f'No timestamp found for block {block_number}'
+        }
+    
+    # Convert block timestamp to ISO format for CMC API
+    block_time = datetime.fromtimestamp(block_timestamp, tz=timezone.utc)
+    
+    # Construct CMC API URL for latest quotes (reverting from historical)
+    endpoint = f"{api_url}/v4/dex/pairs/quotes/latest"
+
+    # Network slug mapping (case sensitive)
+    slugs = {
+        1: 'ethereum',  # Ethereum mainnet
+        137: 'polygon-pos',  # Polygon PoS
+        8453: 'base',  # Base
+        42161: 'arbitrum-one',  # Arbitrum One
+        10: 'optimistic-ethereum',  # Optimism
+    }
+    
+    network_slug = slugs.get(source_chain_id)
+    if not network_slug:
+        print(f"      ⚠️  Unsupported chain ID {source_chain_id}, defaulting to ethereum")
+        network_slug = 'ethereum'
+    
+    headers = {
+        'X-CMC_PRO_API_KEY': api_key,
+        'Accept': 'application/json'
+    }
+    
+    params = {
+        'contract_address': pool_address,
+        'network_slug': network_slug,
+        'aux': '',
+        'skip_invalid': 'true'
+    }
+    
+    async with aiohttp.ClientSession() as session:
+        async with session.get(endpoint, params=params, headers=headers, timeout=30) as response:
+            if response.status != 200:
+                error_text = await response.text()
+                print(f"      ⚠️  CMC request failed with status {response.status}")
+                print(f"      ⚠️  Error response: {error_text}")
+                return {
+                    'cmc_available': False,
+                    'reason': f'API request failed: {response.status} - {error_text}'
+                }
+            
+            data = await response.json()
+            
+            if 'data' not in data:
+                print(f"      ⚠️  Unexpected CMC response format: {data}")
+                return {
+                    'cmc_available': False,
+                    'reason': 'Invalid API response format'
+                }
+            
+            # Data comes as a list in the 'data' field
+            pair_data = data['data'][0] if data['data'] else None
+            if not pair_data:
+                return {
+                    'cmc_available': False,
+                    'reason': 'No data returned for pool address'
+                }
+            
+            # Get the first quote (should be USD with convert_id '2781')
+            quote = pair_data['quote'][0] if pair_data.get('quote') else {}
+            if not quote:
+                return {
+                    'cmc_available': False,
+                    'reason': 'No quote data available'
+                }
+            
+            # Parse CMC's last_updated timestamp (ISO format with timezone)
+            last_updated_str = quote.get('last_updated')
+            if last_updated_str:
+                last_updated = datetime.fromisoformat(last_updated_str.replace('Z', '+00:00'))
+                last_updated_ts = int(last_updated.timestamp())
+                
+                # Calculate time difference in seconds
+                time_diff = abs(block_timestamp - last_updated_ts)
+                
+                # Warn if difference is more than 2 minutes (120 seconds)
+                if time_diff > 120:
+                    print(f"      ⚠️  WARNING: CMC data is {time_diff} seconds ({time_diff/60:.1f} minutes) stale")
+                    warnings.append(f"CMC data for block {block_number} is stale (difference: {time_diff} seconds)")
+            else:
+                print(f"      ⚠️  WARNING: No last_updated timestamp in CMC response")
+                print(f"         Cannot verify data freshness, continuing with validation")
+                last_updated_ts = None
+                time_diff = None
+                warnings.append(f"No last_updated timestamp found for block {block_number} in CMC response")
+            
+            # Determine which token is the base asset
+            base_asset_address = pair_data.get('base_asset_contract_address', '').lower()
+            is_token0_base = base_asset_address == pool_metadata.token0.address.lower()
+            
+            # Get snapshot USD prices for comparison
+            snapshot_token0_usd = snapshot.token0PricesUSD.get(block_number, 0)
+            snapshot_token1_usd = snapshot.token1PricesUSD.get(block_number, 0)
+            
+            # Extract CMC price data
+            # price: Base asset price in USD
+            # price_by_quote_asset: Raw token price (base/quote ratio)
+            cmc_base_usd = quote.get('price', 0)  # Base token USD price
+            cmc_raw_price = quote.get('price_by_quote_asset', 0)  # Raw token price ratio
+            
+            # Map CMC prices to token0/token1 format with high precision
+            from decimal import Decimal, getcontext
+            getcontext().prec = 50  # High precision for calculations
+            
+            cmc_raw_price_decimal = Decimal(str(cmc_raw_price))
+            cmc_base_usd_decimal = Decimal(str(cmc_base_usd))
+            
+            if is_token0_base:
+                # If token0 is base:
+                # - cmc_raw_price is token0/token1 ratio
+                # - cmc_base_usd is token0's USD price
+                cmc_token0_price = float(cmc_raw_price_decimal)
+                cmc_token1_price = float(1 / cmc_raw_price_decimal) if cmc_raw_price_decimal else 0
+                cmc_token0_usd = float(cmc_base_usd_decimal)
+                cmc_token1_usd = float(cmc_base_usd_decimal / cmc_raw_price_decimal) if cmc_raw_price_decimal else 0
+            else:
+                # If token1 is base:
+                # - cmc_raw_price is token1/token0 ratio
+                # - cmc_base_usd is token1's USD price
+                cmc_token0_price = float(1 / cmc_raw_price_decimal) if cmc_raw_price_decimal else 0
+                cmc_token1_price = float(cmc_raw_price_decimal)
+                cmc_token0_usd = float(cmc_base_usd_decimal * cmc_raw_price_decimal) if cmc_raw_price_decimal else 0
+                cmc_token1_usd = float(cmc_base_usd_decimal)
+            
+            validation_result = {
+                'cmc_available': True,
+                'pool_address': pool_address,
+                'block_number': block_number,
+                'warnings': warnings,
+                'timestamp_validation': {
+                    'block_timestamp': block_timestamp,
+                    'cmc_last_updated': last_updated_ts,
+                    'time_difference_seconds': time_diff,
+                    'is_within_threshold': time_diff <= 120 if time_diff else None
+                },
+                'comparison': {
+                    'usd_prices': {
+                        'token0': {
+                            'snapshot': snapshot_token0_usd,
+                            'cmc': cmc_token0_usd
+                        },
+                        'token1': {
+                            'snapshot': snapshot_token1_usd,
+                            'cmc': cmc_token1_usd
+                        }
+                    },
+                    'metadata': {
+                        'base_token': pair_data.get('base_asset_symbol'),
+                        'quote_token': pair_data.get('quote_asset_symbol'),
+                        'dex': pair_data.get('dex_slug'),
+                        'network': pair_data.get('network_slug'),
+                        'market_data': {
+                            'price': quote.get('price', 0),
+                            'price_by_quote_asset': quote.get('price_by_quote_asset', 0),
+                            'liquidity': quote.get('liquidity', 0),
+                            'volume_24h': quote.get('volume_24h', 0),
+                            'percent_change_24h': quote.get('percent_change_price_24h', 0)
+                        }
+                    }
+                }
+            }
+            
+            # Log comparison results
+            print(f"     📊 CoinMarketCap Price Validation:")
+            print(f"       Pool: {pair_data.get('base_asset_symbol')}/{pair_data.get('quote_asset_symbol')} on {pair_data.get('dex_slug')}")
+            print(f"       Market Data: Price=${quote.get('price', 0):.2f}, Liquidity=${quote.get('liquidity', 0):,.2f}")
+            print(f"       24h Volume: ${quote.get('volume_24h', 0):,.2f}, 24h Change: {quote.get('percent_change_price_24h', 0):.2f}%")
+            
+            price_validation_warnings = validate_price_differences(
+                snapshot_token0_usd=snapshot_token0_usd,
+                snapshot_token1_usd=snapshot_token1_usd,
+                cmc_token0_usd=cmc_token0_usd,
+                cmc_token1_usd=cmc_token1_usd,
+                pool_metadata=pool_metadata,
+                data_is_fresh=time_diff is not None and time_diff <= 120,
+                tolerance=tolerance
+            )
+            warnings.extend(price_validation_warnings)
+            
+            return validation_result
+
+
+async def validate_raw_token_prices_from_onchain_data(
+    snapshot: UniswapBaseSnapshot,
+    pool_metadata: UniswapPoolMetadata,
+    block_number: int,
+    rpc_helper: RpcHelper
+) -> Dict[str, any]:
+    """
+    Validate raw token prices by querying on-chain pool state directly.
+    
+    This provides independent verification by getting the actual price from the pool's slot0
+    at the specific block, rather than relying on the snapshot's reserves.
+    
+    Args:
+        snapshot: The UniswapBaseSnapshot to validate
+        pool_metadata: Pool metadata
+        block_number: Block number for validation
+        rpc_helper: RPC helper for blockchain queries
+    
+    Returns:
+        Validation results with comparison data
+    """
+    # Extract reported prices from snapshot
+    token0_price_reported = snapshot.token0Prices.get(block_number, 0)
+    token1_price_reported = snapshot.token1Prices.get(block_number, 0)
+    
+    # Query pool's slot0 directly from blockchain
+    pool_contract = rpc_helper.get_current_node()['web3_client'].eth.contract(
+        address=Web3.to_checksum_address(snapshot.address),
+        abi=json.load(open("computes/static/abis/UniswapV3Pool.json"))
+    )
+    
+    # Get slot0 at the specific block
+    slot0_data = await pool_contract.functions.slot0().call(block_identifier=block_number)
+    sqrt_price_x96 = slot0_data[0]  # sqrtPriceX96 is the first element
+
+    token0_price_onchain, token1_price_onchain = sqrtPriceX96ToTokenPrices(
+        sqrt_price_x96,
+        pool_metadata.token0.decimals,
+        pool_metadata.token1.decimals,
+    )
+    
+    validation_result = {
+        'block_number': block_number,
+        'onchain_data_available': True,
+        'sqrt_price_x96': sqrt_price_x96,
+        'token0_price_comparison': {
+            'reported': token0_price_reported,
+            'onchain': token0_price_onchain,
+        },
+        'token1_price_comparison': {
+            'reported': token1_price_reported,
+            'onchain': token1_price_onchain,
+        }
+    }
+    
+    # Add validation assertions
+    tolerance = 0.01  # 1% tolerance
+    
+    if token0_price_onchain > 0 and token0_price_reported > 0:
+        token0_relative_diff = abs(token0_price_reported - token0_price_onchain) / token0_price_onchain
+        assert token0_relative_diff <= tolerance, \
+            f"Token0 price mismatch: reported={token0_price_reported:.10f}, on-chain={token0_price_onchain:.10f} " \
+            f"(relative diff: {token0_relative_diff:.2%}, tolerance: {tolerance:.2%})"
+    
+    if token1_price_onchain > 0 and token1_price_reported > 0:
+        token1_relative_diff = abs(token1_price_reported - token1_price_onchain) / token1_price_onchain
+        assert token1_relative_diff <= tolerance, \
+            f"Token1 price mismatch: reported={token1_price_reported:.10f}, on-chain={token1_price_onchain:.10f} " \
+            f"(relative diff: {token1_relative_diff:.2%}, tolerance: {tolerance:.2%})"
+    
+    return validation_result
+
+
 @pytest.mark.asyncio(loop_scope="module")
 async def test_calculate_reserves(
     rpc_helper,
@@ -450,14 +838,11 @@ async def test_calculate_reserves(
     app_config
 ):
     """Test the calculate_reserves function with normal operation against a historical block."""
-    from computes.total_value_locked import calculate_reserves
-    from computes.metadata import MetadataProcessor
-    metadata_processor = MetadataProcessor()
 
     validate_test_environment(app_config)
     
     # Load pool address from settings
-    pool_address = Web3.to_checksum_address(compute_settings.contract_addresses.USDC_WETH_PAIR)
+    pool_address = Web3.to_checksum_address("0xE0554a476A092703abdB3Ef35c80e0D76d32939F")
 
     try:
         current_block_number = await rpc_helper.get_current_block_number()
@@ -474,8 +859,7 @@ async def test_calculate_reserves(
     if not await validate_block_availability(rpc_helper, from_block):
         pytest.skip(f"Skipping test: block {from_block} not available on configured RPC node.")
 
-    pool_contract_abi = load_abi_fn("computes/static/abis/UniswapV3Pool.json")
-    pool_metadata: Optional[UniswapPoolMetadata] = await metadata_processor.get_pool_metadata(
+    pool_metadata: Optional[UniswapPoolMetadata] = await get_pool_metadata(
         pool_address=pool_address,
         redis_conn=redis_conn,
         anchor_rpc_helper=anchor_rpc_helper,
@@ -534,9 +918,7 @@ async def test_pair_total_reserves_processor(
     anchor_rpc_helper,
     ipfs_reader,
     redis_conn,
-    w3_instance,
     protocol_state_contract,
-    load_abi_fn,
     app_config
 ):
     """Test the PairTotalReservesProcessor with active pools from Redis."""
@@ -573,6 +955,28 @@ async def test_pair_total_reserves_processor(
     if len(active_pools) > 5:
         print(f"  ... and {len(active_pools) - 5} more pools")
 
+    # Get source chain ID for Etherscan v2 API (read-only, don't cache in Redis for tests)
+    try:
+        source_chain_id_data = await redis_conn.get(source_chain_id_key())
+        
+        if source_chain_id_data:
+            source_chain_id = int(source_chain_id_data.decode('utf-8'))
+            print(f"      ℹ️  Using cached source chain ID: {source_chain_id}")
+        else:
+            # If not in cache, fetch from blockchain but don't cache (test mode)
+            [source_chain_id] = await anchor_rpc_helper.web3_call(
+                tasks=[
+                    ('SOURCE_CHAIN_ID', [Web3.to_checksum_address(settings.data_market)]),
+                ],
+                contract_addr=protocol_state_contract.address,
+                abi=protocol_state_contract.abi,
+            )
+            print(f"      ℹ️  Fetched source chain ID from contract: {source_chain_id}")
+    except Exception as e:
+        print(f"      ⚠️  Could not get source chain ID: {e}")
+        print(f"      ⚠️  Defaulting to Ethereum mainnet (chain ID 1) for Etherscan API")
+        pytest.fail("Could not get source chain ID")
+
     # Create epoch message
     epoch = SnapshotProcessMessage(
         begin=from_block,
@@ -581,34 +985,67 @@ async def test_pair_total_reserves_processor(
         timestamp=int(time.time())
     )
 
-    # Run the processor
-    print(f"\nRunning PairTotalReservesProcessor.compute()...")
-    start_time = time.time()
-    
-    results = await processor.compute(
-        epoch=epoch,
-        redis_conn=redis_conn,
-        rpc_helper=rpc_helper,
-        anchor_rpc_helper=anchor_rpc_helper,
-        ipfs_reader=ipfs_reader,
-        protocol_state_contract=protocol_state_contract,
-        task_type="baseSnapshot:{poolAddress}:{Namespace}"
-    )
-    
-    compute_time = time.time() - start_time
-    print(f"Processor completed in {compute_time:.2f} seconds")
+    pools_to_process = eval(os.getenv('POOLS_TO_TEST', '[]'))
+    if pools_to_process:
+        pools_to_process = [Web3.to_checksum_address(pool) for pool in pools_to_process]
+        active_pools = pools_to_process
 
-    # Validate results
-    assert isinstance(results, list), "Results should be a list"
-    print(f"Processor returned {len(results)} snapshots")
-    
-    if not results:
-        print("ℹ️  No snapshots returned. This could mean:")
-        print("    - No pools had sufficient data for processing")
-        print("    - All pools were filtered out due to missing metadata")
-        print("    - No events found for the test block")
-        pytest.skip("No snapshots returned from processor")
+        results = []
 
+        block_details_dict = await get_block_details_in_block_range(
+            from_block,
+            to_block,
+            redis_conn=redis_conn,
+            rpc_helper=rpc_helper,
+        )
+
+        for pool in pools_to_process:
+            base_snapshot_data: Optional[UniswapBaseSnapshot] = await base_snapshot_from_block_range(
+                pair_address=pool,
+                from_block=from_block,
+                to_block=to_block,
+                redis_conn=redis_conn,
+                rpc_helper=rpc_helper,
+                ipfs_reader=ipfs_reader,
+                anchor_rpc_helper=anchor_rpc_helper,
+                protocol_state_contract=protocol_state_contract,
+                block_details_dict=block_details_dict,
+            )
+
+            results.append((f"baseSnapshot:{pool}:{app_config.namespace}", base_snapshot_data))
+
+    else:
+        # Run the processor
+        print(f"\nRunning PairTotalReservesProcessor.compute()...")
+        start_time = time.time()
+        
+        results = await processor.compute(
+            epoch=epoch,
+            redis_conn=redis_conn,
+            rpc_helper=rpc_helper,
+            anchor_rpc_helper=anchor_rpc_helper,
+            ipfs_reader=ipfs_reader,
+            protocol_state_contract=protocol_state_contract,
+            task_type="baseSnapshot:{poolAddress}:{Namespace}"
+        )
+        
+        compute_time = time.time() - start_time
+        print(f"Processor completed in {compute_time:.2f} seconds")
+
+        # Validate results
+        assert isinstance(results, list), "Results should be a list"
+        print(f"Processor returned {len(results)} snapshots")
+        
+        if not results:
+            print("ℹ️  No snapshots returned. This could mean:")
+            print("    - No pools had sufficient data for processing")
+            print("    - All pools were filtered out due to missing metadata")
+            print("    - No events found for the test block")
+            pytest.skip("No snapshots returned from processor")
+
+    # Collect all warnings from validation
+    all_warnings = []
+    
     # Validate each snapshot
     for i, (task_key, snapshot) in enumerate(results):
         print(f"\n📊 Validating snapshot {i+1}/{len(results)}")
@@ -681,10 +1118,8 @@ async def test_pair_total_reserves_processor(
         
         # Validate trade data against Etherscan if API key is available
         print(f"  🔍 Validating trade data against Etherscan...")
-        from computes.metadata import MetadataProcessor
-        metadata_processor = MetadataProcessor()
         
-        pool_metadata = await metadata_processor.get_pool_metadata(
+        pool_metadata = await get_pool_metadata(
             pool_address=snapshot.address,
             redis_conn=redis_conn,
             anchor_rpc_helper=anchor_rpc_helper,
@@ -694,8 +1129,45 @@ async def test_pair_total_reserves_processor(
         
         if pool_metadata:
             trade_validation = await validate_trade_data_against_etherscan(
-                snapshot, pool_metadata, from_block, redis_conn, protocol_state_contract, anchor_rpc_helper
+                snapshot=snapshot,
+                pool_metadata=pool_metadata,
+                block_number=from_block,
+                source_chain_id=source_chain_id
             )
+            
+            # not that useful but a sanity check
+            raw_price_validation = await validate_raw_token_prices_from_onchain_data(
+                snapshot=snapshot,
+                pool_metadata=pool_metadata,
+                block_number=from_block,
+                rpc_helper=rpc_helper
+            )
+            
+            print(f"  🔍 Validating prices against CoinMarketCap...")
+            tolerance = os.getenv('COINMARKETCAP_API_PRICE_TOLERANCE', 2)
+            tolerance = float(tolerance) / 100
+            cmc_validation = await validate_prices_against_coinmarketcap(
+                snapshot=snapshot,
+                pool_metadata=pool_metadata,
+                block_number=from_block,
+                source_chain_id=source_chain_id,
+                tolerance=tolerance
+            )
+
+            if cmc_validation.get('warnings'):
+                print(f"     ⚠️  CMC VALIDATION WARNINGS ({len(cmc_validation.get('warnings', []))} total):")
+                for i, warning in enumerate(cmc_validation.get('warnings', []), 1):
+                    print(f"       {i}. {warning}")
+                print(f"     ⚠️  Test passed with warnings - manual review recommended")
+                
+                # Emit pytest warnings so they appear in final test output
+                all_warnings.extend(cmc_validation.get('warnings', []))
+            
+            if cmc_validation.get('cmc_available'):
+                print(f"     ✅ CoinMarketCap validation passed")
+            else:
+                reason = cmc_validation.get('reason', 'Unknown')
+                print(f"     ℹ️  CoinMarketCap validation skipped: {reason}")
             
             if trade_validation.get('etherscan_available'):
                 comparison = trade_validation['comparison']
@@ -718,13 +1190,6 @@ async def test_pair_total_reserves_processor(
                 # Token1 mint/burn comparison
                 snap_mb_t1 = comparison['mint_burn_volume_token1']['snapshot']
                 eth_mb_t1 = comparison['mint_burn_volume_token1']['etherscan']
-                
-                # Log USD values from snapshot for reference only
-                usd_ref = comparison['usd_values_reference']
-                print(f"     💰 USD Values from Snapshot (Reference Only):")
-                print(f"       Swap Volume USD: ${usd_ref['snapshot_swap_volume_usd']:.2f}")
-                print(f"       Fees USD: ${usd_ref['snapshot_fees_usd']:.2f}")
-                print(f"       Mint/Burn Volume USD: ${usd_ref['snapshot_mint_burn_volume_usd']:.2f}")
                 
                 # Validation using raw token amounts with reasonable tolerance
                 total_events = swap_count + mint_count + burn_count
@@ -804,6 +1269,18 @@ async def test_pair_total_reserves_processor(
         print("    - Many pools lack sufficient metadata")
         print("    - Pools have no liquidity/events in this block")
         print("    - RPC or network issues during processing")
+
+    # Final warning summary
+    if all_warnings:
+        print(f"\n⚠️  TEST COMPLETED WITH {len(all_warnings)} WARNINGS:")
+        for i, warning in enumerate(all_warnings, 1):
+            print(f"    {i}. {warning}")
+        print(f"⚠️  Manual review recommended for pools with warnings")
+        
+        # Emit a summary warning
+        emit_pytest_warnings([f"Test completed with {len(all_warnings)} validation warnings"], "test_summary")
+    else:
+        print(f"\n✅ TEST COMPLETED WITH NO WARNINGS")
 
     print("PASSED: test_pair_total_reserves_processor")
 
