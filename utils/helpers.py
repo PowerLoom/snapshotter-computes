@@ -607,7 +607,8 @@ async def get_token_price_in_usd_in_block_range(
             Dict[int, float],  # token1_price: token1 price in USD for each block
         ]
     """
-    token0_price_raw, token1_price_raw = await get_token_price_in_block_range(
+    # TODO: Rename function names and variablesto relative token price for clarity
+    token0_price_raw, token1_price_raw = await get_token_price_in_block_range( 
         pair_metadata=pair_metadata,
         from_block=from_block,
         to_block=to_block,
@@ -905,19 +906,14 @@ async def get_events_from_cache(
     max_score = (to_block + 1) * SCORE_BLOCK_MULTIPLIER - 1  # -1 to not include next block's events
     
     # Get events from Redis zset
+    redis_key = f"events:{settings.namespace}:address:{pool_address}"
     events = await redis_conn.zrangebyscore(
-        name=f"events:{settings.namespace}:address:{pool_address}",
+        name=redis_key,
         min=min_score,
         max=max_score,
         withscores=True
     )
 
-    helper_logger.info(f"Found {len(events)} events in raw cache for pool {pool_address} from block {from_block} to block {to_block}")
-
-    if len(events) > 0:
-        helper_logger.info(f"First event: {events[0]}")
-        helper_logger.info(f"Last event: {events[-1]}")
-    
     # Group events by block number
     block_events: Dict[int, List[UniswapEvent]] = {}
     for block in range(from_block, to_block + 1):
@@ -940,7 +936,9 @@ async def get_events_from_cache(
             
         block_events[block_number].append(event)
 
-    helper_logger.info(f"Found {len(block_events)} events in cache for pool {pool_address} from block {from_block} to block {to_block}")
+    # Count total events across all blocks
+    total_events = sum(len(events_list) for events_list in block_events.values())
+    helper_logger.info(f"Found {total_events} total events across {len(block_events)} blocks in cache for pool {pool_address} from block {from_block} to block {to_block}")
     
     return block_events
 
