@@ -457,8 +457,11 @@ def emit_pytest_warnings(warning_messages: List[str], test_name: str = "price_va
 def validate_price_differences(
     snapshot_token0_usd: float,
     snapshot_token1_usd: float,
+    snapshot_token0_reserve_usd: float,
+    snapshot_token1_reserve_usd: float,
     cmc_token0_usd: float,
     cmc_token1_usd: float,
+    cmc_liquidity_usd: float,
     pool_metadata: UniswapPoolMetadata,
     data_is_fresh: bool,
     tolerance: float
@@ -533,6 +536,18 @@ def validate_price_differences(
                 warning_msg = f"Token1 USD price difference ({token1_usd_diff:.2%}) exceeds tolerance but data is stale"
                 print(f"         ⚠️  WARNING: {warning_msg}")
                 validation_warnings.append(warning_msg)
+
+    # Validate USD Reserves
+    # Overriding tolerance for this validation because CMC uses balances, not reserves
+    tolerance = 0.2  # 20% tolerance
+    if cmc_liquidity_usd > 0 and (snapshot_token0_reserve_usd > 0 or snapshot_token1_reserve_usd > 0):
+        total_snapshot_reserve_usd = snapshot_token0_reserve_usd + snapshot_token1_reserve_usd
+
+        relative_diff = abs(total_snapshot_reserve_usd - cmc_liquidity_usd) / cmc_liquidity_usd
+        if relative_diff > tolerance:
+            error_msg = f"USD reserves: pool={pool_metadata.address} snapshot=${total_snapshot_reserve_usd:.6f}, cmc=${cmc_liquidity_usd:.6f} (relative diff: {relative_diff:.2%}, tolerance: {tolerance:.2%})"
+            print(f"         ⚠️  WARNING: {error_msg}")
+            validation_warnings.append(error_msg)
     
     return validation_warnings, validation_errors
 
@@ -672,12 +687,15 @@ async def validate_prices_against_coinmarketcap(
             # Get snapshot USD prices for comparison
             snapshot_token0_usd = snapshot.token0PricesUSD.get(block_number, 0)
             snapshot_token1_usd = snapshot.token1PricesUSD.get(block_number, 0)
+            snapshot_token0_reserve_usd = snapshot.token0ReservesUSD.get(block_number, 0)
+            snapshot_token1_reserve_usd = snapshot.token1ReservesUSD.get(block_number, 0)
             
             # Extract CMC price data
             # price: Base asset price in USD
             # price_by_quote_asset: Raw token price (base/quote ratio)
             cmc_base_usd = quote.get('price', 0)  # Base token USD price
             cmc_raw_price = quote.get('price_by_quote_asset', 0)  # Raw token price ratio
+            cmc_liquidity_usd = quote.get('liquidity', 0)
             
             # Map CMC prices to token0/token1 format with high precision
             from decimal import Decimal, getcontext
@@ -743,8 +761,11 @@ async def validate_prices_against_coinmarketcap(
             price_validation_warnings, price_validation_errors = validate_price_differences(
                 snapshot_token0_usd=snapshot_token0_usd,
                 snapshot_token1_usd=snapshot_token1_usd,
+                snapshot_token0_reserve_usd=snapshot_token0_reserve_usd,
+                snapshot_token1_reserve_usd=snapshot_token1_reserve_usd,
                 cmc_token0_usd=cmc_token0_usd,
                 cmc_token1_usd=cmc_token1_usd,
+                cmc_liquidity_usd=cmc_liquidity_usd,
                 pool_metadata=pool_metadata,
                 data_is_fresh=time_diff is not None and time_diff <= 120,
                 tolerance=tolerance
