@@ -4,7 +4,7 @@ import os
 import warnings
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Tuple
-from web3 import Web3
+from web3 import Web3, AsyncWeb3
 from web3._utils.events import get_event_data
 from eth_abi.codec import ABICodec
 from eth_abi.registry import registry as default_abi_registry
@@ -409,10 +409,10 @@ async def get_token_balances(
     pool_address: str,
     block_number: int,
     pool_metadata: UniswapPoolMetadata,
-    w3: Web3,
+    w3: AsyncWeb3,
     token_abi: Dict
-) -> Tuple[int, int]:
-    """Helper to get actual token balances from the pool"""
+) -> Tuple[float, float]:
+    """Helper to get actual token balances from the pool, normalized by token decimals"""
     token0_contract = w3.eth.contract(
         address=Web3.to_checksum_address(pool_metadata.token0.address),
         abi=token_abi
@@ -422,10 +422,14 @@ async def get_token_balances(
         abi=token_abi
     )
     
-    token0_balance = token0_contract.functions.balanceOf(pool_address).call(block_identifier=block_number)
-    token1_balance = token1_contract.functions.balanceOf(pool_address).call(block_identifier=block_number)
+    token0_balance = await token0_contract.functions.balanceOf(pool_address).call(block_identifier=block_number)
+    token1_balance = await token1_contract.functions.balanceOf(pool_address).call(block_identifier=block_number)
     
-    return token0_balance, token1_balance
+    # Normalize balances using token decimals
+    token0_balance_normalized = token0_balance / (10 ** int(pool_metadata.token0.decimals))
+    token1_balance_normalized = token1_balance / (10 ** int(pool_metadata.token1.decimals))
+    
+    return token0_balance_normalized, token1_balance_normalized
 
 def get_coinmarketcap_config():
     """Get CoinMarketCap configuration from environment variables."""
@@ -753,7 +757,7 @@ async def validate_prices_against_coinmarketcap(
             return validation_result
 
 
-async def validate_raw_token_prices_from_onchain_data(
+async def validate_raw_token_prices_and_reserves(
     snapshot: UniswapBaseSnapshot,
     pool_metadata: UniswapPoolMetadata,
     block_number: int,
@@ -777,6 +781,8 @@ async def validate_raw_token_prices_from_onchain_data(
     # Extract reported prices from snapshot
     token0_price_reported = snapshot.token0Prices.get(block_number, 0)
     token1_price_reported = snapshot.token1Prices.get(block_number, 0)
+    token0_reserve_reported = snapshot.token0Reserves.get(block_number, 0)
+    token1_reserve_reported = snapshot.token1Reserves.get(block_number, 0)
     
     # Query pool's slot0 directly from blockchain
     pool_contract = rpc_helper.get_current_node()['web3_client'].eth.contract(
@@ -793,12 +799,23 @@ async def validate_raw_token_prices_from_onchain_data(
         pool_metadata.token0.decimals,
         pool_metadata.token1.decimals,
     )
+
+    token0_balance_onchain, token1_balance_onchain = await get_token_balances(
+        pool_address=snapshot.address,
+        block_number=block_number,
+        pool_metadata=pool_metadata,
+        w3=rpc_helper.get_current_node()['web3_client'],
+        token_abi=json.load(open("computes/static/abis/IERC20.json"))
+    )
+
+    
     
     validation_result = {
         'block_number': block_number,
         'onchain_data_available': True,
         'sqrt_price_x96': sqrt_price_x96,
         'validation_errors': [],
+        'validation_warnings': [],
         'token0_price_comparison': {
             'reported': token0_price_reported,
             'onchain': token0_price_onchain,
@@ -806,7 +823,15 @@ async def validate_raw_token_prices_from_onchain_data(
         'token1_price_comparison': {
             'reported': token1_price_reported,
             'onchain': token1_price_onchain,
-        }
+        },
+        'token0_reserve_comparison': {
+            'reported': token0_reserve_reported,
+            'onchain': token0_balance_onchain,
+        },
+        'token1_reserve_comparison': {
+            'reported': token1_reserve_reported,
+            'onchain': token1_balance_onchain,
+        },
     }
     
     # Collect validation errors instead of asserting
@@ -815,14 +840,30 @@ async def validate_raw_token_prices_from_onchain_data(
     if token0_price_onchain > 0 and token0_price_reported > 0:
         token0_relative_diff = abs(token0_price_reported - token0_price_onchain) / token0_price_onchain
         if token0_relative_diff > tolerance:
-            error_msg = f"Token0 price mismatch: reported={token0_price_reported:.10f}, on-chain={token0_price_onchain:.10f} (relative diff: {token0_relative_diff:.2%}, tolerance: {tolerance:.2%})"
+            error_msg = f"Token0 price mismatch for pool {snapshot.address}: reported={token0_price_reported:.10f}, on-chain={token0_price_onchain:.10f} (relative diff: {token0_relative_diff:.2%}, tolerance: {tolerance:.2%})"
             validation_result['validation_errors'].append(error_msg)
     
     if token1_price_onchain > 0 and token1_price_reported > 0:
         token1_relative_diff = abs(token1_price_reported - token1_price_onchain) / token1_price_onchain
         if token1_relative_diff > tolerance:
-            error_msg = f"Token1 price mismatch: reported={token1_price_reported:.10f}, on-chain={token1_price_onchain:.10f} (relative diff: {token1_relative_diff:.2%}, tolerance: {tolerance:.2%})"
+            error_msg = f"Token1 price mismatch for pool {snapshot.address}: reported={token1_price_reported:.10f}, on-chain={token1_price_onchain:.10f} (relative diff: {token1_relative_diff:.2%}, tolerance: {tolerance:.2%})"
             validation_result['validation_errors'].append(error_msg)
+    
+    # TODO: this is a workaround to account for fees, should find a better comparison method
+    tolerance = 0.2  # 20% tolerance for reserve comparison
+
+    if token0_balance_onchain > 0 and token0_reserve_reported > 0:
+        token0_relative_diff = abs(token0_balance_onchain - token0_reserve_reported) / token0_reserve_reported
+        if token0_relative_diff > tolerance:
+            error_msg = f"Token0 reserve mismatch for pool {snapshot.address}: reported={token0_reserve_reported:.10f}, on-chain={token0_balance_onchain:.10f} (relative diff: {token0_relative_diff:.2%}, tolerance: {tolerance:.2%})"
+            # warning because this is a workaround
+            validation_result['validation_warnings'].append(error_msg)
+    
+    if token1_balance_onchain > 0 and token1_reserve_reported > 0:
+        token1_relative_diff = abs(token1_balance_onchain - token1_reserve_reported) / token1_reserve_reported
+        if token1_relative_diff > tolerance:
+            error_msg = f"Token1 reserve mismatch for pool {snapshot.address}: reported={token1_reserve_reported:.10f}, on-chain={token1_balance_onchain:.10f} (relative diff: {token1_relative_diff:.2%}, tolerance: {tolerance:.2%})"
+            validation_result['validation_warnings'].append(error_msg)
     
     return validation_result
 
@@ -1131,33 +1172,32 @@ async def test_pair_total_reserves_processor(
         cmc_validation_errors = []
         
         if pool_metadata:
+            # Validate trade data against Etherscan
             trade_validation = await validate_trade_data_against_etherscan(
                 snapshot=snapshot,
                 pool_metadata=pool_metadata,
                 block_number=from_block,
                 source_chain_id=source_chain_id
             )
-            
-            # Collect Etherscan validation errors
             etherscan_validation_errors = trade_validation.get('validation_errors', [])
             
             # not that useful but a sanity check
-            try:
-                raw_price_validation = await validate_raw_token_prices_from_onchain_data(
-                    snapshot=snapshot,
-                    pool_metadata=pool_metadata,
-                    block_number=from_block,
-                    rpc_helper=rpc_helper
-                )
-                onchain_errors = raw_price_validation.get('validation_errors', [])
-                if onchain_errors:
-                    print(f"       ❌ On-chain price validation errors: {len(onchain_errors)}")
-                    etherscan_validation_errors.extend(onchain_errors)
-            except Exception as e:
-                error_msg = f"On-chain price validation failed: {str(e)}"
-                print(f"       ❌ {error_msg}")
-                etherscan_validation_errors.append(error_msg)
+            raw_price_validation = await validate_raw_token_prices_and_reserves(
+                snapshot=snapshot,
+                pool_metadata=pool_metadata,
+                block_number=from_block,
+                rpc_helper=rpc_helper
+            )
+            onchain_errors = raw_price_validation.get('validation_errors', [])
+            onchain_warnings = raw_price_validation.get('validation_warnings', [])
+            if onchain_errors:
+                print(f"       ❌ On-chain data validation errors: {len(onchain_errors)}")
+                etherscan_validation_errors.extend(onchain_errors)
+            if onchain_warnings:
+                print(f"       ⚠️  On-chain data validation warnings: {len(onchain_warnings)}")
+                snapshot_warnings.extend(onchain_warnings)
             
+            # Validate prices against CoinMarketCap
             tolerance = os.getenv('COINMARKETCAP_API_PRICE_TOLERANCE', 2)
             tolerance = float(tolerance) / 100
             print(f"    🔍 Validating prices against CoinMarketCap with tolerance: {tolerance}")
@@ -1168,8 +1208,6 @@ async def test_pair_total_reserves_processor(
                 source_chain_id=source_chain_id,
                 tolerance=tolerance
             )
-
-            # Collect CMC validation results
             cmc_warnings = cmc_validation.get('warnings', [])
             cmc_validation_errors = cmc_validation.get('validation_errors', [])
             
@@ -1202,7 +1240,7 @@ async def test_pair_total_reserves_processor(
                 reason = trade_validation.get('reason', 'Unknown')
                 print(f"     ℹ️  Etherscan validation skipped: {reason}")
         else:
-            etherscan_validation_errors.append("Could not fetch pool metadata for validation")
+            all_structural_errors.append("Could not fetch pool metadata for validation")
             print(f"     ❌ Could not fetch pool metadata for validation")
         
         # Store validation results for this snapshot
