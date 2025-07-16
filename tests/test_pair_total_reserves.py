@@ -252,6 +252,8 @@ async def validate_trade_data_against_etherscan(
     token1_trade_vol = getattr(snapshot, 'token1TradeVolume', None)
     token0_mb_vol = getattr(snapshot, 'token0MintBurnVolume', None)
     token1_mb_vol = getattr(snapshot, 'token1MintBurnVolume', None)
+    total_trade = getattr(snapshot, 'totalTrade', None)
+    total_trade_mint_burn = getattr(snapshot, 'totalTradeMintBurn', None)
     
     if token0_trade_vol:
         snapshot_swap_token0_amount = float(token0_trade_vol)
@@ -302,6 +304,14 @@ async def validate_trade_data_against_etherscan(
                 'mint_count_etherscan': etherscan_data['mint_count'],
                 'burn_count_etherscan': etherscan_data['burn_count']
             },
+            'total_trade': {
+                'snapshot': total_trade,
+                'etherscan_events': etherscan_data.get('events_details', [])
+            },
+            'total_trade_mint_burn': {
+                'snapshot': total_trade_mint_burn,
+                'etherscan_events': etherscan_data.get('events_details', [])
+            },
             'events_details': etherscan_data.get('events_details', [])
         }
     }
@@ -325,6 +335,29 @@ async def validate_trade_data_against_etherscan(
     print(f"       Token1 Swap - Snapshot: {snapshot_swap_token1_amount:.6f}, Etherscan: {etherscan_data['total_swap_token1_amount']:.6f}")
     print(f"       Token0 Mint/Burn - Snapshot: {snapshot_mint_burn_token0_amount:.6f}, Etherscan: {etherscan_data['total_mint_burn_token0_amount']:.6f} ({etherscan_data['mint_count']} mints, {etherscan_data['burn_count']} burns)")
     print(f"       Token1 Mint/Burn - Snapshot: {snapshot_mint_burn_token1_amount:.6f}, Etherscan: {etherscan_data['total_mint_burn_token1_amount']:.6f}")
+
+    # Calculate total USD volume from Etherscan events
+    etherscan_total_trade_usd = 0.0
+    etherscan_total_mint_burn_usd = 0.0
+    
+    for event in events_details:
+        event_type = event['event_type']
+        token0_amt = event['token0_amount']
+        token1_amt = event['token1_amount']
+        
+        # Get token prices from snapshot for this block
+        token0_price_usd = snapshot.token0PricesUSD.get(block_number, 0)
+        token1_price_usd = snapshot.token1PricesUSD.get(block_number, 0)
+        
+        # Calculate USD value using the higher of token0 or token1 amounts
+        token0_value_usd = token0_amt * token0_price_usd
+        token1_value_usd = token1_amt * token1_price_usd
+        event_value_usd = max(token0_value_usd, token1_value_usd)
+        
+        if event_type == 'Swap':
+            etherscan_total_trade_usd += event_value_usd
+        else:  # Mint or Burn
+            etherscan_total_mint_burn_usd += event_value_usd
 
     # Collect validation errors instead of asserting immediately
     tolerance = 0.01  # 1% tolerance for floating point precision
@@ -369,6 +402,25 @@ async def validate_trade_data_against_etherscan(
                 print(f"       ✅ {token_name} mint/burn volume validation passed (both zero)")
     else:
         print(f"       ℹ️  No mint/burn events found - skipping mint/burn validation")
+
+    # Validate total USD volumes
+    if etherscan_total_trade_usd > 0 and total_trade > 0:
+        relative_diff = abs(total_trade - etherscan_total_trade_usd) / etherscan_total_trade_usd
+        if relative_diff > tolerance:
+            error_msg = f"Total trade USD mismatch: snapshot=${total_trade:.2f}, etherscan=${etherscan_total_trade_usd:.2f} (relative diff: {relative_diff:.2%}, tolerance: {tolerance:.2%})"
+            print(f"       ❌ VALIDATION ERROR: {error_msg}")
+            validation_result['validation_errors'].append(error_msg)
+        else:
+            print(f"       ✅ Total trade USD validation passed")
+
+    if etherscan_total_mint_burn_usd > 0 and total_trade_mint_burn > 0:
+        relative_diff = abs(total_trade_mint_burn - etherscan_total_mint_burn_usd) / etherscan_total_mint_burn_usd
+        if relative_diff > tolerance:
+            error_msg = f"Total mint/burn USD mismatch: snapshot=${total_trade_mint_burn:.2f}, etherscan=${etherscan_total_mint_burn_usd:.2f} (relative diff: {relative_diff:.2%}, tolerance: {tolerance:.2%})"
+            print(f"       ❌ VALIDATION ERROR: {error_msg}")
+            validation_result['validation_errors'].append(error_msg)
+        else:
+            print(f"       ✅ Total mint/burn USD validation passed")
     
     return validation_result
 
