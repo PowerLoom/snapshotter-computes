@@ -13,9 +13,11 @@ from eth_abi.registry import registry as default_abi_registry
 
 from computes.trades import TradesProcessor
 from computes.utils.models.message_models import UniswapTradesSnapshot, TradeType
+from snapshotter.settings.config import settings
 from snapshotter.utils.default_logger import logger
 from snapshotter.utils.models.message_models import SnapshotProcessMessage
-from snapshotter.settings.config import settings
+from snapshotter.utils.redis.redis_keys import source_chain_id_key
+
 
 """
 Test for TradesProcessor validation against Uniswap V3 Etherscan data.
@@ -101,9 +103,7 @@ async def fetch_uniswap_v3_events_from_etherscan(
     pool_address: str,
     start_block: int,
     end_block: int,
-    redis_conn=None,
-    protocol_state_contract=None,
-    anchor_rpc_helper=None
+    source_chain_id: int,
 ) -> Dict[str, List]:
     """
     Fetch Uniswap V3 events (swaps, mints, burns) from Etherscan API.
@@ -118,32 +118,7 @@ async def fetch_uniswap_v3_events_from_etherscan(
     """
     api_key, api_url = get_etherscan_config()
     if not api_key or not api_url:
-        return {"swaps": [], "mints": [], "burns": []}  # Return empty dict if missing config
-    
-    # Get source chain ID for Etherscan v2 API (if available)
-    source_chain_id = 1  # Default to Ethereum mainnet
-    if redis_conn and protocol_state_contract and anchor_rpc_helper:
-        try:
-            from snapshotter.utils.redis.redis_keys import source_chain_id_key
-            source_chain_id_data = await redis_conn.get(source_chain_id_key())
-            
-            if source_chain_id_data:
-                source_chain_id = int(source_chain_id_data.decode('utf-8'))
-                print(f"      ℹ️  Using cached source chain ID: {source_chain_id}")
-            else:
-                # If not in cache, fetch from blockchain but don't cache (test mode)
-                [source_chain_id] = await anchor_rpc_helper.web3_call(
-                    tasks=[
-                        ('SOURCE_CHAIN_ID', [Web3.to_checksum_address(settings.data_market)]),
-                    ],
-                    contract_addr=protocol_state_contract.address,
-                    abi=protocol_state_contract.abi,
-                )
-                print(f"      ℹ️  Fetched source chain ID from contract: {source_chain_id}")
-        except Exception as e:
-            print(f"      ⚠️  Could not get source chain ID: {e}")
-            print(f"      ℹ️  Using default Ethereum mainnet (chain ID 1)")
-            source_chain_id = 1
+        pytest.fail("No etherscan api key or url configured.")
     
     # Uniswap V3 event signatures
     swap_topic = "0xc42079f94a6350d7e6235f29174924f928cc2ac818eb64fed8004e115fbcca67"  # Swap event
@@ -292,6 +267,9 @@ async def fetch_uniswap_v3_events_from_etherscan(
     
     total_events = len(events["swaps"]) + len(events["mints"]) + len(events["burns"])
     print(f"  📊 Total events found: {total_events} (swaps: {len(events['swaps'])}, mints: {len(events['mints'])}, burns: {len(events['burns'])})")
+
+    # small sleep to avoid rate limits
+    time.sleep(0.25)
     
     return events
 
@@ -435,9 +413,7 @@ def compare_events(
 async def validate_trades_snapshot_against_etherscan(
     trades_snapshot: UniswapTradesSnapshot,
     pool_address: str,
-    redis_conn=None,
-    protocol_state_contract=None,
-    anchor_rpc_helper=None
+    source_chain_id: int,
 ) -> Dict:
     """
     Validate trades snapshot against Etherscan data.
@@ -455,12 +431,10 @@ async def validate_trades_snapshot_against_etherscan(
     
     # Fetch Etherscan data for the same block range
     etherscan_data = await fetch_uniswap_v3_events_from_etherscan(
-        pool_address,
-        trades_snapshot.epoch.begin,
-        trades_snapshot.epoch.end,
-        redis_conn,
-        protocol_state_contract,
-        anchor_rpc_helper
+        pool_address=pool_address,
+        start_block=trades_snapshot.epoch.begin,
+        end_block=trades_snapshot.epoch.end,
+        source_chain_id=source_chain_id,
     )
     
     print(f"  Etherscan data:")
@@ -586,17 +560,36 @@ async def test_trades_processor_against_etherscan(
     # Validate each snapshot against Etherscan data
     print(f"\n🔍 Validating snapshots against Etherscan data...")
     all_validation_results = []
+
+    # Get source chain ID for Etherscan v2 API (read-only, don't cache in Redis for tests)
+    try:
+        source_chain_id_data = await redis_conn.get(source_chain_id_key())
+        
+        if source_chain_id_data:
+            source_chain_id = int(source_chain_id_data.decode('utf-8'))
+            print(f"      ℹ️  Using cached source chain ID: {source_chain_id}")
+        else:
+            # If not in cache, fetch from blockchain but don't cache (test mode)
+            [source_chain_id] = await anchor_rpc_helper.web3_call(
+                tasks=[
+                    ('SOURCE_CHAIN_ID', [Web3.to_checksum_address(settings.data_market)]),
+                ],
+                contract_addr=protocol_state_contract.address,
+                abi=protocol_state_contract.abi,
+            )
+            print(f"      ℹ️  Fetched source chain ID from contract: {source_chain_id}")
+    except Exception as e:
+        print(f"      ⚠️  Could not get source chain ID: {e}")
+        pytest.fail("Could not get source chain ID")
     
     for snapshot_key, trades_snapshot in results:
         pool_address = trades_snapshot.address
         print(f"\n📋 Processing snapshot for pool: {pool_address}")
         
         validation_result = await validate_trades_snapshot_against_etherscan(
-            trades_snapshot,
-            pool_address,
-            redis_conn,
-            protocol_state_contract,
-            anchor_rpc_helper
+            trades_snapshot=trades_snapshot,
+            pool_address=pool_address,
+            source_chain_id=source_chain_id,
         )
         all_validation_results.append(validation_result)
     

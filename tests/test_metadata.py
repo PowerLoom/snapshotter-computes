@@ -4,10 +4,10 @@ from typing import Dict
 import pytest
 from redis import asyncio as aioredis
 
-from computes.utils.helpers import get_pool_metadata
 from computes.metadata import MetadataProcessor
-from snapshotter.utils.models.message_models import SnapshotProcessMessage
+from computes.utils.helpers import get_pool_metadata
 from snapshotter.settings.config import settings
+from snapshotter.utils.models.message_models import SnapshotProcessMessage
 from snapshotter.utils.data_utils import get_project_latest_snapshot
 
 """
