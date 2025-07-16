@@ -1,6 +1,6 @@
 import json
 import time
-from typing import Dict, Optional, Any, Tuple
+from typing import Dict, Optional, Any, Tuple, List
 
 from redis import asyncio as aioredis
 from computes.utils.models.message_models import UniswapBaseSnapshot, UniswapPoolMetadata, EpochBaseSnapshot
@@ -180,6 +180,11 @@ async def generate_pair_reserves_dict_and_trade_data(
     # Initialize reserve amounts
     token0Amount = initial_reserves[0]
     token1Amount = initial_reserves[1]
+    
+    core_logger.info(
+        "[Epoch {}-{}] Pool {} | Initial reserves: token0={}, token1={}",
+        from_block, to_block, pair_address, token0Amount, token1Amount
+    )
     # Initialize accumulators for epoch-wide trade data
     epoch_total_trade_data = TradeData()
 
@@ -206,7 +211,7 @@ async def generate_pair_reserves_dict_and_trade_data(
         block_delta_token1 = 0
 
         # Process each event in the block
-        for event_data_obj in event_list:
+        for i, event_data_obj in enumerate(event_list):
             # Extract trade data from the event log
             current_event_trade_data, _ = extract_trade_volume_log(
                 event_name=event_data_obj.eventName,
@@ -221,23 +226,30 @@ async def generate_pair_reserves_dict_and_trade_data(
                 epoch_total_trade_data += current_event_trade_data
 
             # Update reserve deltas based on event type
+            event_amount0 = event_data_obj.args['amount0']
+            event_amount1 = event_data_obj.args['amount1']
+            
             if event_data_obj.eventName == 'Burn':
                 # Burn events remove liquidity from the pool
-                block_delta_token0 -= event_data_obj.args['amount0']
-                block_delta_token1 -= event_data_obj.args['amount1']
+                block_delta_token0 -= event_amount0
+                block_delta_token1 -= event_amount1
             else:
                 # Mint and Swap events add liquidity or swap tokens
                 # Swap events use a negative value for the token that was removed from the pool
-                block_delta_token0 += event_data_obj.args['amount0']
-                block_delta_token1 += event_data_obj.args['amount1']
+                block_delta_token0 += event_amount0
+                block_delta_token1 += event_amount1
+            
+            core_logger.debug(
+                "[Block {}] Pool {} | Event {} | Post-event deltas: token0_delta={}, token1_delta={}",
+                block_num, pair_address, i+1, block_delta_token0, block_delta_token1
+            )
+        
+        token0Amount += block_delta_token0
+        token1Amount += block_delta_token1
 
-            # Update the running total of reserves
-            token0Amount += block_delta_token0
-            token1Amount += block_delta_token1
-
-            # Normalize reserves for this block
-            token0AmountNormalized = token0Amount / (10 ** int(pair_per_token_metadata.token0.decimals))
-            token1AmountNormalized = token1Amount / (10 ** int(pair_per_token_metadata.token1.decimals))
+        # Normalize reserves for this block
+        token0AmountNormalized = token0Amount / (10 ** int(pair_per_token_metadata.token0.decimals))
+        token1AmountNormalized = token1Amount / (10 ** int(pair_per_token_metadata.token1.decimals))
 
         # Get block details (e.g., timestamp)
         current_block_details = block_details_dict.get(block_num, {})
