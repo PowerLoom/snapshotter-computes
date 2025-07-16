@@ -4,6 +4,7 @@ from typing import Dict
 import pytest
 from redis import asyncio as aioredis
 
+from computes.utils.helpers import get_pool_metadata
 from computes.metadata import MetadataProcessor
 from snapshotter.utils.models.message_models import SnapshotProcessMessage
 from snapshotter.settings.config import settings
@@ -322,7 +323,7 @@ async def test_metadata_processor(
     print(f"\n🔍 Retrieving pool metadata...")
     task_type = f'metadata:{pool_address}:{settings.namespace}'
     
-    metadata = await processor.get_pool_metadata(
+    metadata = await get_pool_metadata(
         pool_address=pool_address,
         redis_conn=redis_conn,
         anchor_rpc_helper=anchor_rpc_helper,
