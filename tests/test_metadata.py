@@ -6,7 +6,6 @@ from redis import asyncio as aioredis
 
 from computes.metadata import MetadataProcessor
 from computes.utils.helpers import get_pool_metadata
-from snapshotter.settings.config import settings
 from snapshotter.utils.models.message_models import SnapshotProcessMessage
 from snapshotter.utils.data_utils import get_project_latest_snapshot
 
@@ -321,7 +320,7 @@ async def test_metadata_processor(
 
     # Get pool metadata using the processor
     print(f"\n🔍 Retrieving pool metadata...")
-    task_type = f'metadata:{pool_address}:{settings.namespace}'
+    task_type = f'metadata:{pool_address}:{app_config.namespace}'
     
     metadata = await get_pool_metadata(
         pool_address=pool_address,
@@ -377,7 +376,7 @@ async def test_metadata_processor(
     print(f"\n🔍 Validating project latest snapshot from IPFS...")
     
     # Get the latest snapshot from IPFS using the same method as the processor
-    metadata_project_id = f"metadata:{pool_address}:{settings.namespace}"
+    metadata_project_id = f"metadata:{pool_address}:{app_config.namespace}"
     
     try:
         

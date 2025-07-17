@@ -12,8 +12,8 @@ from computes.active_tokens import ActiveTokensProcessor
 from computes.utils.models.message_models import ActiveTokensSnapshot
 from snapshotter.utils.default_logger import logger
 from snapshotter.utils.models.message_models import SnapshotProcessMessage
+from snapshotter.utils.models.settings_model import Settings
 from snapshotter.utils.redis.redis_keys import source_chain_id_key
-from snapshotter.settings.config import settings
 from computes.settings.config import settings as computes_settings
 
 
@@ -312,9 +312,9 @@ async def extract_tokens_from_etherscan_detailed(
     return token_frequencies, token_event_details
 
 
-async def verify_redis_token_data(redis_conn: aioredis.Redis, block_number: int) -> Dict[str, int]:
+async def verify_redis_token_data(redis_conn: aioredis.Redis, block_number: int, app_config: Settings) -> Dict[str, int]:
     """Verify and return Redis token data for a specific block"""
-    key = f"active_tokens_per_block:{block_number}:{settings.namespace}"
+    key = f"active_tokens_per_block:{block_number}:{app_config.namespace}"
     data = await redis_conn.zrange(key, 0, -1, withscores=True)
     
     if not data:
@@ -326,10 +326,10 @@ async def verify_redis_token_data(redis_conn: aioredis.Redis, block_number: int)
     }
 
 
-async def check_redis_pool_data(redis_conn: aioredis.Redis, block_number: int, pool_addresses: List[str]) -> Dict[str, bool]:
+async def check_redis_pool_data(redis_conn: aioredis.Redis, block_number: int, pool_addresses: List[str], app_config: Settings) -> Dict[str, bool]:
     """Check if specific pools are present in Redis active pools data"""
-    active_pools_key = f"active_pools:{block_number}:{settings.namespace}"
-    pools_per_block_key = f"active_pools_per_block:{block_number}:{settings.namespace}"
+    active_pools_key = f"active_pools:{block_number}:{app_config.namespace}"
+    pools_per_block_key = f"active_pools_per_block:{block_number}:{app_config.namespace}"
     
     # Check active_pools set
     redis_active_pools = await redis_conn.smembers(active_pools_key)
@@ -393,11 +393,18 @@ async def test_active_tokens_processor_single_block(
     from_block = current_block_number - block_offset_from_head
     print(f"\nTesting single block: {from_block} (current head: {current_block_number})")
 
-    if not await validate_block_availability(rpc_helper, from_block):
+    if not await validate_block_availability(
+        rpc_helper=rpc_helper,
+        block_number=from_block
+    ):
         pytest.skip(f"Skipping test: block {from_block} not available on configured RPC node.")
 
     # Get Redis data for this block
-    redis_token_data = await verify_redis_token_data(redis_conn, from_block)
+    redis_token_data = await verify_redis_token_data(
+        redis_conn=redis_conn, 
+        block_number=from_block, 
+        app_config=app_config
+    )
     assert redis_token_data, f"No Redis token data found for block {from_block}"
     
     print(f"\nRedis contains {len(redis_token_data)} tokens:")
@@ -413,7 +420,7 @@ async def test_active_tokens_processor_single_block(
             # If not in cache, fetch from blockchain but don't cache (test mode)
             [source_chain_id] = await anchor_rpc_helper.web3_call(
                 tasks=[
-                    ('SOURCE_CHAIN_ID', [Web3.to_checksum_address(settings.data_market)]),
+                    ('SOURCE_CHAIN_ID', [Web3.to_checksum_address(app_config.data_market)]),
                 ],
                 contract_addr=protocol_state_contract.address,
                 abi=protocol_state_contract.abi,
@@ -633,7 +640,7 @@ async def test_active_tokens_processor_multi_block(
     
     for block_num in range(from_block, to_block + 1):
         try:
-            block_redis_data = await verify_redis_token_data(redis_conn, block_num)
+            block_redis_data = await verify_redis_token_data(redis_conn=redis_conn, block_number=block_num, app_config=app_config)
             redis_data_per_block[block_num] = block_redis_data
             
             # Aggregate frequencies

@@ -13,9 +13,9 @@ from eth_abi.registry import registry as default_abi_registry
 
 from computes.trades import TradesProcessor
 from computes.utils.models.message_models import UniswapTradesSnapshot, TradeType
-from snapshotter.settings.config import settings
 from snapshotter.utils.default_logger import logger
 from snapshotter.utils.models.message_models import SnapshotProcessMessage
+from snapshotter.utils.models.settings_model import Settings
 from snapshotter.utils.redis.redis_keys import source_chain_id_key
 
 
@@ -77,9 +77,9 @@ async def validate_block_availability(rpc_helper, block_number: int) -> bool:
         return False
 
 
-async def get_active_pools_for_block(redis_conn: aioredis.Redis, block_number: int) -> Set[str]:
+async def get_active_pools_for_block(redis_conn: aioredis.Redis, block_number: int, app_config: Settings) -> Set[str]:
     """Get active pools for a specific block from Redis"""
-    key = f"active_pools:{block_number}:{settings.namespace}"
+    key = f"active_pools:{block_number}:{app_config.namespace}"
     pools = await redis_conn.smembers(key)
     return {pool.decode('utf-8') for pool in pools}
 
@@ -523,7 +523,11 @@ async def test_trades_processor_against_etherscan(
 
     # Get active pools for the block
     print(f"\n🔍 Getting active pools for block {from_block}...")
-    active_pools = await get_active_pools_for_block(redis_conn, from_block)
+    active_pools = await get_active_pools_for_block(
+        redis_conn=redis_conn, 
+        block_number=from_block, 
+        app_config=app_config
+    )
     
     if not active_pools:
         pytest.skip(f"No active pools found for block {from_block}")
@@ -572,7 +576,7 @@ async def test_trades_processor_against_etherscan(
             # If not in cache, fetch from blockchain but don't cache (test mode)
             [source_chain_id] = await anchor_rpc_helper.web3_call(
                 tasks=[
-                    ('SOURCE_CHAIN_ID', [Web3.to_checksum_address(settings.data_market)]),
+                    ('SOURCE_CHAIN_ID', [Web3.to_checksum_address(app_config.data_market)]),
                 ],
                 contract_addr=protocol_state_contract.address,
                 abi=protocol_state_contract.abi,

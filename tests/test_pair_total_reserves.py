@@ -19,7 +19,6 @@ from computes.utils.helpers import calculate_reserves, get_pool_metadata
 
 from snapshotter.utils.models.message_models import SnapshotProcessMessage
 from snapshotter.utils.redis.redis_keys import source_chain_id_key
-from snapshotter.settings.config import settings
 
 
 def sqrtPriceX96ToTokenPrices(sqrtPriceX96, token0_decimals, token1_decimals):
@@ -1069,7 +1068,7 @@ async def test_pair_total_reserves_processor(
             # If not in cache, fetch from blockchain but don't cache (test mode)
             [source_chain_id] = await anchor_rpc_helper.web3_call(
                 tasks=[
-                    ('SOURCE_CHAIN_ID', [Web3.to_checksum_address(settings.data_market)]),
+                    ('SOURCE_CHAIN_ID', [Web3.to_checksum_address(app_config.data_market)]),
                 ],
                 contract_addr=protocol_state_contract.address,
                 abi=protocol_state_contract.abi,

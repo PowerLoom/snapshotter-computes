@@ -1,6 +1,5 @@
 import asyncio
 import json
-import os
 import time
 from typing import List, Dict
 from web3 import Web3
@@ -11,7 +10,7 @@ from computes.active_pools import ActivePoolsProcessor
 from computes.utils.models.message_models import ActivePoolsSnapshot
 from snapshotter.utils.default_logger import logger
 from snapshotter.utils.models.message_models import SnapshotProcessMessage
-from snapshotter.settings.config import settings
+from snapshotter.utils.models.settings_model import Settings
 from computes.settings.config import settings as computes_settings
 
 
@@ -138,9 +137,9 @@ async def count_pool_occurrences_in_logs(receipts: List[Dict], pool_address: str
     return count, complete_logs
 
 
-async def verify_redis_data(redis_conn: aioredis.Redis, block_number: int) -> Dict[str, int]:
+async def verify_redis_data(redis_conn: aioredis.Redis, block_number: int, app_config: Settings) -> Dict[str, int]:
     """Verify and return Redis data for a specific block"""
-    key = f"active_pools_per_block:{block_number}:{settings.namespace}"
+    key = f"active_pools_per_block:{block_number}:{app_config.namespace}"
     data = await redis_conn.zrange(key, 0, -1, withscores=True)
 
     print(f"Redis data for block {block_number}: {data}")
@@ -277,7 +276,7 @@ async def test_active_pools_processor(
         pytest.skip(f"Skipping test: block {from_block} not available on configured RPC node.")
 
     # Verify Redis data exists for this block
-    redis_data = await verify_redis_data(redis_conn, from_block)
+    redis_data = await verify_redis_data(redis_conn, from_block, app_config)
     assert redis_data, f"No Redis data found for block {from_block}"
     
     print(f"\nRedis data contains {len(redis_data)} pools:")
