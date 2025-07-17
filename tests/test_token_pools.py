@@ -4,12 +4,14 @@ import os
 from typing import Dict, Set
 import pytest
 from redis import asyncio as aioredis
+from web3 import Web3
 
 from computes.token_pools import TokenPoolsProcessor
 from computes.utils.models.message_models import UniswapTokenPoolsSnapshot
 from snapshotter.utils.models.message_models import SnapshotProcessMessage
 from snapshotter.utils.models.settings_model import Settings
 from snapshotter.utils.data_utils import get_project_latest_snapshot
+from computes.settings.config import settings as computes_settings
 
 
 """
@@ -62,6 +64,23 @@ def get_weth_address():
     if not weth_address:
         pytest.skip("TEST_WETH_ADDRESS not configured in environment")
     return weth_address
+
+
+def get_excluded_tokens():
+    """Get tokens to exclude from testing (USDC, USDT) from compute settings."""
+    excluded_tokens = set()
+    
+    # Add USDC and USDT from compute settings
+    if hasattr(computes_settings.contract_addresses, 'USDC'):
+        excluded_tokens.add(Web3.to_checksum_address(computes_settings.contract_addresses.USDC))
+    
+    if hasattr(computes_settings.contract_addresses, 'USDT'):
+        excluded_tokens.add(Web3.to_checksum_address(computes_settings.contract_addresses.USDT))
+
+    if hasattr(computes_settings.contract_addresses, 'DAI'):
+        excluded_tokens.add(Web3.to_checksum_address(computes_settings.contract_addresses.DAI))
+    
+    return excluded_tokens
 
 
 async def validate_block_availability(rpc_helper, block_number: int) -> bool:
@@ -283,7 +302,10 @@ async def test_token_pools_processor(
     print(f"\n📋 Collecting token information from active pools...")
     token_to_pools = {}
     WETH_ADDRESS = get_weth_address()
+    EXCLUDED_TOKENS = get_excluded_tokens()
+    
     print(f"Using WETH address: {WETH_ADDRESS}")
+    print(f"Excluding tokens: {EXCLUDED_TOKENS}")
     
     for pool_address in active_pools:
         pool_metadata = await get_pool_metadata(
@@ -301,25 +323,45 @@ async def test_token_pools_processor(
         token0_address = pool_metadata.get("token0", {}).get("address", "")
         token1_address = pool_metadata.get("token1", {}).get("address", "")
         
+        # Normalize addresses for comparison
+        token0_checksum = Web3.to_checksum_address(token0_address) if token0_address else ""
+        token1_checksum = Web3.to_checksum_address(token1_address) if token1_address else ""
+        weth_checksum = Web3.to_checksum_address(WETH_ADDRESS)
+        
         # Skip WETH pools as per processor logic
-        if token0_address == WETH_ADDRESS:
-            if token1_address not in token_to_pools:
-                token_to_pools[token1_address] = set()
-            token_to_pools[token1_address].add(pool_address)
-        elif token1_address == WETH_ADDRESS:
-            if token0_address not in token_to_pools:
-                token_to_pools[token0_address] = set()
-            token_to_pools[token0_address].add(pool_address)
+        if token0_checksum == weth_checksum:
+            # Only add token1 if it's not in excluded list
+            if token1_checksum not in EXCLUDED_TOKENS:
+                if token1_checksum not in token_to_pools:
+                    token_to_pools[token1_checksum] = set()
+                token_to_pools[token1_checksum].add(pool_address)
+            else:
+                print(f"  ⏭️  Skipping excluded token {token1_checksum} from pool {pool_address}")
+        elif token1_checksum == weth_checksum:
+            # Only add token0 if it's not in excluded list
+            if token0_checksum not in EXCLUDED_TOKENS:
+                if token0_checksum not in token_to_pools:
+                    token_to_pools[token0_checksum] = set()
+                token_to_pools[token0_checksum].add(pool_address)
+            else:
+                print(f"  ⏭️  Skipping excluded token {token0_checksum} from pool {pool_address}")
         else:
-            # Both tokens are non-WETH, add both
-            if token0_address not in token_to_pools:
-                token_to_pools[token0_address] = set()
-            if token1_address not in token_to_pools:
-                token_to_pools[token1_address] = set()
-            token_to_pools[token0_address].add(pool_address)
-            token_to_pools[token1_address].add(pool_address)
+            # Both tokens are non-WETH, add both if not excluded
+            if token0_checksum not in EXCLUDED_TOKENS:
+                if token0_checksum not in token_to_pools:
+                    token_to_pools[token0_checksum] = set()
+                token_to_pools[token0_checksum].add(pool_address)
+            else:
+                print(f"  ⏭️  Skipping excluded token {token0_checksum} from pool {pool_address}")
+                
+            if token1_checksum not in EXCLUDED_TOKENS:
+                if token1_checksum not in token_to_pools:
+                    token_to_pools[token1_checksum] = set()
+                token_to_pools[token1_checksum].add(pool_address)
+            else:
+                print(f"  ⏭️  Skipping excluded token {token1_checksum} from pool {pool_address}")
     
-    print(f"Found {len(token_to_pools)} unique tokens (excluding WETH)")
+    print(f"Found {len(token_to_pools)} unique tokens (excluding WETH, USDC, USDT)")
     
     # Validate token pools for each token
     print(f"\n🔍 Validating token pools data...")
