@@ -99,6 +99,66 @@ def get_etherscan_config():
     return api_key, api_url
 
 
+async def fetch_from_etherscan_with_retry(
+    url: str,
+    params: Dict[str, any],
+    max_retries: int = 3,
+    retry_delay: float = 0.25
+) -> Dict[str, any]:
+    """
+    Fetch data from Etherscan API with retry logic.
+    
+    Args:
+        url: Etherscan API URL
+        params: Request parameters
+        max_retries: Maximum number of retry attempts
+        retry_delay: Delay between retries in seconds
+        
+    Returns:
+        API response data or empty dict on failure
+    """
+    attempt = 0
+    
+    while attempt < max_retries:
+        attempt += 1
+        print(f"      📋 Sending Etherscan request attempt {attempt}/{max_retries}")
+        
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=30)) as response:
+                    if response.status != 200:
+                        print(f"      ⚠️  Etherscan request failed with status {response.status}")
+                        if attempt < max_retries:
+                            time.sleep(retry_delay)
+                            continue
+                        return {}
+                    
+                    data = await response.json()
+                    
+                    if data.get("status") != "1":
+                        error_message = data.get('message', 'Unknown error')
+                        result = data.get('result', '')
+                        print(f"      ⚠️  Etherscan API error: {error_message}")
+                        if result and result != error_message:
+                            print(f"      ⚠️  API result: {result}")
+                        
+                        if attempt < max_retries:
+                            time.sleep(retry_delay)
+                            continue
+                        return {}
+                    
+                    return data
+                    
+        except Exception as e:
+            print(f"      ⚠️  Error fetching events from Etherscan: {e}")
+            if attempt < max_retries:
+                time.sleep(retry_delay)
+                continue
+            return {}
+    
+    return {}
+
+
 async def fetch_uniswap_v3_events_from_etherscan(
     pool_address: str,
     start_block: int,
@@ -172,98 +232,80 @@ async def fetch_uniswap_v3_events_from_etherscan(
         params["chainid"] = source_chain_id
     # Chain-specific APIs (basescan.org, polygonscan.com, etc.) don't need chainid
         
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=30)) as response:
-                if response.status != 200:
-                    logger.error(f"Etherscan request failed with status {response.status}")
-                    return {"swaps": [], "mints": [], "burns": []}
-                
-                data = await response.json()
-                
-                if data.get("status") != "1":
-                    error_message = data.get('message', 'Unknown error')
-                    logger.warning(f"Etherscan API returned status 0: {error_message}")
-                    
-                    if "No records found" in error_message:
-                        print(f"    ℹ️  No events found for pool {pool_address} in block range {start_block}-{end_block}")
-                        return {"swaps": [], "mints": [], "burns": []}
-                    else:
-                        logger.error(f"Etherscan API error: {error_message}")
-                        return {"swaps": [], "mints": [], "burns": []}
-                
-                logs = data.get("result", [])
-                print(f"    📋 Etherscan returned {len(logs)} total events for pool {pool_address}")
-                
-                # Separate events by type
-                swap_events = []
-                mint_events = []  
-                burn_events = []
-                
-                for log in logs:
-                    try:
-                        # Determine event type from topic
-                        if len(log.get('topics', [])) == 0:
-                            continue  # Skip logs without topics
-                            
-                        topic0 = log['topics'][0]
-                        event_name = None
-                        event_type = None
-                        
-                        if topic0 == swap_topic:
-                            event_name = "Swap"
-                            event_type = "swaps"
-                        elif topic0 == mint_topic:
-                            event_name = "Mint"  
-                            event_type = "mints"
-                        elif topic0 == burn_topic:
-                            event_name = "Burn"
-                            event_type = "burns"
-                        else:
-                            continue  # Skip non-Uniswap V3 events
-                        
-                        event_abi = event_abis.get(event_name)
-                        if not event_abi:
-                            logger.warning(f"No ABI found for event {event_name}")
-                            continue
-
-                        decoded_event = get_event_data(codec, event_abi, log)
-                        
-                        event = {
-                            "id": f"{log['transactionHash']}_{log['logIndex']}",
-                            "transaction": {"id": log["transactionHash"]},
-                            "logIndex": log["logIndex"],
-                            "blockNumber": int(log["blockNumber"], 16),
-                            "amount0": str(decoded_event['args'].get('amount0', 0)),
-                            "amount1": str(decoded_event['args'].get('amount1', 0)),
-                            "amountUSD": "0"  # Not available in logs
-                        }
-                        
-                        print(f"    🔍 Decoded {event_type}: amount0={event['amount0']}, amount1={event['amount1']}")
-                        
-                        # Add to appropriate list
-                        if event_type == "swaps":
-                            swap_events.append(event)
-                        elif event_type == "mints":
-                            mint_events.append(event)
-                        elif event_type == "burns":
-                            burn_events.append(event)
-                            
-                    except Exception as e:
-                        logger.warning(f"Error decoding event log: {e}")
-                        logger.warning(f"Log data: {log.get('data', 'No data')}")
-                        continue
-                
-                # Build final events dict
-                events = {
-                    "swaps": swap_events,
-                    "mints": mint_events, 
-                    "burns": burn_events
-                }
-                    
-    except Exception as e:
-        logger.error(f"Error fetching events from Etherscan: {e}")
+    data = await fetch_from_etherscan_with_retry(url, params)
+    
+    if not data:
+        print(f"    ℹ️  No events found for pool {pool_address} in block range {start_block}-{end_block}")
         return {"swaps": [], "mints": [], "burns": []}
+
+    logs = data.get("result", [])
+    print(f"    📋 Etherscan returned {len(logs)} total events for pool {pool_address}")
+                
+    # Separate events by type
+    swap_events = []
+    mint_events = []  
+    burn_events = []
+    
+    for log in logs:
+        try:
+            # Determine event type from topic
+            if len(log.get('topics', [])) == 0:
+                continue  # Skip logs without topics
+                
+            topic0 = log['topics'][0]
+            event_name = None
+            event_type = None
+            
+            if topic0 == swap_topic:
+                event_name = "Swap"
+                event_type = "swaps"
+            elif topic0 == mint_topic:
+                event_name = "Mint"  
+                event_type = "mints"
+            elif topic0 == burn_topic:
+                event_name = "Burn"
+                event_type = "burns"
+            else:
+                continue  # Skip non-Uniswap V3 events
+            
+            event_abi = event_abis.get(event_name)
+            if not event_abi:
+                logger.warning(f"No ABI found for event {event_name}")
+                continue
+
+            decoded_event = get_event_data(codec, event_abi, log)
+            
+            event = {
+                "id": f"{log['transactionHash']}_{log['logIndex']}",
+                "transaction": {"id": log["transactionHash"]},
+                "logIndex": log["logIndex"],
+                "blockNumber": int(log["blockNumber"], 16),
+                "amount0": str(decoded_event['args'].get('amount0', 0)),
+                "amount1": str(decoded_event['args'].get('amount1', 0)),
+                "amountUSD": "0"  # Not available in logs
+            }
+            
+            print(f"    🔍 Decoded {event_type}: amount0={event['amount0']}, amount1={event['amount1']}")
+            
+            # Add to appropriate list
+            if event_type == "swaps":
+                swap_events.append(event)
+            elif event_type == "mints":
+                mint_events.append(event)
+            elif event_type == "burns":
+                burn_events.append(event)
+                
+        except Exception as e:
+            logger.warning(f"Error decoding event log: {e}")
+            logger.warning(f"Log data: {log.get('data', 'No data')}")
+            continue
+    
+    # Build final events dict
+    events = {
+        "swaps": swap_events,
+        "mints": mint_events, 
+        "burns": burn_events
+    }
     
     total_events = len(events["swaps"]) + len(events["mints"]) + len(events["burns"])
     print(f"  📊 Total events found: {total_events} (swaps: {len(events['swaps'])}, mints: {len(events['mints'])}, burns: {len(events['burns'])})")
@@ -316,7 +358,6 @@ def compare_events(
     snapshot_keys = set()
     etherscan_keys = set()
     
-    print(f"  📋 Processing snapshot events:")
     for i, event in enumerate(snapshot_events):
         tx_hash = event.log.get("transactionHash", "")
         log_index = str(event.log.get("logIndex", "0"))
@@ -324,7 +365,6 @@ def compare_events(
         snapshot_keys.add(key)
         print(f"    Snapshot {i+1}: tx={tx_hash}, logIndex={log_index}, key={key}")
     
-    print(f"  📋 Processing Etherscan events:")
     for i, event in enumerate(etherscan_events):
         key = create_event_key(event, event_type)
         etherscan_keys.add(key)
@@ -640,10 +680,21 @@ async def test_trades_processor_against_etherscan(
         len(result["burn_comparison"]["missing_in_snapshot"]) 
         for result in all_validation_results
     )
+    total_extra_swaps = sum(
+        len(result["swap_comparison"]["extra_in_snapshot"]) 
+        for result in all_validation_results
+    )
+    total_extra_mints = sum(
+        len(result["mint_comparison"]["extra_in_snapshot"]) 
+        for result in all_validation_results
+    )
+    total_extra_burns = sum(
+        len(result["burn_comparison"]["extra_in_snapshot"]) 
+        for result in all_validation_results
+    )
     
-    print(f"  Missing swaps: {total_missing_swaps}")
-    print(f"  Missing mints: {total_missing_mints}")
-    print(f"  Missing burns: {total_missing_burns}")
+    print(f"  Missing swaps: {total_missing_swaps} - Missing mints: {total_missing_mints} - Missing burns: {total_missing_burns}")
+    print(f"  Extra swaps: {total_extra_swaps} - Extra mints: {total_extra_mints} - Extra burns: {total_extra_burns}")
     
     # Check for data mismatches
     total_data_mismatches = 0
@@ -657,15 +708,19 @@ async def test_trades_processor_against_etherscan(
     
     # Assertions
     assert total_snapshots > 0, "Should have at least one snapshot to validate"
-    
-    # Only assert on missing events if we actually have events to compare
-    if total_etherscan_events > 0:
+
+    etherscan_api_key, etherscan_api_url = get_etherscan_config()
+    if etherscan_api_key and etherscan_api_url:
+        assert total_etherscan_events > 0, "Should have at least one Etherscan event to validate"
         assert total_missing_swaps == 0, f"Found {total_missing_swaps} swaps missing from snapshots"
         assert total_missing_mints == 0, f"Found {total_missing_mints} mints missing from snapshots"
         assert total_missing_burns == 0, f"Found {total_missing_burns} burns missing from snapshots"
+        assert total_extra_swaps == 0, f"Found {total_extra_swaps} extra swaps in snapshots"
+        assert total_extra_mints == 0, f"Found {total_extra_mints} extra mints in snapshots"
+        assert total_extra_burns == 0, f"Found {total_extra_burns} extra burns in snapshots"
         assert total_data_mismatches == 0, f"Found {total_data_mismatches} data mismatches"
     else:
-        print(f"  ℹ️  Skipping event validation assertions since no events were found")
+        print("Skipping Etherscan event count validation since no API key or URL is configured")
     
     print("PASSED: test_trades_processor_against_etherscan")
 
