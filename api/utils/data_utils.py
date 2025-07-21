@@ -1,7 +1,5 @@
 import asyncio
 import json
-import functools
-from async_lru import alru_cache
 from pydantic import BaseModel
 from redis import asyncio as aioredis
 from rpc_helper.rpc import RpcHelper
@@ -42,8 +40,6 @@ logger = default_logger.bind(module='uniswap_v3_api_data_utils')
 WETH = Web3.to_checksum_address(computes_settings.contract_addresses.WETH)
 
 
-### UNISWAP V3 SPECIFIC LOGIC ###
-@alru_cache(maxsize=10000)
 async def get_uniswap_v3_pool_metadata(
         pool_address: str, 
         redis_conn: aioredis.Redis, 
@@ -1044,7 +1040,6 @@ async def get_active_pools(
     return pools_data, total_pools
 
 
-@alru_cache(maxsize=10000)
 async def get_token_metadata(
     redis_conn: aioredis.Redis,
     protocol_state_contract,

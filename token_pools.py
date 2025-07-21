@@ -125,7 +125,7 @@ class TokenPoolsProcessor(GenericProcessorSnapshot):
 
                 # Update snapshot with local pool metadata
                 for pool in local_pools_with_metadata:
-                    snapshot.pools[pool] = UniswapPoolMetadata(**local_pools_with_metadata[pool])
+                    snapshot.pools[pool] = local_pools_with_metadata[pool]
                 
                 snapshots.append((project_id, snapshot))
 
