@@ -10,7 +10,7 @@ from snapshotter.utils.data_utils import get_source_chain_block_time
 from snapshotter.utils.default_logger import logger
 from snapshotter.utils.models.message_models import EpochBase
 from snapshotter.utils.file_utils import read_json_file
-from computes.redis_keys import uniswap_eth_usd_price_zset
+from computes.utils.redis_keys import uniswap_eth_usd_price_zset
 from snapshotter.utils.redis.redis_keys import source_chain_block_time_key
 from computes.settings.config import settings as worker_settings
 

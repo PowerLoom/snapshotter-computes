@@ -21,13 +21,18 @@ uniswap_ticks_pair_map = (
 )
 
 # Caches token prices at specific block heights for Uniswap pairs
-uniswap_pair_cached_block_height_token_price = (
+uniswap_pool_cached_block_height_token_price = (
     "uniswap:pairContract:" + settings.namespace + ":{}:cachedPairBlockHeightTokenPrice"
 )
 
 # Caches token-ETH prices at specific block heights (for multi-protocol use)
 uniswap_cached_block_height_token_eth_price = (
     "uniswap:pairContract:" + settings.namespace + ":{}:cachedBlockHeightTokenEthPrice"
+)
+
+# Caches token-ETH prices at specific block heights (for multi-protocol use)
+uniswap_pool_cached_block_height_token_price_raw = (
+    "uniswap:pairContract:" + settings.namespace + ":{}:cachedBlockHeightTokenPriceRaw"
 )
 
 # Caches tick data at specific block heights for Uniswap pairs
@@ -62,3 +67,7 @@ uniswap_eth_usd_price_zset = (
 def get_pool_metadata_key(pool_address: str) -> str:
     return f'pool_metadata:{pool_address}'
 
+# Redis key for Uniswap best pair map
+uniswap_v3_best_pool_map = (
+    "uniswap:pairContract:" + settings.namespace + ":bestPoolMap"
+)

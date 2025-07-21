@@ -1,7 +1,7 @@
 import asyncio
 import json
-import os
 import time
+import os
 from typing import List, Dict
 from web3 import Web3
 import pytest
@@ -11,8 +11,40 @@ from computes.active_pools import ActivePoolsProcessor
 from computes.utils.models.message_models import ActivePoolsSnapshot
 from snapshotter.utils.default_logger import logger
 from snapshotter.utils.models.message_models import SnapshotProcessMessage
-from snapshotter.settings.config import settings
+from snapshotter.utils.models.settings_model import Settings
 from computes.settings.config import settings as computes_settings
+
+
+def load_event_filter_topics():
+    """Load event filter topics from the test configuration."""
+    # Look for event_filters.json in the test_config directory
+    test_config_dir = os.path.join(os.getcwd(), "test_config")
+    event_filters_path = os.path.join(test_config_dir, "event_filters.json")
+    
+    if not os.path.exists(event_filters_path):
+        pytest.skip(f"Event filters configuration not found at {event_filters_path}")
+    
+    try:
+        with open(event_filters_path, 'r') as f:
+            event_filters_config = json.load(f)
+        
+        # Find the uniswapv3_pool_events filter
+        for filter_config in event_filters_config.get("filters", []):
+            if filter_config.get("filter_name") == "uniswapv3_pool_events":
+                topics = filter_config.get("event_topics", [])
+                if len(topics) >= 3:
+                    return {
+                        "swap_topic": topics[0],
+                        "mint_topic": topics[1], 
+                        "burn_topic": topics[2]
+                    }
+                else:
+                    pytest.skip("Not enough event topics found in uniswapv3_pool_events filter")
+        
+        pytest.skip("uniswapv3_pool_events filter not found in event_filters.json")
+        
+    except Exception as e:
+        pytest.skip(f"Error loading event filters configuration: {e}")
 
 
 def validate_test_environment(app_config):
@@ -87,12 +119,20 @@ async def get_block_transaction_receipts(rpc_helper, block_number: int) -> List[
 
 
 async def count_pool_occurrences_in_logs(receipts: List[Dict], pool_address: str) -> int:
-    """Count how many times a pool address appears in transaction logs"""
+    """Count how many times a pool address appears in transaction logs with relevant topics"""
     count = 0
     pool_address = Web3.to_checksum_address(pool_address)
     
+    # Load the topics from event filters configuration
+    topics_config = load_event_filter_topics()
+    swap_topic = topics_config["swap_topic"]
+    mint_topic = topics_config["mint_topic"]
+    burn_topic = topics_config["burn_topic"]
+    relevant_topics = {swap_topic, mint_topic, burn_topic}
+    
     print(f"\nSearching for pool address in transaction logs: {pool_address}")
     print(f"Total receipts to process: {len(receipts)}")
+    print(f"Filtering for topics: swap, mint, burn")
     
     found_details = []
     complete_logs = []
@@ -111,11 +151,22 @@ async def count_pool_occurrences_in_logs(receipts: List[Dict], pool_address: str
             if log_entry.get('address'):
                 log_address = Web3.to_checksum_address(log_entry['address'])
                 if log_address == pool_address:
-                    count += 1
-                    log_count += 1
-                    receipt_count += 1
-                    found_details.append(f"receipt[{i}] log[{j}] address: {log_address}")
-                    print(f"  Found in receipt[{i}] log[{j}] address: {log_address}")
+                    # Check if this log has one of the relevant topics
+                    topics = log_entry.get('topics', [])
+                    # Convert HexBytes topics to hex strings for comparison
+                    topic_strings = [topic.hex() if hasattr(topic, 'hex') else str(topic) for topic in topics]
+                    first_topic = topic_strings[0] if topic_strings else None
+                    if first_topic and first_topic in relevant_topics:
+                        count += 1
+                        log_count += 1
+                        receipt_count += 1
+                        topic_name = {
+                            swap_topic: "swap",
+                            mint_topic: "mint", 
+                            burn_topic: "burn"
+                        }.get(first_topic, "unknown")
+                        found_details.append(f"receipt[{i}] log[{j}] address: {log_address} topic: {topic_name}")
+                        print(f"  Found in receipt[{i}] log[{j}] address: {log_address} topic: {topic_name}")
             
             if log_count > 0:
                 print(f"    Log {j} total matches: {log_count}")
@@ -138,9 +189,9 @@ async def count_pool_occurrences_in_logs(receipts: List[Dict], pool_address: str
     return count, complete_logs
 
 
-async def verify_redis_data(redis_conn: aioredis.Redis, block_number: int) -> Dict[str, int]:
+async def verify_redis_data(redis_conn: aioredis.Redis, block_number: int, app_config: Settings) -> Dict[str, int]:
     """Verify and return Redis data for a specific block"""
-    key = f"active_pools_per_block:{block_number}:{settings.namespace}"
+    key = f"active_pools_per_block:{block_number}:{app_config.namespace}"
     data = await redis_conn.zrange(key, 0, -1, withscores=True)
 
     print(f"Redis data for block {block_number}: {data}")
@@ -277,7 +328,7 @@ async def test_active_pools_processor(
         pytest.skip(f"Skipping test: block {from_block} not available on configured RPC node.")
 
     # Verify Redis data exists for this block
-    redis_data = await verify_redis_data(redis_conn, from_block)
+    redis_data = await verify_redis_data(redis_conn, from_block, app_config)
     assert redis_data, f"No Redis data found for block {from_block}"
     
     print(f"\nRedis data contains {len(redis_data)} pools:")

@@ -6,7 +6,7 @@ from redis import asyncio as aioredis
 from rpc_helper.rpc import RpcHelper
 from web3 import Web3
 
-from computes.utils.core import get_pair_reserves, get_block_details_in_block_range
+from computes.utils.core import base_snapshot_from_block_range, get_block_details_in_block_range
 from snapshotter.utils.models.message_models import SnapshotProcessMessage
 from snapshotter.utils.callback_helpers import GenericProcessorSnapshot
 from snapshotter.utils.default_logger import logger
@@ -122,7 +122,7 @@ class PairTotalReservesProcessor(GenericProcessorSnapshot):
             )
             
             # Fetch and compute reserves for the current pool
-            base_snapshot_data: Optional[UniswapBaseSnapshot] = await get_pair_reserves(
+            base_snapshot_data: Optional[UniswapBaseSnapshot] = await base_snapshot_from_block_range(
                 pair_address=pool_address,
                 from_block=min_chain_height,
                 to_block=max_chain_height,

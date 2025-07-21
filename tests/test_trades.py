@@ -15,7 +15,9 @@ from computes.trades import TradesProcessor
 from computes.utils.models.message_models import UniswapTradesSnapshot, TradeType
 from snapshotter.utils.default_logger import logger
 from snapshotter.utils.models.message_models import SnapshotProcessMessage
-from snapshotter.settings.config import settings
+from snapshotter.utils.models.settings_model import Settings
+from snapshotter.utils.redis.redis_keys import source_chain_id_key
+
 
 """
 Test for TradesProcessor validation against Uniswap V3 Etherscan data.
@@ -75,9 +77,9 @@ async def validate_block_availability(rpc_helper, block_number: int) -> bool:
         return False
 
 
-async def get_active_pools_for_block(redis_conn: aioredis.Redis, block_number: int) -> Set[str]:
+async def get_active_pools_for_block(redis_conn: aioredis.Redis, block_number: int, app_config: Settings) -> Set[str]:
     """Get active pools for a specific block from Redis"""
-    key = f"active_pools:{block_number}:{settings.namespace}"
+    key = f"active_pools:{block_number}:{app_config.namespace}"
     pools = await redis_conn.smembers(key)
     return {pool.decode('utf-8') for pool in pools}
 
@@ -97,13 +99,71 @@ def get_etherscan_config():
     return api_key, api_url
 
 
+async def fetch_from_etherscan_with_retry(
+    url: str,
+    params: Dict[str, any],
+    max_retries: int = 3,
+    retry_delay: float = 0.25
+) -> Dict[str, any]:
+    """
+    Fetch data from Etherscan API with retry logic.
+    
+    Args:
+        url: Etherscan API URL
+        params: Request parameters
+        max_retries: Maximum number of retry attempts
+        retry_delay: Delay between retries in seconds
+        
+    Returns:
+        API response data or empty dict on failure
+    """
+    attempt = 0
+    
+    while attempt < max_retries:
+        attempt += 1
+        print(f"      📋 Sending Etherscan request attempt {attempt}/{max_retries}")
+        
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=30)) as response:
+                    if response.status != 200:
+                        print(f"      ⚠️  Etherscan request failed with status {response.status}")
+                        if attempt < max_retries:
+                            time.sleep(retry_delay)
+                            continue
+                        return {}
+                    
+                    data = await response.json()
+                    
+                    if data.get("status") != "1":
+                        error_message = data.get('message', 'Unknown error')
+                        result = data.get('result', '')
+                        print(f"      ⚠️  Etherscan API error: {error_message}")
+                        if result and result != error_message:
+                            print(f"      ⚠️  API result: {result}")
+                        
+                        if attempt < max_retries:
+                            time.sleep(retry_delay)
+                            continue
+                        return {}
+                    
+                    return data
+                    
+        except Exception as e:
+            print(f"      ⚠️  Error fetching events from Etherscan: {e}")
+            if attempt < max_retries:
+                time.sleep(retry_delay)
+                continue
+            return {}
+    
+    return {}
+
+
 async def fetch_uniswap_v3_events_from_etherscan(
     pool_address: str,
     start_block: int,
     end_block: int,
-    redis_conn=None,
-    protocol_state_contract=None,
-    anchor_rpc_helper=None
+    source_chain_id: int,
 ) -> Dict[str, List]:
     """
     Fetch Uniswap V3 events (swaps, mints, burns) from Etherscan API.
@@ -118,32 +178,7 @@ async def fetch_uniswap_v3_events_from_etherscan(
     """
     api_key, api_url = get_etherscan_config()
     if not api_key or not api_url:
-        return {"swaps": [], "mints": [], "burns": []}  # Return empty dict if missing config
-    
-    # Get source chain ID for Etherscan v2 API (if available)
-    source_chain_id = 1  # Default to Ethereum mainnet
-    if redis_conn and protocol_state_contract and anchor_rpc_helper:
-        try:
-            from snapshotter.utils.redis.redis_keys import source_chain_id_key
-            source_chain_id_data = await redis_conn.get(source_chain_id_key())
-            
-            if source_chain_id_data:
-                source_chain_id = int(source_chain_id_data.decode('utf-8'))
-                print(f"      ℹ️  Using cached source chain ID: {source_chain_id}")
-            else:
-                # If not in cache, fetch from blockchain but don't cache (test mode)
-                [source_chain_id] = await anchor_rpc_helper.web3_call(
-                    tasks=[
-                        ('SOURCE_CHAIN_ID', [Web3.to_checksum_address(settings.data_market)]),
-                    ],
-                    contract_addr=protocol_state_contract.address,
-                    abi=protocol_state_contract.abi,
-                )
-                print(f"      ℹ️  Fetched source chain ID from contract: {source_chain_id}")
-        except Exception as e:
-            print(f"      ⚠️  Could not get source chain ID: {e}")
-            print(f"      ℹ️  Using default Ethereum mainnet (chain ID 1)")
-            source_chain_id = 1
+        pytest.fail("No etherscan api key or url configured.")
     
     # Uniswap V3 event signatures
     swap_topic = "0xc42079f94a6350d7e6235f29174924f928cc2ac818eb64fed8004e115fbcca67"  # Swap event
@@ -197,101 +232,86 @@ async def fetch_uniswap_v3_events_from_etherscan(
         params["chainid"] = source_chain_id
     # Chain-specific APIs (basescan.org, polygonscan.com, etc.) don't need chainid
         
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=30)) as response:
-                if response.status != 200:
-                    logger.error(f"Etherscan request failed with status {response.status}")
-                    return {"swaps": [], "mints": [], "burns": []}
-                
-                data = await response.json()
-                
-                if data.get("status") != "1":
-                    error_message = data.get('message', 'Unknown error')
-                    logger.warning(f"Etherscan API returned status 0: {error_message}")
-                    
-                    if "No records found" in error_message:
-                        print(f"    ℹ️  No events found for pool {pool_address} in block range {start_block}-{end_block}")
-                        return {"swaps": [], "mints": [], "burns": []}
-                    else:
-                        logger.error(f"Etherscan API error: {error_message}")
-                        return {"swaps": [], "mints": [], "burns": []}
-                
-                logs = data.get("result", [])
-                print(f"    📋 Etherscan returned {len(logs)} total events for pool {pool_address}")
-                
-                # Separate events by type
-                swap_events = []
-                mint_events = []  
-                burn_events = []
-                
-                for log in logs:
-                    try:
-                        # Determine event type from topic
-                        if len(log.get('topics', [])) == 0:
-                            continue  # Skip logs without topics
-                            
-                        topic0 = log['topics'][0]
-                        event_name = None
-                        event_type = None
-                        
-                        if topic0 == swap_topic:
-                            event_name = "Swap"
-                            event_type = "swaps"
-                        elif topic0 == mint_topic:
-                            event_name = "Mint"  
-                            event_type = "mints"
-                        elif topic0 == burn_topic:
-                            event_name = "Burn"
-                            event_type = "burns"
-                        else:
-                            continue  # Skip non-Uniswap V3 events
-                        
-                        event_abi = event_abis.get(event_name)
-                        if not event_abi:
-                            logger.warning(f"No ABI found for event {event_name}")
-                            continue
-
-                        decoded_event = get_event_data(codec, event_abi, log)
-                        
-                        event = {
-                            "id": f"{log['transactionHash']}_{log['logIndex']}",
-                            "transaction": {"id": log["transactionHash"]},
-                            "logIndex": log["logIndex"],
-                            "blockNumber": int(log["blockNumber"], 16),
-                            "amount0": str(decoded_event['args'].get('amount0', 0)),
-                            "amount1": str(decoded_event['args'].get('amount1', 0)),
-                            "amountUSD": "0"  # Not available in logs
-                        }
-                        
-                        print(f"    🔍 Decoded {event_type}: amount0={event['amount0']}, amount1={event['amount1']}")
-                        
-                        # Add to appropriate list
-                        if event_type == "swaps":
-                            swap_events.append(event)
-                        elif event_type == "mints":
-                            mint_events.append(event)
-                        elif event_type == "burns":
-                            burn_events.append(event)
-                            
-                    except Exception as e:
-                        logger.warning(f"Error decoding event log: {e}")
-                        logger.warning(f"Log data: {log.get('data', 'No data')}")
-                        continue
-                
-                # Build final events dict
-                events = {
-                    "swaps": swap_events,
-                    "mints": mint_events, 
-                    "burns": burn_events
-                }
-                    
-    except Exception as e:
-        logger.error(f"Error fetching events from Etherscan: {e}")
+    data = await fetch_from_etherscan_with_retry(url, params)
+    
+    if not data:
+        print(f"    ℹ️  No events found for pool {pool_address} in block range {start_block}-{end_block}")
         return {"swaps": [], "mints": [], "burns": []}
+
+    logs = data.get("result", [])
+    print(f"    📋 Etherscan returned {len(logs)} total events for pool {pool_address}")
+                
+    # Separate events by type
+    swap_events = []
+    mint_events = []  
+    burn_events = []
+    
+    for log in logs:
+        try:
+            # Determine event type from topic
+            if len(log.get('topics', [])) == 0:
+                continue  # Skip logs without topics
+                
+            topic0 = log['topics'][0]
+            event_name = None
+            event_type = None
+            
+            if topic0 == swap_topic:
+                event_name = "Swap"
+                event_type = "swaps"
+            elif topic0 == mint_topic:
+                event_name = "Mint"  
+                event_type = "mints"
+            elif topic0 == burn_topic:
+                event_name = "Burn"
+                event_type = "burns"
+            else:
+                continue  # Skip non-Uniswap V3 events
+            
+            event_abi = event_abis.get(event_name)
+            if not event_abi:
+                logger.warning(f"No ABI found for event {event_name}")
+                continue
+
+            decoded_event = get_event_data(codec, event_abi, log)
+            
+            event = {
+                "id": f"{log['transactionHash']}_{log['logIndex']}",
+                "transaction": {"id": log["transactionHash"]},
+                "logIndex": log["logIndex"],
+                "blockNumber": int(log["blockNumber"], 16),
+                "amount0": str(decoded_event['args'].get('amount0', 0)),
+                "amount1": str(decoded_event['args'].get('amount1', 0)),
+                "amountUSD": "0"  # Not available in logs
+            }
+            
+            print(f"    🔍 Decoded {event_type}: amount0={event['amount0']}, amount1={event['amount1']}")
+            
+            # Add to appropriate list
+            if event_type == "swaps":
+                swap_events.append(event)
+            elif event_type == "mints":
+                mint_events.append(event)
+            elif event_type == "burns":
+                burn_events.append(event)
+                
+        except Exception as e:
+            logger.warning(f"Error decoding event log: {e}")
+            logger.warning(f"Log data: {log.get('data', 'No data')}")
+            continue
+    
+    # Build final events dict
+    events = {
+        "swaps": swap_events,
+        "mints": mint_events, 
+        "burns": burn_events
+    }
     
     total_events = len(events["swaps"]) + len(events["mints"]) + len(events["burns"])
     print(f"  📊 Total events found: {total_events} (swaps: {len(events['swaps'])}, mints: {len(events['mints'])}, burns: {len(events['burns'])})")
+
+    # small sleep to avoid rate limits
+    time.sleep(0.25)
     
     return events
 
@@ -338,7 +358,6 @@ def compare_events(
     snapshot_keys = set()
     etherscan_keys = set()
     
-    print(f"  📋 Processing snapshot events:")
     for i, event in enumerate(snapshot_events):
         tx_hash = event.log.get("transactionHash", "")
         log_index = str(event.log.get("logIndex", "0"))
@@ -346,7 +365,6 @@ def compare_events(
         snapshot_keys.add(key)
         print(f"    Snapshot {i+1}: tx={tx_hash}, logIndex={log_index}, key={key}")
     
-    print(f"  📋 Processing Etherscan events:")
     for i, event in enumerate(etherscan_events):
         key = create_event_key(event, event_type)
         etherscan_keys.add(key)
@@ -435,9 +453,7 @@ def compare_events(
 async def validate_trades_snapshot_against_etherscan(
     trades_snapshot: UniswapTradesSnapshot,
     pool_address: str,
-    redis_conn=None,
-    protocol_state_contract=None,
-    anchor_rpc_helper=None
+    source_chain_id: int,
 ) -> Dict:
     """
     Validate trades snapshot against Etherscan data.
@@ -455,12 +471,10 @@ async def validate_trades_snapshot_against_etherscan(
     
     # Fetch Etherscan data for the same block range
     etherscan_data = await fetch_uniswap_v3_events_from_etherscan(
-        pool_address,
-        trades_snapshot.epoch.begin,
-        trades_snapshot.epoch.end,
-        redis_conn,
-        protocol_state_contract,
-        anchor_rpc_helper
+        pool_address=pool_address,
+        start_block=trades_snapshot.epoch.begin,
+        end_block=trades_snapshot.epoch.end,
+        source_chain_id=source_chain_id,
     )
     
     print(f"  Etherscan data:")
@@ -549,7 +563,11 @@ async def test_trades_processor_against_etherscan(
 
     # Get active pools for the block
     print(f"\n🔍 Getting active pools for block {from_block}...")
-    active_pools = await get_active_pools_for_block(redis_conn, from_block)
+    active_pools = await get_active_pools_for_block(
+        redis_conn=redis_conn, 
+        block_number=from_block, 
+        app_config=app_config
+    )
     
     if not active_pools:
         pytest.skip(f"No active pools found for block {from_block}")
@@ -586,17 +604,36 @@ async def test_trades_processor_against_etherscan(
     # Validate each snapshot against Etherscan data
     print(f"\n🔍 Validating snapshots against Etherscan data...")
     all_validation_results = []
+
+    # Get source chain ID for Etherscan v2 API (read-only, don't cache in Redis for tests)
+    try:
+        source_chain_id_data = await redis_conn.get(source_chain_id_key())
+        
+        if source_chain_id_data:
+            source_chain_id = int(source_chain_id_data.decode('utf-8'))
+            print(f"      ℹ️  Using cached source chain ID: {source_chain_id}")
+        else:
+            # If not in cache, fetch from blockchain but don't cache (test mode)
+            [source_chain_id] = await anchor_rpc_helper.web3_call(
+                tasks=[
+                    ('SOURCE_CHAIN_ID', [Web3.to_checksum_address(app_config.data_market)]),
+                ],
+                contract_addr=protocol_state_contract.address,
+                abi=protocol_state_contract.abi,
+            )
+            print(f"      ℹ️  Fetched source chain ID from contract: {source_chain_id}")
+    except Exception as e:
+        print(f"      ⚠️  Could not get source chain ID: {e}")
+        pytest.fail("Could not get source chain ID")
     
     for snapshot_key, trades_snapshot in results:
         pool_address = trades_snapshot.address
         print(f"\n📋 Processing snapshot for pool: {pool_address}")
         
         validation_result = await validate_trades_snapshot_against_etherscan(
-            trades_snapshot,
-            pool_address,
-            redis_conn,
-            protocol_state_contract,
-            anchor_rpc_helper
+            trades_snapshot=trades_snapshot,
+            pool_address=pool_address,
+            source_chain_id=source_chain_id,
         )
         all_validation_results.append(validation_result)
     
@@ -643,10 +680,21 @@ async def test_trades_processor_against_etherscan(
         len(result["burn_comparison"]["missing_in_snapshot"]) 
         for result in all_validation_results
     )
+    total_extra_swaps = sum(
+        len(result["swap_comparison"]["extra_in_snapshot"]) 
+        for result in all_validation_results
+    )
+    total_extra_mints = sum(
+        len(result["mint_comparison"]["extra_in_snapshot"]) 
+        for result in all_validation_results
+    )
+    total_extra_burns = sum(
+        len(result["burn_comparison"]["extra_in_snapshot"]) 
+        for result in all_validation_results
+    )
     
-    print(f"  Missing swaps: {total_missing_swaps}")
-    print(f"  Missing mints: {total_missing_mints}")
-    print(f"  Missing burns: {total_missing_burns}")
+    print(f"  Missing swaps: {total_missing_swaps} - Missing mints: {total_missing_mints} - Missing burns: {total_missing_burns}")
+    print(f"  Extra swaps: {total_extra_swaps} - Extra mints: {total_extra_mints} - Extra burns: {total_extra_burns}")
     
     # Check for data mismatches
     total_data_mismatches = 0
@@ -660,15 +708,19 @@ async def test_trades_processor_against_etherscan(
     
     # Assertions
     assert total_snapshots > 0, "Should have at least one snapshot to validate"
-    
-    # Only assert on missing events if we actually have events to compare
-    if total_etherscan_events > 0:
+
+    etherscan_api_key, etherscan_api_url = get_etherscan_config()
+    if etherscan_api_key and etherscan_api_url:
+        assert total_etherscan_events > 0, "Should have at least one Etherscan event to validate"
         assert total_missing_swaps == 0, f"Found {total_missing_swaps} swaps missing from snapshots"
         assert total_missing_mints == 0, f"Found {total_missing_mints} mints missing from snapshots"
         assert total_missing_burns == 0, f"Found {total_missing_burns} burns missing from snapshots"
+        assert total_extra_swaps == 0, f"Found {total_extra_swaps} extra swaps in snapshots"
+        assert total_extra_mints == 0, f"Found {total_extra_mints} extra mints in snapshots"
+        assert total_extra_burns == 0, f"Found {total_extra_burns} extra burns in snapshots"
         assert total_data_mismatches == 0, f"Found {total_data_mismatches} data mismatches"
     else:
-        print(f"  ℹ️  Skipping event validation assertions since no events were found")
+        print("Skipping Etherscan event count validation since no API key or URL is configured")
     
     print("PASSED: test_trades_processor_against_etherscan")
 

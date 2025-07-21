@@ -9,7 +9,7 @@ from typing import List, Optional, Tuple, Type, Dict, Any
 from web3 import Web3
 from ipfs_client.main import AsyncIPFSClient
 
-from computes.redis_keys import uniswap_eth_usd_price_zset
+from computes.utils.redis_keys import uniswap_eth_usd_price_zset
 from computes.settings.config import settings as computes_settings
 from computes.utils.models.message_models import UniswapBaseSnapshot, UniswapTradesSnapshot, TradeType, AllUniswapTradesSnapshot
 from computes.api.models.data_models import (
@@ -297,6 +297,10 @@ async def get_uniswap_v3_base_snapshots_for_token(
     if not token_pools:
         logger.error(f"No token pools found for token {token_address}")
         return None
+    
+    if len(token_pools.pools) > 20:
+        raise Exception(f"Too many pools found for token {token_address}, this is not supported yet")
+    
     data = {}
     for pool in token_pools.pools:
         base_snapshot = await get_uniswap_v3_base_snapshot(
@@ -583,6 +587,9 @@ async def get_uniswap_v3_token_prices_all_snapshot(
     if not token_pools_snapshot_result or not token_pools_snapshot_result.pools:
         logger.error(f"No token pools snapshot data found for token {token_address}")
         return None
+
+    if len(token_pools_snapshot_result.pools) > 20:
+        raise Exception(f"Too many pools found for token {token_address}, this is not supported yet")
     
     logger.info(f"Token pools snapshot result against token {token_address}: {token_pools_snapshot_result}")
     # Get list of pool addresses
@@ -1373,6 +1380,9 @@ async def get_uniswap_trade_volume_agg_all_pools(
     if not token_pools:
         logger.error(f"No token pools found for token {token_address}")
         return None
+
+    if len(token_pools.pools) > 20:
+        raise Exception(f"Too many pools found for token {token_address}, this is not supported yet")
     
     for pool in token_pools.pools:
         tasks.append(get_uniswap_trade_volume_agg(

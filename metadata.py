@@ -29,50 +29,6 @@ class MetadataProcessor(GenericProcessorSnapshot):
         """Initialize the MetadataProcessor with a logger instance."""
         self._logger = logger.bind(module="MetadataProcessor")
     
-    async def get_pool_metadata(
-        self, 
-        pool_address: str, 
-        redis_conn: aioredis.Redis, 
-        anchor_rpc_helper: RpcHelper,
-        ipfs_reader: AsyncIPFSClient,
-        protocol_state_contract,
-        task_type: str = 'metadata:{poolAddress}:{Namespace}',
-    ) -> Optional[UniswapPoolMetadata]:
-        """
-        Retrieve metadata for a specific pool, checking cache first then fetching from chain.
-
-        Args:
-            pool_address (str): The address of the pool to get metadata for
-            redis_conn (aioredis.Redis): Redis connection for cache operations
-            anchor_rpc_helper (RpcHelper): RPC helper for blockchain interactions
-            ipfs_reader (AsyncIPFSClient): IPFS client for reading data
-            protocol_state_contract: Contract instance for protocol state
-            task_type (str): Format string for project ID construction
-
-        Returns:
-            Optional[UniswapPoolMetadata]: Pool metadata if found, None otherwise
-        """
-        # Check Redis cache first for existing metadata
-        cache_key = f'pool_metadata:{pool_address}'
-        cached_data = await redis_conn.get(cache_key)
-        if cached_data:
-            self._logger.info(f"Found cached metadata for pool {pool_address}")
-            return UniswapPoolMetadata(**json.loads(cached_data))
-
-        try:
-            # Get the latest snapshot from chain if not in cache
-            project_id = task_type.format(poolAddress=pool_address, Namespace=settings.namespace)
-            latest_snapshot = await get_project_latest_snapshot(
-                redis_conn, protocol_state_contract, anchor_rpc_helper, ipfs_reader, project_id
-            )
-            if not latest_snapshot:
-                self._logger.error(f"No latest snapshot found for pool {pool_address} while processing metadata")
-                return None
-            return UniswapPoolMetadata(**latest_snapshot)
-        except Exception as e:
-            self._logger.opt(exception=e).error(f"Error getting latest snapshot for pool {pool_address} while processing metadata")
-            return None
-
     async def _process_pool(
         self,
         epoch: SnapshotProcessMessage,

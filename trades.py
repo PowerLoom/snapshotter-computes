@@ -1,13 +1,12 @@
 import time
 import json
-from typing import List, Tuple, Union
+from typing import List, Tuple
 from ipfs_client.main import AsyncIPFSClient
 from redis import asyncio as aioredis
 from rpc_helper.rpc import RpcHelper
 from web3 import Web3
 
-from computes.metadata import MetadataProcessor
-from computes.redis_keys import uniswap_eth_usd_price_zset
+from computes.utils.redis_keys import uniswap_eth_usd_price_zset
 from computes.utils.core import get_block_details_in_block_range
 from computes.utils.core import get_pair_trade_volume
 from computes.utils.models.message_models import (
@@ -119,9 +118,6 @@ class TradesProcessor(GenericProcessorSnapshot):
             len(active_pool_addresses)
         )
 
-        # Initialize metadata processor and fetch ETH prices
-        metadata_processor = MetadataProcessor()
-
         # Fetch ETH prices for the epoch range
         eth_price_dict = await redis_conn.zrangebyscore(
             name=uniswap_eth_usd_price_zset,
@@ -164,7 +160,6 @@ class TradesProcessor(GenericProcessorSnapshot):
                 anchor_rpc_helper=anchor_rpc_helper,
                 ipfs_reader=ipfs_reader,
                 protocol_state_contract=protocol_state_contract,
-                metadata_processor=metadata_processor,
                 block_details_dict=block_details_dict,
             )
 

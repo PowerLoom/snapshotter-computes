@@ -4,12 +4,14 @@ import os
 from typing import Dict, Set
 import pytest
 from redis import asyncio as aioredis
+from web3 import Web3
 
 from computes.token_pools import TokenPoolsProcessor
 from computes.utils.models.message_models import UniswapTokenPoolsSnapshot
 from snapshotter.utils.models.message_models import SnapshotProcessMessage
-from snapshotter.settings.config import settings
+from snapshotter.utils.models.settings_model import Settings
 from snapshotter.utils.data_utils import get_project_latest_snapshot
+from computes.settings.config import settings as computes_settings
 
 
 """
@@ -64,6 +66,23 @@ def get_weth_address():
     return weth_address
 
 
+def get_excluded_tokens():
+    """Get tokens to exclude from testing (USDC, USDT) from compute settings."""
+    excluded_tokens = set()
+    
+    # Add USDC and USDT from compute settings
+    if hasattr(computes_settings.contract_addresses, 'USDC'):
+        excluded_tokens.add(Web3.to_checksum_address(computes_settings.contract_addresses.USDC))
+    
+    if hasattr(computes_settings.contract_addresses, 'USDT'):
+        excluded_tokens.add(Web3.to_checksum_address(computes_settings.contract_addresses.USDT))
+
+    if hasattr(computes_settings.contract_addresses, 'DAI'):
+        excluded_tokens.add(Web3.to_checksum_address(computes_settings.contract_addresses.DAI))
+    
+    return excluded_tokens
+
+
 async def validate_block_availability(rpc_helper, block_number: int) -> bool:
     """Check if a block number is available in the RPC node"""
     try:
@@ -76,9 +95,9 @@ async def validate_block_availability(rpc_helper, block_number: int) -> bool:
         return False
 
 
-async def get_active_pools_for_block(redis_conn: aioredis.Redis, block_number: int) -> Set[str]:
+async def get_active_pools_for_block(redis_conn: aioredis.Redis, block_number: int, app_config: Settings) -> Set[str]:
     """Get active pools for a specific block from Redis"""
-    key = f"active_pools:{block_number}:{settings.namespace}"
+    key = f"active_pools:{block_number}:{app_config.namespace}"
     pools = await redis_conn.smembers(key)
     return {pool.decode('utf-8') for pool in pools}
 
@@ -86,6 +105,7 @@ async def get_active_pools_for_block(redis_conn: aioredis.Redis, block_number: i
 async def get_pool_metadata(
     redis_conn: aioredis.Redis, 
     pool_address: str,
+    app_config: Settings,
     anchor_rpc_helper=None,
     ipfs_reader=None,
     protocol_state_contract=None
@@ -100,7 +120,7 @@ async def get_pool_metadata(
     # If not in cache and we have the required dependencies, try latest snapshot
     if anchor_rpc_helper and ipfs_reader and protocol_state_contract:
         try:
-            metadata_project_id = f"metadata:{pool_address}:{settings.namespace}"
+            metadata_project_id = f"metadata:{pool_address}:{app_config.namespace}"
             pool_metadata = await get_project_latest_snapshot(
                 redis_conn, protocol_state_contract, anchor_rpc_helper, ipfs_reader, metadata_project_id
             )
@@ -123,10 +143,11 @@ async def get_token_pools_snapshot(
     anchor_rpc_helper,
     ipfs_reader,
     protocol_state_contract,
-    token_address: str
+    token_address: str,
+    app_config: Settings,
 ) -> UniswapTokenPoolsSnapshot:
     """Get token pools snapshot from IPFS"""
-    project_id = f"tokenPools:{token_address}:{settings.namespace}"
+    project_id = f"tokenPools:{token_address}:{app_config.namespace}"
     
     token_pools_snapshot = await get_project_latest_snapshot(
         redis_conn, protocol_state_contract, anchor_rpc_helper, ipfs_reader, project_id
@@ -158,7 +179,8 @@ async def validate_token_pools_data(
     ipfs_reader,
     protocol_state_contract,
     token_address: str,
-    pool_addresses: Set[str]
+    pool_addresses: Set[str],
+    app_config: Settings,
 ) -> Dict:
     """
     Validate token pools data for a specific token.
@@ -182,7 +204,12 @@ async def validate_token_pools_data(
     
     # Get token pools snapshot from IPFS
     token_pools_snapshot = await get_token_pools_snapshot(
-        redis_conn, anchor_rpc_helper, ipfs_reader, protocol_state_contract, token_address
+        redis_conn=redis_conn, 
+        anchor_rpc_helper=anchor_rpc_helper, 
+        ipfs_reader=ipfs_reader, 
+        protocol_state_contract=protocol_state_contract, 
+        token_address=token_address,
+        app_config=app_config
     )
     snapshot_pools = set(token_pools_snapshot.pools.keys())
     print(f"  Pools from IPFS snapshot: {len(snapshot_pools)} pools")
@@ -204,11 +231,12 @@ async def validate_token_pools_data(
     # Validate each pool
     for pool_address in all_pools_to_check:
         pool_metadata = await get_pool_metadata(
-            redis_conn, 
-            pool_address,
-            anchor_rpc_helper,
-            ipfs_reader,
-            protocol_state_contract
+            redis_conn=redis_conn, 
+            pool_address=pool_address,
+            app_config=app_config,
+            anchor_rpc_helper=anchor_rpc_helper,
+            ipfs_reader=ipfs_reader,
+            protocol_state_contract=protocol_state_contract
         )
         
         if not pool_metadata:
@@ -263,7 +291,7 @@ async def test_token_pools_processor(
 
     # Get active pools for the block
     print(f"\n🔍 Getting active pools for block {from_block}...")
-    active_pools = await get_active_pools_for_block(redis_conn, from_block)
+    active_pools = await get_active_pools_for_block(redis_conn=redis_conn, block_number=from_block, app_config=app_config)
     
     if not active_pools:
         pytest.skip(f"No active pools found for block {from_block}")
@@ -274,7 +302,10 @@ async def test_token_pools_processor(
     print(f"\n📋 Collecting token information from active pools...")
     token_to_pools = {}
     WETH_ADDRESS = get_weth_address()
+    EXCLUDED_TOKENS = get_excluded_tokens()
+    
     print(f"Using WETH address: {WETH_ADDRESS}")
+    print(f"Excluding tokens: {EXCLUDED_TOKENS}")
     
     for pool_address in active_pools:
         pool_metadata = await get_pool_metadata(
@@ -292,25 +323,45 @@ async def test_token_pools_processor(
         token0_address = pool_metadata.get("token0", {}).get("address", "")
         token1_address = pool_metadata.get("token1", {}).get("address", "")
         
+        # Normalize addresses for comparison
+        token0_checksum = Web3.to_checksum_address(token0_address) if token0_address else ""
+        token1_checksum = Web3.to_checksum_address(token1_address) if token1_address else ""
+        weth_checksum = Web3.to_checksum_address(WETH_ADDRESS)
+        
         # Skip WETH pools as per processor logic
-        if token0_address == WETH_ADDRESS:
-            if token1_address not in token_to_pools:
-                token_to_pools[token1_address] = set()
-            token_to_pools[token1_address].add(pool_address)
-        elif token1_address == WETH_ADDRESS:
-            if token0_address not in token_to_pools:
-                token_to_pools[token0_address] = set()
-            token_to_pools[token0_address].add(pool_address)
+        if token0_checksum == weth_checksum:
+            # Only add token1 if it's not in excluded list
+            if token1_checksum not in EXCLUDED_TOKENS:
+                if token1_checksum not in token_to_pools:
+                    token_to_pools[token1_checksum] = set()
+                token_to_pools[token1_checksum].add(pool_address)
+            else:
+                print(f"  ⏭️  Skipping excluded token {token1_checksum} from pool {pool_address}")
+        elif token1_checksum == weth_checksum:
+            # Only add token0 if it's not in excluded list
+            if token0_checksum not in EXCLUDED_TOKENS:
+                if token0_checksum not in token_to_pools:
+                    token_to_pools[token0_checksum] = set()
+                token_to_pools[token0_checksum].add(pool_address)
+            else:
+                print(f"  ⏭️  Skipping excluded token {token0_checksum} from pool {pool_address}")
         else:
-            # Both tokens are non-WETH, add both
-            if token0_address not in token_to_pools:
-                token_to_pools[token0_address] = set()
-            if token1_address not in token_to_pools:
-                token_to_pools[token1_address] = set()
-            token_to_pools[token0_address].add(pool_address)
-            token_to_pools[token1_address].add(pool_address)
+            # Both tokens are non-WETH, add both if not excluded
+            if token0_checksum not in EXCLUDED_TOKENS:
+                if token0_checksum not in token_to_pools:
+                    token_to_pools[token0_checksum] = set()
+                token_to_pools[token0_checksum].add(pool_address)
+            else:
+                print(f"  ⏭️  Skipping excluded token {token0_checksum} from pool {pool_address}")
+                
+            if token1_checksum not in EXCLUDED_TOKENS:
+                if token1_checksum not in token_to_pools:
+                    token_to_pools[token1_checksum] = set()
+                token_to_pools[token1_checksum].add(pool_address)
+            else:
+                print(f"  ⏭️  Skipping excluded token {token1_checksum} from pool {pool_address}")
     
-    print(f"Found {len(token_to_pools)} unique tokens (excluding WETH)")
+    print(f"Found {len(token_to_pools)} unique tokens (excluding WETH, USDC, USDT)")
     
     # Validate token pools for each token
     print(f"\n🔍 Validating token pools data...")
@@ -318,12 +369,13 @@ async def test_token_pools_processor(
     
     for token_address, pool_addresses in token_to_pools.items():
         validation_result = await validate_token_pools_data(
-            redis_conn,
-            anchor_rpc_helper,
-            ipfs_reader,
-            protocol_state_contract,
-            token_address,
-            pool_addresses
+            redis_conn=redis_conn,
+            anchor_rpc_helper=anchor_rpc_helper,
+            ipfs_reader=ipfs_reader,
+            protocol_state_contract=protocol_state_contract,
+            token_address=token_address,
+            pool_addresses=pool_addresses,
+            app_config=app_config
         )
         all_validation_results.append(validation_result)
     

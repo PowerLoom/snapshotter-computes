@@ -1,3 +1,4 @@
+import aiohttp
 import asyncio
 import json
 import os
@@ -11,7 +12,8 @@ from computes.active_tokens import ActiveTokensProcessor
 from computes.utils.models.message_models import ActiveTokensSnapshot
 from snapshotter.utils.default_logger import logger
 from snapshotter.utils.models.message_models import SnapshotProcessMessage
-from snapshotter.settings.config import settings
+from snapshotter.utils.models.settings_model import Settings
+from snapshotter.utils.redis.redis_keys import source_chain_id_key
 from computes.settings.config import settings as computes_settings
 
 
@@ -149,20 +151,25 @@ async def verify_pool_on_factory(rpc_helper, pool_address: str, factory_address:
         return False, {}
 
 
-def get_etherscan_api_key():
-    """Get Etherscan API key from environment variable."""
+def get_etherscan_config():
+    """Get Etherscan configuration from environment variables."""
     api_key = os.getenv('TEST_ETHERSCAN_API_KEY')
-    if not api_key:
-        pytest.skip(
-            "TEST_ETHERSCAN_API_KEY not configured in environment. "
-            "Please get a free API key from https://etherscan.io/apis"
-        )
-    return api_key
+    api_url = os.getenv('TEST_ETHERSCAN_URL')
+
+    if not api_key or not api_url:
+        return None, None  # Skip etherscan validation if missing config
+
+    # Ensure URL ends with /api if not already present
+    if not api_url.endswith('/api'):
+        api_url = api_url.rstrip('/') + '/api'
+
+    return api_key, api_url
 
 
 async def extract_tokens_from_etherscan_detailed(
     start_block: int,
     end_block: int,
+    source_chain_id: int,
     rpc_helper
 ) -> Tuple[Dict[str, int], Dict[str, List[Dict]]]:
     """
@@ -178,9 +185,8 @@ async def extract_tokens_from_etherscan_detailed(
         - Dictionary mapping token addresses to their frequency of occurrence
         - Dictionary mapping token addresses to the events that caused them to be active
     """
-    import aiohttp
     
-    api_key = get_etherscan_api_key()
+    api_key, api_url = get_etherscan_config()
     
     # Uniswap V3 event signatures
     swap_topic = "0xc42079f94a6350d7e6235f29174924f928cc2ac818eb64fed8004e115fbcca67"
@@ -188,22 +194,17 @@ async def extract_tokens_from_etherscan_detailed(
     burn_topic = "0x0c396cd989a39f4459b5fa1aed6a9a8dcdbc45908acfd67e028cd568da98982c"
     
     print(f"\n🔍 Extracting detailed token frequencies from Etherscan for blocks {start_block} to {end_block}")
-    weth_address = Web3.to_checksum_address(computes_settings.contract_addresses.WETH)
-    print(f"  📍 WETH Address: {weth_address}")
-    print(f"  📍 Only counting pools that contain WETH as token0 or token1")
     
     token_frequencies = {}
     token_event_details = {}  # Track which events each token came from
     verified_pools_cache = {}
     total_events_processed = 0
-    weth_pools_found = 0
-    non_weth_pools_skipped = 0
     
     # Fetch events for each type and count token occurrences
     for event_type, topic in [("swap", swap_topic), ("mint", mint_topic), ("burn", burn_topic)]:
         print(f"  📡 Processing {event_type} events...")
         
-        url = "https://api.etherscan.io/api"
+        url = api_url
         params = {
             "module": "logs",
             "action": "getLogs",
@@ -212,6 +213,10 @@ async def extract_tokens_from_etherscan_detailed(
             "toBlock": end_block,
             "apikey": api_key
         }
+    
+        # Only add chainid for Etherscan v2 API, not for chain-specific APIs
+        if "etherscan.io" in api_url and "/v2" in api_url:
+            params["chainid"] = source_chain_id
         
         try:
             async with aiohttp.ClientSession() as session:
@@ -255,16 +260,6 @@ async def extract_tokens_from_etherscan_detailed(
                             if pool_info:
                                 token0 = pool_info['token0']
                                 token1 = pool_info['token1']
-                                
-                                # Only process pools that have WETH as one of the tokens
-                                if token0 != weth_address and token1 != weth_address:
-                                    non_weth_pools_skipped += 1
-                                    print(f"      ⏭️  Skipping pool {pool_address} - no WETH token")
-                                    print(f"         Tokens: {token0} & {token1}")
-                                    print(f"         WETH: {weth_address}")
-                                    continue
-                                
-                                weth_pools_found += 1
                                 
                                 # Create event detail record
                                 event_detail = {
@@ -312,19 +307,15 @@ async def extract_tokens_from_etherscan_detailed(
     
     print(f"\n  📊 ETHERSCAN PROCESSING SUMMARY:")
     print(f"     Total events processed: {total_events_processed}")
-    print(f"     WETH pools found: {weth_pools_found}")
-    print(f"     Non-WETH pools skipped: {non_weth_pools_skipped}")
     print(f"     Unique tokens in WETH pools: {len(token_frequencies)}")
     print(f"  📊 Final detailed token frequencies: {token_frequencies}")
     return token_frequencies, token_event_details
 
 
-async def verify_redis_token_data(redis_conn: aioredis.Redis, block_number: int) -> Dict[str, int]:
+async def verify_redis_token_data(redis_conn: aioredis.Redis, block_number: int, app_config: Settings) -> Dict[str, int]:
     """Verify and return Redis token data for a specific block"""
-    key = f"active_tokens_per_block:{block_number}:{settings.namespace}"
+    key = f"active_tokens_per_block:{block_number}:{app_config.namespace}"
     data = await redis_conn.zrange(key, 0, -1, withscores=True)
-
-    print(f"Redis token data for block {block_number}: {data}")
     
     if not data:
         pytest.skip(f"No Redis token data found for block {block_number}")
@@ -335,10 +326,10 @@ async def verify_redis_token_data(redis_conn: aioredis.Redis, block_number: int)
     }
 
 
-async def check_redis_pool_data(redis_conn: aioredis.Redis, block_number: int, pool_addresses: List[str]) -> Dict[str, bool]:
+async def check_redis_pool_data(redis_conn: aioredis.Redis, block_number: int, pool_addresses: List[str], app_config: Settings) -> Dict[str, bool]:
     """Check if specific pools are present in Redis active pools data"""
-    active_pools_key = f"active_pools:{block_number}:{settings.namespace}"
-    pools_per_block_key = f"active_pools_per_block:{block_number}:{settings.namespace}"
+    active_pools_key = f"active_pools:{block_number}:{app_config.namespace}"
+    pools_per_block_key = f"active_pools_per_block:{block_number}:{app_config.namespace}"
     
     # Check active_pools set
     redis_active_pools = await redis_conn.smembers(active_pools_key)
@@ -402,16 +393,42 @@ async def test_active_tokens_processor_single_block(
     from_block = current_block_number - block_offset_from_head
     print(f"\nTesting single block: {from_block} (current head: {current_block_number})")
 
-    if not await validate_block_availability(rpc_helper, from_block):
+    if not await validate_block_availability(
+        rpc_helper=rpc_helper,
+        block_number=from_block
+    ):
         pytest.skip(f"Skipping test: block {from_block} not available on configured RPC node.")
 
     # Get Redis data for this block
-    redis_token_data = await verify_redis_token_data(redis_conn, from_block)
+    redis_token_data = await verify_redis_token_data(
+        redis_conn=redis_conn, 
+        block_number=from_block, 
+        app_config=app_config
+    )
     assert redis_token_data, f"No Redis token data found for block {from_block}"
     
     print(f"\nRedis contains {len(redis_token_data)} tokens:")
-    for token_addr, freq in redis_token_data.items():
-        print(f"  {token_addr}: {freq}")
+
+    # Get source chain ID for Etherscan v2 API (read-only, don't cache in Redis for tests)
+    try:
+        source_chain_id_data = await redis_conn.get(source_chain_id_key())
+        
+        if source_chain_id_data:
+            source_chain_id = int(source_chain_id_data.decode('utf-8'))
+            print(f"      ℹ️  Using cached source chain ID: {source_chain_id}")
+        else:
+            # If not in cache, fetch from blockchain but don't cache (test mode)
+            [source_chain_id] = await anchor_rpc_helper.web3_call(
+                tasks=[
+                    ('SOURCE_CHAIN_ID', [Web3.to_checksum_address(app_config.data_market)]),
+                ],
+                contract_addr=protocol_state_contract.address,
+                abi=protocol_state_contract.abi,
+            )
+            print(f"      ℹ️  Fetched source chain ID from contract: {source_chain_id}")
+    except Exception as e:
+        print(f"      ⚠️  Could not get source chain ID: {e}")
+        pytest.fail("Could not get source chain ID")
 
     # Create epoch for single block
     epoch = SnapshotProcessMessage(
@@ -446,9 +463,10 @@ async def test_active_tokens_processor_single_block(
     
     # Extract actual token activity from Etherscan
     actual_token_frequencies, token_event_details = await extract_tokens_from_etherscan_detailed(
-        from_block,
-        from_block,
-        rpc_helper
+        start_block=from_block,
+        end_block=from_block,
+        source_chain_id=source_chain_id,
+        rpc_helper=rpc_helper
     )
     
     print(f"\n📊 Comparison Results:")
@@ -622,7 +640,7 @@ async def test_active_tokens_processor_multi_block(
     
     for block_num in range(from_block, to_block + 1):
         try:
-            block_redis_data = await verify_redis_token_data(redis_conn, block_num)
+            block_redis_data = await verify_redis_token_data(redis_conn=redis_conn, block_number=block_num, app_config=app_config)
             redis_data_per_block[block_num] = block_redis_data
             
             # Aggregate frequencies
@@ -637,10 +655,6 @@ async def test_active_tokens_processor_multi_block(
 
     if not expected_aggregated_tokens:
         pytest.skip(f"No Redis token data found for epoch {from_block}-{to_block}")
-
-    print(f"\nExpected aggregated tokens across epoch ({len(expected_aggregated_tokens)} unique tokens):")
-    for token_addr, total_freq in expected_aggregated_tokens.items():
-        print(f"  {token_addr}: {total_freq}")
 
     # Create epoch for multiple blocks
     epoch = SnapshotProcessMessage(

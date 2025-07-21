@@ -9,7 +9,7 @@ from snapshotter.utils.default_logger import logger
 from rpc_helper.rpc import RpcHelper
 from computes.utils.models.message_models import EpochBaseSnapshot
 from computes.utils.models.message_models import UniswapEthPriceSnapshot
-from computes.redis_keys import uniswap_eth_usd_price_zset
+from computes.utils.redis_keys import uniswap_eth_usd_price_zset
 from snapshotter.settings.config import settings
 from ipfs_client.main import AsyncIPFSClient
 
