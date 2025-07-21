@@ -105,29 +105,20 @@ class TokenPoolsProcessor(GenericProcessorSnapshot):
                 for pool in local_pools:
                     if pool in snapshot.pools:
                         continue
-                        
-                    # Check Redis cache for pool metadata
-                    cache_key = f'pool_metadata:{pool}'
-                    cached_data = await redis_conn.get(cache_key)
-
-                    if cached_data:
-                        local_pools_with_metadata[pool] = json.loads(cached_data)
-                    else:
-                        # Fallback to protocol state if not in cache
-                        pool_metadata = await get_project_latest_snapshot(
-                            redis_conn, protocol_state_contract, anchor_rpc_helper, ipfs_reader, metadata_project_id,
+                    
+                    pool_metadata = await get_uniswap_v3_pool_metadata(
+                        pool, redis_conn, anchor_rpc_helper, ipfs_reader, protocol_state_contract,
+                    )
+                    if not pool_metadata:
+                        self._logger.error(
+                            "[Epoch {}-{}] Pool {} | No metadata found in cache or protocol state",
+                            epoch.begin,
+                            epoch.end,
+                            pool
                         )
+                        continue
 
-                        if pool_metadata:
-                            local_pools_with_metadata[pool] = pool_metadata
-                        else:
-                            self._logger.error(
-                                "[Epoch {}-{}] Pool {} | No metadata found in cache or protocol state",
-                                epoch.begin,
-                                epoch.end,
-                                pool_address
-                            )
-                            continue
+                    local_pools_with_metadata[pool] = pool_metadata
 
                 if not local_pools_with_metadata:
                     continue
