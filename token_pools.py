@@ -11,6 +11,7 @@ from snapshotter.settings.config import settings
 from ipfs_client.main import AsyncIPFSClient
 from computes.utils.models.message_models import UniswapPoolMetadata, UniswapTokenPoolsSnapshot
 from snapshotter.utils.data_utils import get_project_latest_snapshot
+from computes.api.utils.data_utils import get_uniswap_v3_pool_metadata
 from web3 import Web3
 
 
@@ -64,28 +65,19 @@ class TokenPoolsProcessor(GenericProcessorSnapshot):
             snapshots = []
 
             # Attempt to get pool metadata from protocol state
-            pool_metadata = await get_project_latest_snapshot(
-                redis_conn, protocol_state_contract, anchor_rpc_helper, ipfs_reader, metadata_project_id,
+            pool_metadata = await get_uniswap_v3_pool_metadata(
+                pool_address, redis_conn, anchor_rpc_helper, ipfs_reader, protocol_state_contract,
             )
-
             if not pool_metadata:
-                # Fallback to Redis cache if protocol state doesn't have metadata
-                cache_key = f'pool_metadata:{pool_address}'
-                cached_data = await redis_conn.get(cache_key)
-
-                if cached_data:
-                    pool_metadata = json.loads(cached_data)
-                else:
-                    self._logger.debug(
-                        "[Epoch {}-{}] Pool {} | No metadata found in cache or first epoch",
-                        epoch.begin,
-                        epoch.end,
-                        pool_address
-                    )
-                    return None
-            
+                self._logger.error(
+                    "[Epoch {}-{}] Pool {} | No metadata found in cache or protocol state",
+                    epoch.begin,
+                    epoch.end,
+                    pool_address
+                )
+                return None
             # Process token addresses and ensure checksum format
-            token_addresses = [pool_metadata["token0"]["address"], pool_metadata["token1"]["address"]]
+            token_addresses = [pool_metadata.token0.address, pool_metadata.token1.address]
             token_addresses = [Web3.to_checksum_address(token_address) for token_address in token_addresses]
             
             for token_address in token_addresses:
