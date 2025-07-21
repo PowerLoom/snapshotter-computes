@@ -89,10 +89,13 @@ async def get_uniswap_v3_pool_metadata(
         latest_snapshot = await get_project_latest_snapshot(
             redis_conn, protocol_state_contract, anchor_rpc_helper, ipfs_reader, project_id.format(poolAddress=pool_address, Namespace=settings.namespace)
         )
+        if not latest_snapshot:
+            logger.error(f"No snapshot data found for project {project_id}")
+            return None
+        return UniswapPoolMetadata(**latest_snapshot)
     except Exception as e:
         logger.opt(exception=e).error(f"Error getting latest snapshot for pool {pool_address} while processing metadata")
         return None
-    return UniswapPoolMetadata(**latest_snapshot)
 
 
 async def get_uniswapv3_snapshot(
