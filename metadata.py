@@ -4,16 +4,13 @@ from typing import Union
 import asyncio
 
 from redis import asyncio as aioredis
-import json
 from snapshotter.utils.models.message_models import SnapshotProcessMessage
 from snapshotter.utils.callback_helpers import GenericProcessorSnapshot
 from snapshotter.utils.default_logger import logger
 from rpc_helper.rpc import RpcHelper
-from computes.utils.models.message_models import UniswapPoolMetadata
 from snapshotter.settings.config import settings
 from ipfs_client.main import AsyncIPFSClient
-from snapshotter.utils.data_utils import get_project_first_epoch
-from snapshotter.utils.data_utils import get_project_latest_snapshot
+from computes.api.utils.data_utils import get_uniswap_v3_pool_metadata
 from web3 import Web3
 
 
@@ -53,23 +50,13 @@ class MetadataProcessor(GenericProcessorSnapshot):
             Optional[tuple]: Tuple of (project_id, pool_metadata) if successful, None otherwise
         """
         try:
-            project_id = task_type.format(poolAddress=pool_address, Namespace=settings.namespace)
-            
-            # Get project's first epoch data
-            project_first_epoch = await get_project_first_epoch(
-                redis_conn, protocol_state_contract, anchor_rpc_helper, project_id,
+            pool_metadata = await get_uniswap_v3_pool_metadata(
+                pool_address, redis_conn, anchor_rpc_helper, ipfs_reader, protocol_state_contract,
             )
-
-            if not project_first_epoch:
-                # If no first epoch, check Redis cache for existing metadata
-                cache_key = f'pool_metadata:{pool_address}'
-                cached_data = await redis_conn.get(cache_key)
-
-                if cached_data:
-                    data = json.loads(cached_data)
-                    return (project_id, UniswapPoolMetadata(**data))
+            if not pool_metadata:
+                return None
             
-            return None
+            return (pool_address, pool_metadata)
         except Exception as e:
             self._logger.opt(exception=e).error(f"Error processing pool {pool_address}")
             return None

@@ -35,9 +35,138 @@ from snapshotter.settings.config import settings
 from snapshotter.utils.default_logger import default_logger
 from snapshotter.utils.redis.redis_keys import block_number_to_timestamp_key
 from snapshotter.utils.models.data_models import BlockSearchType
+from computes.utils.constants import ERC20_ABI
+from computes.utils.constants import POOL_ABI
+from typing import Union
+from eth_typing import Address
 
 logger = default_logger.bind(module='uniswap_v3_api_data_utils')
 WETH = Web3.to_checksum_address(computes_settings.contract_addresses.WETH)
+
+
+async def get_pool_metadata(
+    pool_address: Union[str, Address],
+    redis_conn: aioredis.Redis,
+    rpc_helper: RpcHelper,
+) -> Optional[Dict[str, Any]]:
+    """Get comprehensive metadata from a UniswapV3Pool.
+
+    Args:
+        pool_address: The address of the UniswapV3Pool contract
+
+    Returns:
+        Dict containing pool metadata or None if not a valid pool
+    """
+    try:
+        pool_address = Web3.to_checksum_address(pool_address)
+
+        # Check cache first
+        cache_key = f'pool_metadata:{pool_address}'
+        cached_data = await redis_conn.get(cache_key)
+        if cached_data:
+            return json.loads(cached_data)
+
+        # Create pool contract instance
+        current_node = rpc_helper.get_current_node()
+        pool_contract = current_node['web3_client'].eth.contract(address=pool_address, abi=POOL_ABI)
+
+        # Get basic pool data
+        try:
+            token0_address = await pool_contract.functions.token0().call()
+            token1_address = await pool_contract.functions.token1().call()
+            factory_address = await pool_contract.functions.factory().call()
+            fee = await pool_contract.functions.fee().call()
+            tick_spacing = await pool_contract.functions.tickSpacing().call()
+        except Exception as e:
+            logger.error(f"Failed to get basic pool data for {pool_address}: {str(e)}")
+            return None
+
+        # Normalize addresses
+        token0_address = Web3.to_checksum_address(token0_address)
+        token1_address = Web3.to_checksum_address(token1_address)
+        factory_address = Web3.to_checksum_address(factory_address)
+
+        # Get token metadata
+        token0_metadata = await _get_erc20_metadata(token0_address, redis_conn, rpc_helper)
+        token1_metadata = await _get_erc20_metadata(token1_address, redis_conn, rpc_helper)
+
+        if not token0_metadata or not token1_metadata:
+            logger.error(f"Failed to get token metadata for pool {pool_address}")
+            return None
+
+        # Build metadata
+        pool_metadata = {
+            'address': pool_address,
+            'token0': {
+                'address': token0_address,
+                **token0_metadata
+            },
+            'token1': {
+                'address': token1_address,
+                **token1_metadata
+            },
+            'fee': fee,
+            'tick_spacing': tick_spacing,
+            'factory': factory_address
+        }
+
+        # Cache the result
+        await redis_conn.set(cache_key, json.dumps(pool_metadata))
+        return pool_metadata
+
+    except Exception as e:
+        logger.error(f"Error getting pool metadata for {pool_address}: {str(e)}")
+        return None
+
+
+async def _get_erc20_metadata(
+    token_address: Union[str, Address], 
+    redis_conn: aioredis.Redis, 
+    rpc_helper: RpcHelper,
+) -> Optional[Dict[str, Any]]:
+    """Get ERC20 token metadata with robust error handling."""
+    try:
+        token_address = Web3.to_checksum_address(token_address)
+
+        # Check cache first
+        cache_key = f'erc20_metadata:{token_address}'
+        cached_data = await redis_conn.get(cache_key)
+        if cached_data:
+            return json.loads(cached_data)
+
+        # Create token contract
+        current_node = rpc_helper.get_current_node()
+        token_contract = current_node['web3_client'].eth.contract(address=token_address, abi=ERC20_ABI)
+
+        # Get metadata with fallbacks
+        try:
+            name = await token_contract.functions.name().call()
+        except Exception:
+            name = "Unknown Token"
+
+        try:
+            symbol = await token_contract.functions.symbol().call()
+        except Exception:
+            symbol = "UNKNOWN"
+
+        try:
+            decimals = await token_contract.functions.decimals().call()
+        except Exception:
+            decimals = 18  # Default to 18 decimals
+
+        metadata = {
+            'name': name,
+            'symbol': symbol,
+            'decimals': decimals
+        }
+
+        # Cache for 24 hours
+        await redis_conn.set(cache_key, json.dumps(metadata))
+        return metadata
+
+    except Exception as e:
+        logger.error(f"Error getting ERC20 metadata for {token_address}: {str(e)}")
+        return None
 
 
 async def get_uniswap_v3_pool_metadata(
@@ -86,9 +215,14 @@ async def get_uniswap_v3_pool_metadata(
             redis_conn, protocol_state_contract, anchor_rpc_helper, ipfs_reader, project_id.format(poolAddress=pool_address, Namespace=settings.namespace)
         )
         if not latest_snapshot:
-            logger.error(f"No snapshot data found for project {project_id}")
-            return None
-        return UniswapPoolMetadata(**latest_snapshot)
+            pool_metadata_raw = await get_pool_metadata(pool_address, redis_conn, anchor_rpc_helper)
+            if not pool_metadata_raw:
+                logger.error(f"Unable to get pool metadata for pool {pool_address}")
+                return None
+            return UniswapPoolMetadata(**pool_metadata_raw)
+        else:
+            logger.info(f"Found cached metadata for pool {pool_address}")
+            return UniswapPoolMetadata(**latest_snapshot)
     except Exception as e:
         logger.opt(exception=e).error(f"Error getting latest snapshot for pool {pool_address} while processing metadata")
         return None
@@ -236,9 +370,6 @@ async def get_uniswap_v3_token_pools_snapshot(
                                            for the token, or None if not found
     """
     token_address = Web3.to_checksum_address(token_address)
-    # check if weth
-    if token_address == WETH:
-        return UniswapTokenPoolsSnapshot(pools={})
 
     project_id = f"tokenPools:{token_address}:{settings.namespace}"
     result = await get_uniswapv3_snapshot(
