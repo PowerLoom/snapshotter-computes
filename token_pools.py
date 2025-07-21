@@ -60,8 +60,6 @@ class TokenPoolsProcessor(GenericProcessorSnapshot):
             or None if processing fails
         """
         try:
-            # WETH address constant for filtering
-            WETH_ADDRESS = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
             metadata_project_id = f"metadata:{pool_address}:{settings.namespace}"
             snapshots = []
 
@@ -91,10 +89,6 @@ class TokenPoolsProcessor(GenericProcessorSnapshot):
             token_addresses = [Web3.to_checksum_address(token_address) for token_address in token_addresses]
             
             for token_address in token_addresses:
-                # Skip WETH pools as they're handled separately
-                if token_address == WETH_ADDRESS:
-                    continue
-                    
                 project_id = task_type.format(tokenAddress=token_address, Namespace=settings.namespace)
 
                 # Get existing token pools snapshot or create new one
