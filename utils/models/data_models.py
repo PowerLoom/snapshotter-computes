@@ -62,6 +62,7 @@ class TradeData(BaseModel):
         """
         self.totalTradesUSD += other.totalTradesUSD
         self.totalFeeUSD += other.totalFeeUSD
+        self.totalTradesMintBurnUSD += other.totalTradesMintBurnUSD
         self.token0TradeVolume += other.token0TradeVolume
         self.token1TradeVolume += other.token1TradeVolume
         self.token0TradeVolumeUSD += other.token0TradeVolumeUSD
@@ -82,6 +83,7 @@ class TradeData(BaseModel):
         """
         self.totalTradesUSD -= other.totalTradesUSD
         self.totalFeeUSD -= other.totalFeeUSD
+        self.totalTradesMintBurnUSD -= other.totalTradesMintBurnUSD
         self.token0TradeVolume -= other.token0TradeVolume
         self.token1TradeVolume -= other.token1TradeVolume
         self.token0TradeVolumeUSD -= other.token0TradeVolumeUSD
@@ -100,6 +102,7 @@ class TradeData(BaseModel):
         """
         self.totalTradesUSD = abs(self.totalTradesUSD)
         self.totalFeeUSD = abs(self.totalFeeUSD)
+        self.totalTradesMintBurnUSD = abs(self.totalTradesMintBurnUSD)
         self.token0TradeVolume = abs(self.token0TradeVolume)
         self.token1TradeVolume = abs(self.token1TradeVolume)
         self.token0TradeVolumeUSD = abs(self.token0TradeVolumeUSD)

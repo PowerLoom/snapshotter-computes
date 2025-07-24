@@ -383,7 +383,6 @@ async def generate_base_snapshot(
         token1TradeVolume=epoch_total_trade_data.token1TradeVolume,
         token0TradeVolumeUSD=epoch_total_trade_data.token0TradeVolumeUSD,
         token1TradeVolumeUSD=epoch_total_trade_data.token1TradeVolumeUSD,
-        timestamp=snapshot_timestamp,
     )
     return base_reserves_snapshot
 
