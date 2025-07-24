@@ -2157,14 +2157,6 @@ async def get_uniswap_v3_pool_trades(
         logger.error(err_msg)
         raise Exception(err_msg)
 
-    # Determine base token (WETH is typically the base)
-    if Web3.to_checksum_address(pool_metadata.token0.address) == WETH:
-        base_token_num = 0
-    elif Web3.to_checksum_address(pool_metadata.token1.address) == WETH:
-        base_token_num = 1
-    else:
-        logger.error(f"Neither token in pool {pool_address} is WETH. Cannot determine base token.")
-        raise Exception(f"Pool {pool_address} does not contain WETH")
 
     token0_symbol = pool_metadata.token0.symbol
     token1_symbol = pool_metadata.token1.symbol
@@ -2183,55 +2175,20 @@ async def get_uniswap_v3_pool_trades(
 
         # Process individual trades within the snapshot
         for trade in trade_snapshot.trades:
-
-            if trade.tradeType == TradeType.SWAP:
-                block_timestamp = trade.data.get('block_timestamp')
-                token0_amount = trade.data['amount0']
-                token1_amount = trade.data['amount1']
-                transaction_hash = trade.log['transactionHash']
-                
-                # Adjust amounts for token decimals
-                token0_amount_adjusted = abs(token0_amount) / 10 ** pool_metadata.token0.decimals
-                token1_amount_adjusted = abs(token1_amount) / 10 ** pool_metadata.token1.decimals
-                trade_amount_usd = trade.data.get('calculated_trade_amount_usd', 0.0)
-                trade_type_str = "Swap"
-
-                price_of_non_base_token_in_weth = 0.0
-                if base_token_num == 0:
-                    if token1_amount_adjusted > 1e-18: 
-                        price_of_non_base_token_in_weth = token0_amount_adjusted / token1_amount_adjusted
-                    elif token0_amount_adjusted > 1e-18:
-                        logger.warning(f"Token1 amount is zero for trade where WETH is token0. Pool: {pool_address}, tx: {transaction_hash}")
-                    else:
-                        logger.warning(f"Both token amounts are zero for trade where WETH is token0. Pool: {pool_address}, tx: {transaction_hash}")
-                else:
-                    if token0_amount_adjusted > 1e-18:
-                        price_of_non_base_token_in_weth = token1_amount_adjusted / token0_amount_adjusted
-                    elif token1_amount_adjusted > 1e-18:
-                        logger.warning(f"Token0 amount is zero for trade where WETH is token1. Pool: {pool_address}, tx: {transaction_hash}")
-                    else:
-                        logger.warning(f"Both token amounts are zero for trade where WETH is token1. Pool: {pool_address}, tx: {transaction_hash}")
-
-
-                # Calculate USD price using ETH price from trade data
-                eth_price_usd = trade.data.get('calculated_eth_price', 0.0)
-                price_of_non_base_token_usd = price_of_non_base_token_in_weth * eth_price_usd
-                
-                # Create processed trade entry
-                processed_trade_entry = {
-                    'timestamp': block_timestamp,
-                    'tokens': {
-                        token0_symbol: token0_amount_adjusted,
-                        token1_symbol: token1_amount_adjusted,
-                    },
-                    'trade_amount_usd': trade_amount_usd,
-                    'trade_type': trade_type_str,
-                    'trade_price_usd': price_of_non_base_token_usd,
-                    'token0_amount': token0_amount,
-                    'token1_amount': token1_amount,
-                    'transaction_hash': transaction_hash,
-                }
-                processed_trades.append(processed_trade_entry)
+            # Create processed trade entry
+            processed_trade_entry = {
+                'timestamp': trade.data.get('block_timestamp'),
+                'tokens': {
+                    token0_symbol: trade.data.get('calculated_token0_amount', 0.0),
+                    token1_symbol: trade.data.get('calculated_token1_amount', 0.0),
+                },
+                'trade_amount_usd': trade.data.get('calculated_trade_amount_usd', 0.0),
+                'trade_type': trade.tradeType,
+                'token0_amount': trade.data.get('amount0'),
+                'token1_amount': trade.data.get('amount1'),
+                'transaction_hash': trade.log.get('transactionHash'),
+            }
+            processed_trades.append(processed_trade_entry)
 
     return processed_trades
 
