@@ -29,7 +29,6 @@ from snapshotter.settings.config import settings
 from computes.utils.models.message_models import UniswapPoolMetadata
 from computes.utils.redis_keys import uniswap_v3_best_pool_map
 from snapshotter.utils.data_utils import get_project_latest_snapshot
-from computes.utils.helpers import get_uniswap_v3_pool_metadata
 
 AddressLike = Union[Address, ChecksumAddress]
 getcontext().prec = 36

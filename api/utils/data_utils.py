@@ -15,6 +15,8 @@ from computes.api.models.data_models import (
     UniswapTokenPoolsSnapshot, 
     UniswapEthPriceSnapshot, 
 )
+from computes.utils.helpers import get_uniswap_v3_pool_metadata
+
 from snapshotter.utils.data_utils import (
     get_project_latest_snapshot,
     get_project_last_finalized_epoch,
