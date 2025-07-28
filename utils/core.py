@@ -18,7 +18,7 @@ from computes.utils.models.data_models import UniswapEvent, UniswapProcessedLog
 from computes.utils.models.data_models import PairBlockDetail
 from computes.utils.models.data_models import TradeData
 from computes.utils.helpers import get_token_price_in_usd_in_block_range
-from computes.utils.helpers import get_pool_metadata
+from computes.utils.helpers import get_uniswap_v3_pool_metadata
 
 core_logger = logger.bind(module='PowerLoom|UniswapCore')
 
@@ -462,7 +462,7 @@ async def base_snapshot_from_block_range(
             to_block,
             pair_address
         )
-        pair_per_token_metadata: Optional[UniswapPoolMetadata] = await get_pool_metadata(
+        pair_per_token_metadata: Optional[UniswapPoolMetadata] = await get_uniswap_v3_pool_metadata(
             pool_address=pair_address,
             redis_conn=redis_conn,
             anchor_rpc_helper=anchor_rpc_helper,
@@ -822,9 +822,10 @@ async def get_pair_trade_volume(
             pair_address
         )
 
-    pair_per_token_metadata = await get_pool_metadata(
+    pair_per_token_metadata = await get_uniswap_v3_pool_metadata(
         pool_address=pair_address,
         redis_conn=redis_conn,
+        rpc_helper=rpc_helper,
         anchor_rpc_helper=anchor_rpc_helper,
         ipfs_reader=ipfs_reader,
         protocol_state_contract=protocol_state_contract,

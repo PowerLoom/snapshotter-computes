@@ -7,7 +7,7 @@ from eth_typing import Address
 from functools import reduce
 from eth_typing.evm import ChecksumAddress
 
-from typing import Optional, Union, List, Tuple, Dict
+from typing import Optional, Union, List, Tuple, Dict, Any
 from redis import asyncio as aioredis
 from computes.utils.models.data_models import UniswapEvent
 from snapshotter.utils.default_logger import logger
@@ -29,6 +29,7 @@ from snapshotter.settings.config import settings
 from computes.utils.models.message_models import UniswapPoolMetadata
 from computes.utils.redis_keys import uniswap_v3_best_pool_map
 from snapshotter.utils.data_utils import get_project_latest_snapshot
+from computes.utils.helpers import get_uniswap_v3_pool_metadata
 
 AddressLike = Union[Address, ChecksumAddress]
 getcontext().prec = 36
@@ -459,54 +460,6 @@ async def get_tick_info(
         )
         return None
 
-
-async def get_pool_metadata(
-    pool_address: str,
-    redis_conn: aioredis.Redis,
-    anchor_rpc_helper: RpcHelper,
-    ipfs_reader: AsyncIPFSClient,
-    protocol_state_contract,
-    task_type: str = 'metadata:{poolAddress}:{Namespace}',
-) -> UniswapPoolMetadata:
-    """
-    Retrieve metadata for a specific Uniswap V3 pool, checking Redis cache first, then fetching from chain if needed.
-
-    Args:
-        pool_address (str): The address of the pool to get metadata for.
-        redis_conn (aioredis.Redis): Redis connection for cache operations.
-        anchor_rpc_helper (RpcHelper): RPC helper for blockchain interactions.
-        ipfs_reader (AsyncIPFSClient): IPFS client for reading data.
-        protocol_state_contract: Contract instance for protocol state.
-        task_type (str): Format string for project ID construction.
-
-    Returns:
-        Optional[UniswapPoolMetadata]: Pool metadata if found, None otherwise.
-
-    Raises:
-        Exception: If metadata cannot be found or fetched.
-    """
-    # Check Redis cache first for existing metadata
-    cache_key = f'pool_metadata:{pool_address}'
-    cached_data = await redis_conn.get(cache_key)
-    if cached_data:
-        helper_logger.info(f"Found cached metadata for pool {pool_address}")
-        return UniswapPoolMetadata(**json.loads(cached_data))
-
-    try:
-        # Get the latest snapshot from chain if not in cache
-        project_id = task_type.format(poolAddress=pool_address, Namespace=settings.namespace)
-        latest_snapshot = await get_project_latest_snapshot(
-            redis_conn, protocol_state_contract, anchor_rpc_helper, ipfs_reader, project_id
-        )
-        if not latest_snapshot:
-            helper_logger.error(f"No latest snapshot found for pool {pool_address} while processing metadata")
-            raise Exception(f"No latest snapshot found for pool {pool_address} while processing metadata")
-        return UniswapPoolMetadata(**latest_snapshot)
-    except Exception as e:
-        helper_logger.opt(exception=e).error(f"Error getting latest snapshot for pool {pool_address} while processing metadata")
-        raise Exception(f"Error getting latest snapshot for pool {pool_address} while processing metadata")
-
-
 async def get_token_price_in_block_range(
     pair_metadata: UniswapPoolMetadata,
     from_block: int,
@@ -662,9 +615,10 @@ async def get_token_price_in_usd_in_block_range(
             rpc_helper=rpc_helper,
         )
         # Generate pool metadata for the best reference pool.
-        best_pool_metadata = await get_pool_metadata(
+        best_pool_metadata = await get_uniswap_v3_pool_metadata(
             pool_address=best_pool_token_address,
             redis_conn=redis_conn,
+            rpc_helper=rpc_helper,
             anchor_rpc_helper=anchor_rpc_helper,
             ipfs_reader=ipfs_reader,
             protocol_state_contract=protocol_state_contract,
@@ -995,3 +949,184 @@ async def get_pair(
     )
 
     return pair
+
+
+
+async def get_pool_metadata(
+    pool_address: Union[str, Address],
+    redis_conn: aioredis.Redis,
+    rpc_helper: RpcHelper,
+) -> Optional[Dict[str, Any]]:
+    """Get comprehensive metadata from a UniswapV3Pool.
+
+    Args:
+        pool_address: The address of the UniswapV3Pool contract
+
+    Returns:
+        Dict containing pool metadata or None if not a valid pool
+    """
+    try:
+        pool_address = Web3.to_checksum_address(pool_address)
+
+        # Create pool contract instance
+        current_node = rpc_helper.get_current_node()
+        pool_contract = current_node['web3_client'].eth.contract(address=pool_address, abi=POOL_ABI)
+
+        # Get basic pool data
+        try:
+            token0_address = await pool_contract.functions.token0().call()
+            token1_address = await pool_contract.functions.token1().call()
+            factory_address = await pool_contract.functions.factory().call()
+            fee = await pool_contract.functions.fee().call()
+            tick_spacing = await pool_contract.functions.tickSpacing().call()
+        except Exception as e:
+            logger.error(f"Failed to get basic pool data for {pool_address}: {str(e)}")
+            return None
+
+        # Normalize addresses
+        token0_address = Web3.to_checksum_address(token0_address)
+        token1_address = Web3.to_checksum_address(token1_address)
+        factory_address = Web3.to_checksum_address(factory_address)
+
+        # Get token metadata
+        token0_metadata = await _get_erc20_metadata(token0_address, redis_conn, rpc_helper)
+        token1_metadata = await _get_erc20_metadata(token1_address, redis_conn, rpc_helper)
+
+        if not token0_metadata or not token1_metadata:
+            logger.error(f"Failed to get token metadata for pool {pool_address}")
+            return None
+
+        # Build metadata
+        pool_metadata = {
+            'address': pool_address,
+            'token0': {
+                'address': token0_address,
+                **token0_metadata
+            },
+            'token1': {
+                'address': token1_address,
+                **token1_metadata
+            },
+            'fee': fee,
+            'tick_spacing': tick_spacing,
+            'factory': factory_address
+        }
+
+        # Cache the result
+        cache_key = f'pool_metadata:{pool_address}'
+        await redis_conn.set(cache_key, json.dumps(pool_metadata))
+        return pool_metadata
+
+    except Exception as e:
+        logger.error(f"Error getting pool metadata for {pool_address}: {str(e)}")
+        return None
+
+
+async def _get_erc20_metadata(
+    token_address: Union[str, Address], 
+    redis_conn: aioredis.Redis, 
+    rpc_helper: RpcHelper,
+) -> Optional[Dict[str, Any]]:
+    """Get ERC20 token metadata with robust error handling."""
+    try:
+        token_address = Web3.to_checksum_address(token_address)
+
+        # Check cache first
+        cache_key = f'erc20_metadata:{token_address}'
+        cached_data = await redis_conn.get(cache_key)
+        if cached_data:
+            return json.loads(cached_data)
+
+        # Create token contract
+        current_node = rpc_helper.get_current_node()
+        token_contract = current_node['web3_client'].eth.contract(address=token_address, abi=ERC20_ABI)
+
+        # Get metadata with fallbacks
+        try:
+            name = await token_contract.functions.name().call()
+        except Exception:
+            name = "Unknown Token"
+
+        try:
+            symbol = await token_contract.functions.symbol().call()
+        except Exception:
+            symbol = "UNKNOWN"
+
+        try:
+            decimals = await token_contract.functions.decimals().call()
+        except Exception:
+            decimals = 18  # Default to 18 decimals
+
+        metadata = {
+            'name': name,
+            'symbol': symbol,
+            'decimals': decimals
+        }
+
+        # Cache for 24 hours
+        await redis_conn.set(cache_key, json.dumps(metadata))
+        return metadata
+
+    except Exception as e:
+        logger.error(f"Error getting ERC20 metadata for {token_address}: {str(e)}")
+        return None
+
+
+async def get_uniswap_v3_pool_metadata(
+        pool_address: str, 
+        redis_conn: aioredis.Redis, 
+        rpc_helper: RpcHelper,
+        anchor_rpc_helper: RpcHelper,
+        ipfs_reader: AsyncIPFSClient,
+        protocol_state_contract,
+        
+    ) -> Optional[UniswapPoolMetadata]:
+    """
+    Retrieves metadata for a Uniswap V3 pool from the snapshotter system.
+    
+    This function first checks the Redis cache for existing pool metadata. If not found,
+    it fetches the latest snapshot data for the pool from the protocol state and 
+    constructs the metadata object.
+    
+    Args:
+        pool_address (str): The Ethereum address of the Uniswap V3 pool
+        redis_conn (aioredis.Redis): Redis connection for caching
+        anchor_rpc_helper (RpcHelper): RPC helper for blockchain interactions
+        ipfs_reader (AsyncIPFSClient): IPFS client for reading snapshot data
+        protocol_state_contract: Smart contract object for protocol state
+        
+    Returns:
+        Optional[UniswapPoolMetadata]: Pool metadata object containing token information,
+                                     decimals, symbols, etc. Returns None if metadata 
+                                     cannot be retrieved.
+                                     
+    Raises:
+        Exception: If there's an error fetching the latest snapshot data
+    """
+    # Check redis cache first for existing metadata
+    project_id: str = 'metadata:{poolAddress}:{Namespace}'
+    
+    cache_key = f'pool_metadata:{pool_address}'
+    cached_data = await redis_conn.get(cache_key)
+    
+    if cached_data:
+        logger.info(f"Found cached metadata for pool {pool_address}")
+        return UniswapPoolMetadata(**json.loads(cached_data))
+
+    # If not cached, fetch from latest snapshot
+    try:
+        latest_snapshot = await get_project_latest_snapshot(
+            redis_conn, protocol_state_contract, anchor_rpc_helper, ipfs_reader, project_id.format(poolAddress=pool_address, Namespace=settings.namespace)
+        )
+        if not latest_snapshot:
+            pool_metadata_raw = await get_pool_metadata(pool_address, redis_conn, rpc_helper)
+            if not pool_metadata_raw:
+                logger.error(f"Unable to get pool metadata for pool {pool_address}")
+                return None
+            return UniswapPoolMetadata(**pool_metadata_raw)
+        else:
+            logger.info(f"Found cached metadata for pool {pool_address}")
+            return UniswapPoolMetadata(**latest_snapshot)
+    except Exception as e:
+        logger.opt(exception=e).error(f"Error getting latest snapshot for pool {pool_address} while processing metadata")
+        return None

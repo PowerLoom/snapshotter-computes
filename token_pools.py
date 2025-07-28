@@ -9,9 +9,9 @@ from snapshotter.utils.default_logger import logger
 from rpc_helper.rpc import RpcHelper
 from snapshotter.settings.config import settings
 from ipfs_client.main import AsyncIPFSClient
-from computes.utils.models.message_models import UniswapPoolMetadata, UniswapTokenPoolsSnapshot
+from computes.utils.models.message_models import UniswapTokenPoolsSnapshot
 from snapshotter.utils.data_utils import get_project_latest_snapshot
-from computes.api.utils.data_utils import get_uniswap_v3_pool_metadata
+from computes.utils.helpers import get_uniswap_v3_pool_metadata
 from web3 import Web3
 
 
@@ -36,6 +36,7 @@ class TokenPoolsProcessor(GenericProcessorSnapshot):
         task_type: str,
         redis_conn: aioredis.Redis,
         protocol_state_contract,
+        rpc_helper: RpcHelper,
         anchor_rpc_helper: RpcHelper,
         ipfs_reader: AsyncIPFSClient,
     ):
@@ -66,7 +67,7 @@ class TokenPoolsProcessor(GenericProcessorSnapshot):
 
             # Attempt to get pool metadata from protocol state
             pool_metadata = await get_uniswap_v3_pool_metadata(
-                pool_address, redis_conn, anchor_rpc_helper, ipfs_reader, protocol_state_contract,
+                pool_address, redis_conn, rpc_helper, anchor_rpc_helper, ipfs_reader, protocol_state_contract,
             )
             if not pool_metadata:
                 self._logger.error(
@@ -107,7 +108,7 @@ class TokenPoolsProcessor(GenericProcessorSnapshot):
                         continue
                     
                     pool_metadata = await get_uniswap_v3_pool_metadata(
-                        pool, redis_conn, anchor_rpc_helper, ipfs_reader, protocol_state_contract,
+                        pool, redis_conn, rpc_helper, anchor_rpc_helper, ipfs_reader, protocol_state_contract,
                     )
                     if not pool_metadata:
                         self._logger.error(
@@ -207,6 +208,7 @@ class TokenPoolsProcessor(GenericProcessorSnapshot):
                 pool_address=pool_address,
                 task_type=task_type,
                 redis_conn=redis_conn,
+                rpc_helper=rpc_helper,
                 protocol_state_contract=protocol_state_contract,
                 anchor_rpc_helper=anchor_rpc_helper,
                 ipfs_reader=ipfs_reader,

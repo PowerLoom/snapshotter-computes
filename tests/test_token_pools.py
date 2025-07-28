@@ -12,7 +12,7 @@ from snapshotter.utils.models.message_models import SnapshotProcessMessage
 from snapshotter.utils.models.settings_model import Settings
 from snapshotter.utils.data_utils import get_project_latest_snapshot
 from computes.settings.config import settings as computes_settings
-
+from computes.utils.helpers import get_uniswap_v3_pool_metadata
 
 """
 Test for TokenPoolsProcessor token pools validation.
@@ -102,36 +102,6 @@ async def get_active_pools_for_block(redis_conn: aioredis.Redis, block_number: i
     return {pool.decode('utf-8') for pool in pools}
 
 
-async def get_pool_metadata(
-    redis_conn: aioredis.Redis, 
-    pool_address: str,
-    app_config: Settings,
-    anchor_rpc_helper=None,
-    ipfs_reader=None,
-    protocol_state_contract=None
-) -> Dict:
-    """Get pool metadata from Redis cache or latest project snapshot"""
-    # Check Redis cache first
-    cache_key = f'pool_metadata:{pool_address}'
-    cached_data = await redis_conn.get(cache_key)
-    if cached_data:
-        return json.loads(cached_data)
-    
-    # If not in cache and we have the required dependencies, try latest snapshot
-    if anchor_rpc_helper and ipfs_reader and protocol_state_contract:
-        try:
-            metadata_project_id = f"metadata:{pool_address}:{app_config.namespace}"
-            pool_metadata = await get_project_latest_snapshot(
-                redis_conn, protocol_state_contract, anchor_rpc_helper, ipfs_reader, metadata_project_id
-            )
-            if pool_metadata:
-                return pool_metadata
-        except Exception as e:
-            print(f"Error getting latest snapshot for pool {pool_address}: {e}")
-    
-    return None
-
-
 async def get_local_pools_for_token(redis_conn: aioredis.Redis, token_address: str) -> Set[str]:
     """Get local pools for a token from Redis"""
     local_pools = await redis_conn.smembers(f"token_pools:{token_address}")
@@ -175,6 +145,7 @@ async def validate_pool_contains_token(pool_metadata: Dict, token_address: str) 
 
 async def validate_token_pools_data(
     redis_conn: aioredis.Redis,
+    rpc_helper,
     anchor_rpc_helper,
     ipfs_reader,
     protocol_state_contract,
@@ -230,10 +201,10 @@ async def validate_token_pools_data(
     
     # Validate each pool
     for pool_address in all_pools_to_check:
-        pool_metadata = await get_pool_metadata(
-            redis_conn=redis_conn, 
+        pool_metadata = await get_uniswap_v3_pool_metadata(
             pool_address=pool_address,
-            app_config=app_config,
+            redis_conn=redis_conn,
+            rpc_helper=rpc_helper,
             anchor_rpc_helper=anchor_rpc_helper,
             ipfs_reader=ipfs_reader,
             protocol_state_contract=protocol_state_contract
@@ -308,12 +279,13 @@ async def test_token_pools_processor(
     print(f"Excluding tokens: {EXCLUDED_TOKENS}")
     
     for pool_address in active_pools:
-        pool_metadata = await get_pool_metadata(
-            redis_conn, 
-            pool_address,
-            anchor_rpc_helper,
-            ipfs_reader,
-            protocol_state_contract
+        pool_metadata = await get_uniswap_v3_pool_metadata(
+            pool_address=pool_address,
+            redis_conn=redis_conn,
+            rpc_helper=rpc_helper,
+            anchor_rpc_helper=anchor_rpc_helper,
+            ipfs_reader=ipfs_reader,
+            protocol_state_contract=protocol_state_contract
         )
         
         if not pool_metadata:
@@ -370,6 +342,7 @@ async def test_token_pools_processor(
     for token_address, pool_addresses in token_to_pools.items():
         validation_result = await validate_token_pools_data(
             redis_conn=redis_conn,
+            rpc_helper=rpc_helper,
             anchor_rpc_helper=anchor_rpc_helper,
             ipfs_reader=ipfs_reader,
             protocol_state_contract=protocol_state_contract,

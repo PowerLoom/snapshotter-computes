@@ -16,7 +16,7 @@ from typing import Optional
 from web3 import Web3
 
 from snapshotter.settings.config import settings
-from computes.api.utils.data_utils import (
+from computes.utils.helpers import (
     get_uniswap_trade_volume_agg,
     get_uniswap_v3_base_snapshot,
     get_uniswap_v3_eth_price_snapshot,
@@ -66,6 +66,7 @@ async def get_pool_metadata(
         pool_metadata = await get_uniswap_v3_pool_metadata(
             redis_conn=request.app.state.redis_conn,
             protocol_state_contract=request.app.state.protocol_state_contract,
+            rpc_helper=request.app.state.rpc_helper,
             anchor_rpc_helper=request.app.state.anchor_rpc_helper,
             ipfs_reader=request.app.state.ipfs_reader_client,
             pool_address=pool_address,
@@ -729,6 +730,7 @@ async def get_daily_active_pools(
         pools_data, total_pools = await get_active_pools(
             redis_conn=request.app.state.redis_conn,
             protocol_state_contract=request.app.state.protocol_state_contract,
+            rpc_helper=request.app.state.rpc_helper,
             anchor_rpc_helper=request.app.state.anchor_rpc_helper,
             ipfs_reader=request.app.state.ipfs_reader_client,
             time_interval=time_interval,

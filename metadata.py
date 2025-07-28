@@ -10,7 +10,7 @@ from snapshotter.utils.default_logger import logger
 from rpc_helper.rpc import RpcHelper
 from snapshotter.settings.config import settings
 from ipfs_client.main import AsyncIPFSClient
-from computes.api.utils.data_utils import get_uniswap_v3_pool_metadata
+from computes.utils.helpers import get_uniswap_v3_pool_metadata
 from web3 import Web3
 
 
@@ -34,6 +34,7 @@ class MetadataProcessor(GenericProcessorSnapshot):
         redis_conn: aioredis.Redis,
         protocol_state_contract,
         anchor_rpc_helper: RpcHelper,
+        ipfs_reader: AsyncIPFSClient,
     ):
         """
         Process a single pool asynchronously, checking first epoch and cache.
@@ -115,6 +116,7 @@ class MetadataProcessor(GenericProcessorSnapshot):
                 redis_conn=redis_conn,
                 protocol_state_contract=protocol_state_contract,
                 anchor_rpc_helper=anchor_rpc_helper,
+                ipfs_reader=ipfs_reader,
             )
             pool_tasks.append(task)
         

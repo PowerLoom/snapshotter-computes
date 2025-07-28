@@ -15,7 +15,8 @@ import pytest
 from computes.pair_total_reserves import PairTotalReservesProcessor
 from computes.utils.core import base_snapshot_from_block_range, get_block_details_in_block_range
 from computes.utils.models.message_models import UniswapPoolMetadata, UniswapBaseSnapshot
-from computes.utils.helpers import calculate_reserves, get_pool_metadata
+from computes.utils.helpers import calculate_reserves
+from computes.utils.helpers import get_uniswap_v3_pool_metadata
 
 from snapshotter.utils.models.message_models import SnapshotProcessMessage
 from snapshotter.utils.redis.redis_keys import source_chain_id_key
@@ -1022,13 +1023,13 @@ async def test_calculate_reserves(
     if not await validate_block_availability(rpc_helper, from_block):
         pytest.skip(f"Skipping test: block {from_block} not available on configured RPC node.")
 
-    pool_metadata: Optional[UniswapPoolMetadata] = await get_pool_metadata(
+    pool_metadata: Optional[UniswapPoolMetadata] = await get_uniswap_v3_pool_metadata(
         pool_address=pool_address,
         redis_conn=redis_conn,
+        rpc_helper=rpc_helper,
         anchor_rpc_helper=anchor_rpc_helper,
         ipfs_reader=ipfs_reader,
-        protocol_state_contract=protocol_state_contract,
-        task_type=f'metadata:{pool_address}:{app_config.namespace}',
+        protocol_state_contract=protocol_state_contract
     )
 
     if not pool_metadata:
@@ -1281,9 +1282,10 @@ async def test_pair_total_reserves_processor(
         # Validate trade data against Etherscan if API key is available
         print(f"  🔍 Validating trade data against Etherscan...")
         
-        pool_metadata = await get_pool_metadata(
+        pool_metadata = await get_uniswap_v3_pool_metadata(
             pool_address=snapshot.address,
             redis_conn=redis_conn,
+            rpc_helper=rpc_helper,
             anchor_rpc_helper=anchor_rpc_helper,
             ipfs_reader=ipfs_reader,
             protocol_state_contract=protocol_state_contract,
