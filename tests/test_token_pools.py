@@ -136,8 +136,8 @@ async def validate_pool_contains_token(pool_metadata: Dict, token_address: str) 
     if not pool_metadata:
         return False
     
-    token0_address = pool_metadata.get("token0", {}).get("address", "").lower()
-    token1_address = pool_metadata.get("token1", {}).get("address", "").lower()
+    token0_address = pool_metadata.token0.address.lower()
+    token1_address = pool_metadata.token1.address.lower()
     target_token = token_address.lower()
     
     return token0_address == target_token or token1_address == target_token
@@ -292,8 +292,8 @@ async def test_token_pools_processor(
             print(f"  ⚠️  Pool {pool_address}: Missing metadata")
             continue
         
-        token0_address = pool_metadata.get("token0", {}).get("address", "")
-        token1_address = pool_metadata.get("token1", {}).get("address", "")
+        token0_address = pool_metadata.token0.address
+        token1_address = pool_metadata.token1.address
         
         # Normalize addresses for comparison
         token0_checksum = Web3.to_checksum_address(token0_address) if token0_address else ""

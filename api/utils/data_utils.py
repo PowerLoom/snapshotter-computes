@@ -11,7 +11,6 @@ from computes.utils.redis_keys import uniswap_eth_usd_price_zset
 from computes.settings.config import settings as computes_settings
 from computes.utils.models.message_models import UniswapBaseSnapshot, UniswapTradesSnapshot, TradeType, AllUniswapTradesSnapshot
 from computes.api.models.data_models import (
-    UniswapPoolMetadata, 
     UniswapTokenPoolsSnapshot, 
     UniswapEthPriceSnapshot, 
 )

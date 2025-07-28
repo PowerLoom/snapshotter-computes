@@ -325,10 +325,10 @@ async def test_metadata_processor(
     metadata = await get_uniswap_v3_pool_metadata(
         pool_address=pool_address,
         redis_conn=redis_conn,
+        rpc_helper=rpc_helper,
         anchor_rpc_helper=anchor_rpc_helper,
         ipfs_reader=ipfs_reader,
         protocol_state_contract=protocol_state_contract,
-        task_type=task_type
     )
 
     if not metadata:
