@@ -29,6 +29,7 @@ class MetadataProcessor(GenericProcessorSnapshot):
     async def _process_pool(
         self,
         pool_address: str,
+        task_type: str,
         redis_conn: aioredis.Redis,
         protocol_state_contract,
         rpc_helper: RpcHelper,
@@ -54,8 +55,8 @@ class MetadataProcessor(GenericProcessorSnapshot):
             )
             if not pool_metadata:
                 return None
-            
-            return (pool_address, pool_metadata)
+
+            return (task_type.format(poolAddress=pool_address, Namespace=settings.namespace), pool_metadata)
         except Exception as e:
             self._logger.opt(exception=e).error(f"Error processing pool {pool_address}")
             return None
@@ -109,6 +110,7 @@ class MetadataProcessor(GenericProcessorSnapshot):
         for pool_address in pools:
             task = self._process_pool(
                 pool_address=pool_address,
+                task_type=task_type,
                 redis_conn=redis_conn,
                 protocol_state_contract=protocol_state_contract,
                 rpc_helper=rpc_helper,
