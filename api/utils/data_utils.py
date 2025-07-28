@@ -36,10 +36,6 @@ from snapshotter.settings.config import settings
 from snapshotter.utils.default_logger import default_logger
 from snapshotter.utils.redis.redis_keys import block_number_to_timestamp_key
 from snapshotter.utils.models.data_models import BlockSearchType
-from computes.utils.constants import ERC20_ABI
-from computes.utils.constants import POOL_ABI
-from typing import Union
-from eth_typing import Address
 
 logger = default_logger.bind(module='uniswap_v3_api_data_utils')
 WETH = Web3.to_checksum_address(computes_settings.contract_addresses.WETH)
