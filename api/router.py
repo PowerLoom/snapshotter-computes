@@ -16,7 +16,7 @@ from typing import Optional
 from web3 import Web3
 
 from snapshotter.settings.config import settings
-from computes.utils.helpers import (
+from computes.api.utils.data_utils import (
     get_uniswap_trade_volume_agg,
     get_uniswap_v3_base_snapshot,
     get_uniswap_v3_eth_price_snapshot,
