@@ -28,11 +28,10 @@ class MetadataProcessor(GenericProcessorSnapshot):
     
     async def _process_pool(
         self,
-        epoch: SnapshotProcessMessage,
         pool_address: str,
-        task_type: str,
         redis_conn: aioredis.Redis,
         protocol_state_contract,
+        rpc_helper: RpcHelper,
         anchor_rpc_helper: RpcHelper,
         ipfs_reader: AsyncIPFSClient,
     ):
@@ -42,7 +41,6 @@ class MetadataProcessor(GenericProcessorSnapshot):
         Args:
             epoch (SnapshotProcessMessage): Current epoch information
             pool_address (str): The pool address to process
-            task_type (str): Format string for project ID construction
             redis_conn (aioredis.Redis): Redis connection for cache operations
             protocol_state_contract: Contract instance for protocol state
             anchor_rpc_helper (RpcHelper): RPC helper for anchor chain
@@ -52,7 +50,7 @@ class MetadataProcessor(GenericProcessorSnapshot):
         """
         try:
             pool_metadata = await get_uniswap_v3_pool_metadata(
-                pool_address, redis_conn, anchor_rpc_helper, ipfs_reader, protocol_state_contract,
+                pool_address, redis_conn, rpc_helper, anchor_rpc_helper, ipfs_reader, protocol_state_contract,
             )
             if not pool_metadata:
                 return None
@@ -110,11 +108,10 @@ class MetadataProcessor(GenericProcessorSnapshot):
         pool_tasks = []
         for pool_address in pools:
             task = self._process_pool(
-                epoch=epoch,
                 pool_address=pool_address,
-                task_type=task_type,
                 redis_conn=redis_conn,
                 protocol_state_contract=protocol_state_contract,
+                rpc_helper=rpc_helper,
                 anchor_rpc_helper=anchor_rpc_helper,
                 ipfs_reader=ipfs_reader,
             )

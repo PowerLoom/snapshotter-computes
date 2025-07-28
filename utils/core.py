@@ -465,6 +465,7 @@ async def base_snapshot_from_block_range(
         pair_per_token_metadata: Optional[UniswapPoolMetadata] = await get_uniswap_v3_pool_metadata(
             pool_address=pair_address,
             redis_conn=redis_conn,
+            rpc_helper=rpc_helper,
             anchor_rpc_helper=anchor_rpc_helper,
             ipfs_reader=ipfs_reader,
             protocol_state_contract=protocol_state_contract,
