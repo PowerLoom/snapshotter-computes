@@ -1,283 +1,690 @@
 import asyncio
-import math
+from decimal import Decimal
+from decimal import getcontext
 
-from computes.preloaders.eth_price.preloader import eth_price_preloader
-from snapshotter.settings.config import settings
+from eth_typing import Address
+from functools import reduce
+from eth_typing.evm import ChecksumAddress
+
+from typing import Optional, Union, List, Tuple, Dict, Any
 from snapshotter.utils.default_logger import logger
-from snapshotter.utils.models.message_models import SnapshotProcessMessage
-from snapshotter.utils.rpc import get_contract_abi_dict
-from snapshotter.utils.rpc import RpcHelper
+from rpc_helper.rpc import get_contract_abi_dict
+from rpc_helper.rpc import RpcHelper
 from web3 import Web3
+from computes.utils.constants import UNISWAP_TRADE_EVENT_SIGS
+from computes.utils.constants import UNISWAP_EVENTS_ABI
+from computes.utils.helpers import get_event_sig_and_abi
 
 from computes.settings.config import settings as worker_settings
 from computes.utils.constants import current_node
-from computes.utils.constants import erc20_abi
 from computes.utils.constants import factory_contract_obj
 from computes.utils.constants import pair_contract_abi
-from computes.utils.constants import STABLE_TOKENS_LIST
-from computes.utils.constants import TOKENS_DECIMALS
 from computes.utils.constants import ZER0_ADDRESS
+from computes.utils import constants
+from computes.utils.models.data_models import TickData, Slot0Data
+from computes.preloaders.eth_price.preloader import eth_price_preloader
+from computes.utils.models.message_models import UniswapPoolMetadata
+from computes.utils.constants import ERC20_ABI
+from computes.utils.constants import POOL_ABI
+
+AddressLike = Union[Address, ChecksumAddress]
+getcontext().prec = 36
 
 helper_logger = logger.bind(module='PowerLoom|Uniswap|Helpers')
 
+SCORE_BLOCK_MULTIPLIER = 1_000_000
 
-def gen_data_source_idx_to_compute(msg_obj: SnapshotProcessMessage):
-    monitored_pairs = worker_settings.initial_pairs
-    current_epoch = msg_obj.epochId
-    snapshotter_int_value = int(settings.instance_id.lower(), 16)
-    current_day = msg_obj.day
-    return (current_epoch + snapshotter_int_value + settings.slot_id + current_day) % len(monitored_pairs)
+WETH_ADDRESS = Web3.to_checksum_address(worker_settings.contract_addresses.WETH)
+USDC_ADDRESS = Web3.to_checksum_address(worker_settings.contract_addresses.USDC)
 
 
-def get_maker_pair_data(prop):
+class Slot0DataError(Exception):
     """
-    Get Maker token data based on the given property.
-    
-    Args:
-        prop (str): The property to retrieve ('name', 'symbol', or other).
-    
-    Returns:
-        str: The requested Maker token data.
+    Custom exception for errors during slot0 data fetching or processing.
     """
-    prop = prop.lower()
-    if prop == 'name':
-        return 'Maker'
-    elif prop == 'symbol':
-        return 'MKR'
-    else:
-        return 'Maker'
+    pass
 
 
-async def get_pair(
-    factory_contract_obj,
-    token0,
-    token1,
-    fee,
-    rpc_helper: RpcHelper,
-):
+def transform_tick_bytes_to_list(tick_bytes) -> List[TickData]:
     """
-    Get the pair address for two tokens and the given fee.
+    Convert a list of tick byte arrays (from a decoded web3 call) into a list of TickData objects.
 
     Args:
-        factory_contract_obj: The factory contract object.
-        token0 (str): The address of the first token.
-        token1 (str): The address of the second token.
-        fee (int): The fee for the pair.
-        rpc_helper (RpcHelper): Helper for making RPC calls.
+        tick_bytes: List of bytes objects, each representing a tick's data.
 
     Returns:
-        str: The pair address.
+        List[TickData]: List of TickData objects parsed from the input bytes.
     """
-    tasks = [
-        factory_contract_obj.functions.getPool(
-            Web3.to_checksum_address(token0),
-            Web3.to_checksum_address(token1),
-            fee,
-        ),
+    if len(tick_bytes) == 0:
+        return []
+
+    # Each tick is encoded as bytes: liquidity_net (all but last 3 bytes), idx (last 3 bytes)
+    ticks = [
+        TickData(
+            liquidity_net=int.from_bytes(i[:-3], 'big', signed=True),
+            idx=int.from_bytes(i[-3:], 'big', signed=True),
+        )
+        for i in tick_bytes
     ]
 
+    return ticks
 
-    result = await rpc_helper.web3_call(
-        tasks=tasks,
+
+def calculate_tvl_from_ticks(
+    ticks: List[TickData],
+    pair_metadata: UniswapPoolMetadata,
+    sqrt_price: int
+) -> Tuple[int, int]:
+    """
+    Calculate the Total Value Locked (TVL) for token0 and token1 from tick data and pool metadata.
+
+    Args:
+        ticks (List[TickData]): List of tick data objects.
+        pair_metadata (UniswapPoolMetadata): Metadata for the token pair (includes fee).
+        sqrt_price (int): Square root of the current price (uint160 from slot0).
+
+    Returns:
+        Tuple[int, int]: (token0_liquidity, token1_liquidity) as integers.
+    """
+    sqrt_price = Decimal(sqrt_price) / Decimal(2 ** 96)
+
+    liquidity_total = Decimal(0)
+    token0_liquidity = Decimal(0)
+    token1_liquidity = Decimal(0)
+    tick_spacing = Decimal(1)
+
+    if not ticks:
+        return (0, 0)
+
+    int_fee = int(pair_metadata.fee)
+
+    # Set tick spacing based on fee tier
+    if int_fee == 3000:
+        tick_spacing = Decimal(60)
+    elif int_fee == 500:
+        tick_spacing = Decimal(10)
+    elif int_fee == 10000:
+        tick_spacing = Decimal(200)
+
+    # See: https://atiselsts.github.io/pdfs/uniswap-v3-liquidity-math.pdf
+    for i in range(len(ticks)):
+        tick = ticks[i]
+        idx = Decimal(tick.idx)
+        # Next tick index, or add tick_spacing if last tick
+        nextIdx = Decimal(ticks[i + 1].idx) if i < len(ticks) - 1 else idx + tick_spacing
+
+        liquidity_net = Decimal(tick.liquidity_net)
+        liquidity_total += liquidity_net
+        sqrtPriceLow = Decimal(1.0001) ** (idx / 2)
+        sqrtPriceHigh = Decimal(1.0001) ** (nextIdx / 2)
+
+        if sqrt_price <= sqrtPriceLow:
+            # All liquidity is in token0
+            token0_liquidity += get_token0_in_pool(
+                liquidity_total,
+                sqrtPriceLow,
+                sqrtPriceHigh,
+            )
+        elif sqrt_price >= sqrtPriceHigh:
+            # All liquidity is in token1
+            token1_liquidity += get_token1_in_pool(
+                liquidity_total,
+                sqrtPriceLow,
+                sqrtPriceHigh,
+            )
+        else:
+            # Liquidity is split between token0 and token1
+            token0_liquidity += get_token0_in_pool(
+                liquidity_total,
+                sqrt_price,
+                sqrtPriceHigh,
+            )
+            token1_liquidity += get_token1_in_pool(
+                liquidity_total,
+                sqrtPriceLow,
+                sqrt_price,
+            )
+
+    return (int(token0_liquidity), int(token1_liquidity))
+
+
+def get_token0_in_pool(
+    liquidity: Decimal,
+    sqrtPriceLow: Decimal,
+    sqrtPriceHigh: Decimal,
+) -> int:
+    """
+    Calculate the amount of token0 in the pool for a given price range.
+
+    Args:
+        liquidity (Decimal): The liquidity in the pool.
+        sqrtPriceLow (Decimal): The square root of the lower price bound.
+        sqrtPriceHigh (Decimal): The square root of the upper price bound.
+
+    Returns:
+        int: The amount of token0 in the pool.
+    """
+    result = liquidity * (sqrtPriceHigh - sqrtPriceLow) / (sqrtPriceLow * sqrtPriceHigh)
+    return int(result)
+
+
+def get_token1_in_pool(
+    liquidity: Decimal,
+    sqrtPriceLow: Decimal,
+    sqrtPriceHigh: Decimal,
+) -> int:
+    """
+    Calculate the amount of token1 in the pool for a given price range.
+
+    Args:
+        liquidity (Decimal): The liquidity in the pool.
+        sqrtPriceLow (Decimal): The square root of the lower price bound.
+        sqrtPriceHigh (Decimal): The square root of the upper price bound.
+
+    Returns:
+        int: The amount of token1 in the pool.
+    """
+    result = liquidity * (sqrtPriceHigh - sqrtPriceLow)
+    return int(result)
+
+
+async def calculate_reserves(
+    pair_address: str,
+    at_block: int,
+    pair_per_token_metadata: Optional[UniswapPoolMetadata],
+    rpc_helper: RpcHelper,
+) -> Tuple[int, int]:
+    """
+    Calculate reserves for a given Uniswap V3 pool at a specific block.
+
+    Args:
+        pair_address (str): The address of the Uniswap V3 pool.
+        at_block (int): The block number to query.
+        pair_per_token_metadata (Optional[UniswapPoolMetadata]): Metadata for the pool.
+        rpc_helper (RpcHelper): Helper for making RPC calls.
+
+    Returns:
+        Tuple[int, int]: (token0_reserves, token1_reserves)
+    """
+    if not pair_per_token_metadata:
+        return (0, 0)
+    helper_logger.debug(
+        "[Epoch starting at {}] Pool {} | Calculating token0 and token1 reserves based on state at block {}",
+        at_block,
+        pair_address,
+        at_block,
     )
-    pair = result[0]
 
-    return pair
+    # Fetch tick data for the pool at the given block
+    ticks_list = await get_tick_info(
+        rpc_helper=rpc_helper,
+        pair_address=pair_address,
+        at_block=at_block,
+        pair_per_token_metadata=pair_per_token_metadata,
+    )
+    
+    if ticks_list is None:
+        helper_logger.warning(f"Could not get required tick info for {pair_address} at block {at_block}")
+        return (0, 0)
+    
+    # Fetch slot0 data for the pool at the given block
+    slot0_data_dict_at_block = await get_slot0_data_for_block_range(
+        rpc_helper=rpc_helper,
+        pair_address=pair_address,
+        from_block=at_block,
+        to_block=at_block,
+    )
+    if slot0_data_dict_at_block is None:
+        helper_logger.warning(f"Could not get required slot0 data for {pair_address} at block {at_block}")
+        return (0, 0)
+    sqrt_price = slot0_data_dict_at_block[at_block].sqrtPriceX96
+    
+    # Calculate TVL from ticks and slot0 price
+    t0_reserves, t1_reserves = calculate_tvl_from_ticks(
+        ticks_list,
+        pair_per_token_metadata,
+        sqrt_price,
+    )
+
+    return (int(t0_reserves), int(t1_reserves))
 
 
-async def get_pair_metadata(
-    pair_address,
+async def get_slot0_data_for_block_range(
     rpc_helper: RpcHelper,
-):
+    pair_address: str,
+    from_block: int,
+    to_block: int
+) -> Dict[int, Slot0Data]:
     """
-    Get information on the tokens contained within a pair contract.
-
-    This function retrieves the name, symbol, and decimals of token0 and token1,
-    as well as the pair symbol by concatenating {token0Symbol}-{token1Symbol}.
+    Fetch, validate, and process slot0 data for a given pool over a block range.
 
     Args:
-        pair_address (str): The address of the pair contract.
         rpc_helper (RpcHelper): Helper for making RPC calls.
+        pair_address (str): The address of the Uniswap V3 pool.
+        from_block (int): Start block (inclusive).
+        to_block (int): End block (inclusive).
 
     Returns:
-        dict: A dictionary containing token and pair information.
+        Dict[int, Slot0Data]: Mapping from block number to Slot0Data object.
 
     Raises:
-        Exception: If there's an error fetching metadata for the pair.
+        Slot0DataError: If fetching or parsing slot0 data fails.
     """
+    helper_logger.debug(
+        "[Range {}-{}] Pool {} | Fetching slot0 data",
+        from_block, to_block, pair_address
+    )
+
+    if from_block > to_block:
+        helper_logger.debug(
+            f"Invalid or empty block range ({from_block}-{to_block}) for slot0 data for {pair_address}, "
+            f"returning empty dict."
+        )
+        return {}
+
+    slot0ResponseListRaw = None
     try:
-        pair_address = Web3.to_checksum_address(pair_address)
+        # Batch call to fetch slot0 data for each block in the range
+        slot0ResponseListRaw = await rpc_helper.batch_eth_call_on_block_range(
+            abi_dict=get_contract_abi_dict(abi=constants.pair_contract_abi),
+            function_name='slot0',
+            contract_address=pair_address,
+            from_block=from_block,
+            to_block=to_block,
+            params=[],
+        )
+    except Exception as e:
+        msg = (
+            f"Exception during batch_eth_call_on_block_range for slot0 data for {pair_address} "
+            f"range {from_block}-{to_block}: {e}"
+        )
+        helper_logger.error(msg)
+        raise Slot0DataError(msg) from e
 
-        if pair_address in worker_settings.metadata_cache:
-            return worker_settings.metadata_cache[pair_address]
+    if slot0ResponseListRaw is None:
+        msg = f"Batch call for slot0 returned None for {pair_address} range {from_block}-{to_block}"
+        helper_logger.error(msg)
+        raise Slot0DataError(msg)
 
-        pair_contract = current_node['web3_client'].eth.contract(
-            address=pair_address,
-            abi=pair_contract_abi,
+    if not isinstance(slot0ResponseListRaw, list):
+        msg = (
+            f"Batch call for slot0 did not return a list for {pair_address} range {from_block}-{to_block}. "
+            f"Got: {type(slot0ResponseListRaw)}"
+        )
+        helper_logger.error(msg)
+        raise Slot0DataError(msg)
+        
+    slot0_data_dict: Dict[int, Slot0Data] = {}
+    expected_len = to_block - from_block + 1
+
+    if len(slot0ResponseListRaw) != expected_len:
+        msg = (
+            f"Slot0 response list length ({len(slot0ResponseListRaw)}) does not match expected "
+            f"block range length ({expected_len}) for {pair_address} range {from_block}-{to_block}. "
+            f"Expected complete data."
+        )
+        helper_logger.error(msg)
+        raise Slot0DataError(msg)
+         
+    for i in range(expected_len):
+        block_num = from_block + i
+        slot0_tuple = slot0ResponseListRaw[i]
+        try:
+            # Field names must match the order in Slot0Data model and the tuple from eth_abi.decode
+            field_names = [
+                "sqrtPriceX96", 
+                "tick", 
+                "observationIndex", 
+                "observationCardinality", 
+                "observationCardinalityNext", 
+                "feeProtocol", 
+                "unlocked"
+            ]
+            if len(slot0_tuple) != len(field_names):
+                raise ValueError(
+                    f"Tuple length {len(slot0_tuple)} does not match expected number of fields {len(field_names)}"
+                )
+            
+            data_dict = dict(zip(field_names, slot0_tuple))
+            slot0_data_obj = Slot0Data(**data_dict)
+            slot0_data_dict[block_num] = slot0_data_obj
+        except Exception as e_slot0_parse:
+            msg = (
+                f"Failed to parse slot0 tuple {slot0_tuple} for {pair_address} at block {block_num} "
+                f"(index {i}): {e_slot0_parse}."
+            )
+            helper_logger.error(msg)
+            raise Slot0DataError(msg) from e_slot0_parse
+    
+    helper_logger.info(
+        'Processed slot0 data ({}) for pool {} range {}-{}',
+        len(slot0_data_dict), pair_address, from_block, to_block
+    )
+    return slot0_data_dict
+
+
+async def get_tick_info(
+    rpc_helper: RpcHelper,
+    pair_address: str,
+    at_block: int,
+    pair_per_token_metadata: UniswapPoolMetadata,
+) -> Optional[List[TickData]]:
+    """
+    Fetch tick data for a Uniswap V3 pool at a specific block.
+
+    Args:
+        rpc_helper (RpcHelper): Helper for making RPC calls.
+        pair_address (str): The address of the Uniswap V3 pool.
+        at_block (int): The block number to query.
+        pair_per_token_metadata (UniswapPoolMetadata): Metadata for the pool (includes fee).
+
+    Returns:
+        Optional[List[TickData]]: List of TickData objects, or None if fetch fails.
+    """
+    helper_logger.debug(
+        "[Block {}] Pool {} | Fetching tick information",
+        at_block, pair_address
+    )
+    try:
+        fee = int(pair_per_token_metadata.fee)
+        
+        # Determine number of segments to split tick range by fee tier
+        if fee < 500:
+            num_segments = 16
+        elif fee >= 500 and fee < 3000:
+            num_segments = 4
+        elif fee >= 3000 and fee < 10000:
+            num_segments = 2
+        elif fee >= 10000:
+            num_segments = 1
+        
+        tick_tasks = []
+        total_range = constants.MAX_TICK - constants.MIN_TICK + 1
+        segment_size = total_range // num_segments
+
+        # Prepare tasks to fetch ticks in segments
+        for i in range(num_segments):
+            from_tick = constants.MIN_TICK + i * segment_size
+            if i == num_segments - 1:
+                to_tick = constants.MAX_TICK
+            else:
+                to_tick = from_tick + segment_size - 1
+            
+            tick_tasks.append(('getTicks', [pair_address, from_tick, to_tick]))
+
+        try:
+            # Batched call to fetch tick data for all segments at the given block
+            tickDataResponse = await rpc_helper.web3_call(
+                tasks=tick_tasks, 
+                contract_addr=constants.helper_contract.address,
+                abi=constants.helper_contract.abi,
+                tasks_block_override=[at_block for _ in range(len(tick_tasks))],
+            )
+        except Exception as e:
+            helper_logger.opt(exception=True).error(
+                'Unexpected error in get_tick_info for pool {} | block {}: {}',
+                pair_address, at_block, e
+            )
+            return None
+
+        if tickDataResponse is None:
+            helper_logger.error(
+                'Failed to gather required data for pool {} | block {}. ',
+                pair_address, at_block
+            )
+            return None
+
+        ticks_list: List[TickData] = []
+        temp_ticks_list_of_lists = []
+        # Convert each segment's bytes to TickData objects
+        for ticks_bytes in tickDataResponse:
+            if isinstance(ticks_bytes, Exception):
+                helper_logger.warning(f"A batched RPC call for tick data failed: {ticks_bytes}")
+                continue
+            temp_ticks_list_of_lists.append(transform_tick_bytes_to_list(ticks_bytes))
+        
+        if temp_ticks_list_of_lists:
+            # Flatten the list of lists, skipping empty lists
+            non_empty_tick_lists = [lst for lst in temp_ticks_list_of_lists if lst]
+            if non_empty_tick_lists:
+                ticks_list = reduce(lambda x, y: x + y, non_empty_tick_lists)
+
+        helper_logger.info(
+            'Fetched tick data ({}) for pool {} @ block {}',
+            len(ticks_list), pair_address, at_block
         )
 
-        tasks = [
-            pair_contract.functions.token0(),
-            pair_contract.functions.token1(),
-            pair_contract.functions.fee(),
-        ]
+        return ticks_list
 
-        token0Addr, token1Addr, fee = await rpc_helper.web3_call(
-            tasks=tasks,
-        )
-
-        # token0 contract
-        token0 = current_node['web3_client'].eth.contract(
-            address=Web3.to_checksum_address(token0Addr),
-            abi=erc20_abi,
-        )
-        # token1 contract
-        token1 = current_node['web3_client'].eth.contract(
-            address=Web3.to_checksum_address(token1Addr),
-            abi=erc20_abi,
-        )
-
-        # prepare tasks for fetching token data
-        token0_tasks = []
-        token1_tasks = []
-
-        # special case to handle maker token
-        maker_token0 = None
-        maker_token1 = None
-
-        if Web3.to_checksum_address(token0Addr) == Web3.to_checksum_address(worker_settings.contract_addresses.MAKER):
-            token0_name = get_maker_pair_data('name')
-            token0_symbol = get_maker_pair_data('symbol')
-            maker_token0 = True
-        else:
-            token0_tasks.extend([token0.functions.name(), token0.functions.symbol()])
-        token0_tasks.append(token0.functions.decimals())
-
-        if Web3.to_checksum_address(token1Addr) == Web3.to_checksum_address(worker_settings.contract_addresses.MAKER):
-            token1_name = get_maker_pair_data('name')
-            token1_symbol = get_maker_pair_data('symbol')
-            maker_token1 = True
-        else:
-            token1_tasks.extend([token1.functions.name(), token1.functions.symbol()])
-        token1_tasks.append(token1.functions.decimals())
-
-        if maker_token1:
-            [token0_name, token0_symbol, token0_decimals] = await rpc_helper.web3_call(
-                tasks=token0_tasks,
-            )
-            [token1_decimals] = await rpc_helper.web3_call(
-                token1_tasks,
-            )
-        elif maker_token0:
-            [token1_name, token1_symbol, token1_decimals] = await rpc_helper.web3_call(
-                tasks=token1_tasks,
-            )
-            [token0_decimals] = await rpc_helper.web3_call(
-                tasks=token0_tasks,
-            )
-        else:
-            [token0_name, token0_symbol, token0_decimals] = await rpc_helper.web3_call(
-                tasks=token0_tasks,
-            )
-            [token1_name, token1_symbol, token1_decimals] = await rpc_helper.web3_call(
-                tasks=token1_tasks,
-            )
-
-        return {
-            'token0': {
-                'address': token0Addr,
-                'name': token0_name,
-                'symbol': token0_symbol,
-                'decimals': token0_decimals,
-            },
-            'token1': {
-                'address': token1Addr,
-                'name': token1_name,
-                'symbol': token1_symbol,
-                'decimals': token1_decimals,
-            },
-            'pair': {
-                'symbol': f'{token0_symbol}-{token1_symbol}|{fee}',
-                'address': pair_address,
-                'fee': fee,
-            },
-        }
-    except Exception as err:
-        # this will be retried in next cycle
+    except Exception as e:
         helper_logger.opt(exception=True).error(
-            (
-                f'RPC error while fetcing metadata for pair {pair_address},'
-                f' error_msg:{err}'
-            ),
+            'Unexpected error in get_tick_info for pool {} | block {}: {}',
+            pair_address, at_block, e
         )
-        raise err
+        return None
 
 
-async def get_token_eth_price_dict(
-    token_address: str,
-    token_decimals: int,
-    from_block,
-    to_block,
+async def get_token_price_in_block_range(
+    pair_metadata: UniswapPoolMetadata,
+    from_block: int,
+    to_block: int,
     rpc_helper: RpcHelper,
-    eth_price_dict: dict,
 ):
     """
-    Get a dictionary of token prices in ETH for each block.
+    Fetch the price of token0 and token1 for a given Uniswap V3 pool over a specified block range.
+
+    This function queries the Uniswap V3 pool contract's `slot0` function for each block in the range,
+    extracts the sqrtPriceX96 value, and converts it to token prices using the provided token decimals.
+    The prices are returned as dictionaries mapping block numbers to prices for both token0 and token1.
 
     Args:
-        token_address (str): The address of the token.
-        token_decimals (int): The number of decimals for the token.
-        from_block (int): The starting block number.
-        to_block (int): The ending block number.
-        rpc_helper (RpcHelper): Helper for making RPC calls.
+        pair_metadata (UniswapPoolMetadata): Metadata for the Uniswap V3 pool, including token decimals and address.
+        from_block (int): The starting block number (inclusive).
+        to_block (int): The ending block number (inclusive).
+        redis_conn (aioredis.Redis): Redis connection object.
+        rpc_helper (RpcHelper): Helper object to perform batched RPC calls.
 
     Returns:
-        dict: A dictionary mapping block numbers to token prices in ETH.
-
-    Raises:
-        Exception: If there's an error fetching token prices.
+        Tuple[Dict[int, float], Dict[int, float]]:
+            - token0_price: Mapping from block number to token0 price.
+            - token1_price: Mapping from block number to token1 price.
     """
-    token_address = Web3.to_checksum_address(token_address)
-    token_eth_price_dict = dict()
+    response = await rpc_helper.batch_eth_call_on_block_range(
+        abi_dict=get_contract_abi_dict(
+            abi=pair_contract_abi,
+        ),
+        contract_address=pair_metadata.address,
+        from_block=from_block,
+        to_block=to_block,
+        function_name='slot0',
+        params=[],
+    )
 
-    try:
-        token_eth_quote = await get_token_eth_quote_from_uniswap(
-            token_address=token_address,
-            token_decimals=token_decimals,
+    # Log the slot0 responses for debugging and traceability.
+    helper_logger.info(
+        'Epoch {}-{} | Pool {} | Slot0 response: {}',
+        from_block, to_block, pair_metadata.address, response
+    )
+
+    # Initialize dictionaries to store prices for each block.
+    token0_price = {}
+    token1_price = {}
+
+    # Iterate over each block in the range and compute token prices.
+    for i, block_num in enumerate(range(from_block, to_block + 1)):
+        # Extract sqrtPriceX96 from the slot0 response for the current block.
+        sqrtP = response[i][0]
+        # Convert sqrtPriceX96 to token0 and token1 prices using the correct decimals.
+        price0, price1 = eth_price_preloader.sqrtPriceX96ToTokenPrices(
+            sqrtP,
+            pair_metadata.token0.decimals,
+            pair_metadata.token1.decimals,
+        )
+        # Store the computed prices in the result dictionaries.
+        token0_price[block_num] = price0
+        token1_price[block_num] = price1
+
+    # Return the price mappings for token0 and token1.
+    return token0_price, token1_price
+
+
+async def get_token_price_in_usd_in_block_range(
+    pair_metadata: UniswapPoolMetadata,
+    from_block: int,
+    to_block: int,
+    anchor_rpc_helper: RpcHelper,
+    protocol_state_contract,
+    rpc_helper: RpcHelper,
+):
+    """
+    Fetch the price of token0 and token1 in USD for a given Uniswap V3 pool over a specified block range.
+
+    This function first checks if the prices are already cached in Redis. If not, it computes the prices
+    using the best available method depending on whether the tokens are WETH, USDC, or require a reference pool.
+    The computed prices are then cached for future use.
+
+    Args:
+        pair_metadata (UniswapPoolMetadata): Metadata for the Uniswap V3 pool.
+        from_block (int): The starting block number (inclusive).
+        to_block (int): The ending block number (inclusive).
+        redis_conn: Redis connection object.
+        anchor_rpc_helper (RpcHelper): Helper for anchor chain RPC calls.
+        ipfs_reader: IPFS reader object for metadata.
+        protocol_state_contract: Protocol state contract object.
+        rpc_helper (RpcHelper): Helper object to perform batched RPC calls.
+
+    Returns:
+        Tuple[
+            Dict[int, float],  # token0_price_raw: token0 price in terms of token1 for each block
+            Dict[int, float],  # token1_price_raw: token1 price in terms of token0 for each block
+            Dict[int, float],  # token0_price: token0 price in USD for each block
+            Dict[int, float],  # token1_price: token1 price in USD for each block
+        ]
+    """
+    # TODO: Rename function names and variablesto relative token price for clarity
+    token0_price_raw, token1_price_raw = await get_token_price_in_block_range( 
+        pair_metadata=pair_metadata,
+        from_block=from_block,
+        to_block=to_block,
+        rpc_helper=rpc_helper,
+    )
+ 
+    # If either token0 or token1 is WETH, use ETH/USD price for conversion.
+    if Web3.to_checksum_address(pair_metadata.token0.address) == WETH_ADDRESS or Web3.to_checksum_address(pair_metadata.token1.address) == WETH_ADDRESS:
+        # Fetch ETH/USD price for the block range.
+        eth_usd_price_dict = await eth_price_preloader.get_eth_price_usd(
             from_block=from_block,
             to_block=to_block,
             rpc_helper=rpc_helper,
-            eth_price_dict=eth_price_dict,
+        )
+        if Web3.to_checksum_address(pair_metadata.token0.address) == WETH_ADDRESS:
+            # token0 is WETH: its price is ETH/USD, token1 is relative to ETH.
+            token0_price = eth_usd_price_dict
+            token1_price = {
+                block_num: eth_usd_price_dict[block_num] * token1_price_raw[block_num]
+                for block_num in token1_price_raw
+            }
+        else:
+            # token1 is WETH: its price is ETH/USD, token0 is relative to ETH.
+            token0_price = {
+                block_num: eth_usd_price_dict[block_num] * token0_price_raw[block_num]
+                for block_num in token0_price_raw
+            }
+            token1_price = eth_usd_price_dict
+
+    # If either token0 or token1 is USDC, use 1 USD as the price for USDC.
+    elif Web3.to_checksum_address(pair_metadata.token0.address) == USDC_ADDRESS or Web3.to_checksum_address(pair_metadata.token1.address) == USDC_ADDRESS:
+        if Web3.to_checksum_address(pair_metadata.token0.address) == USDC_ADDRESS:
+            # token0 is USDC: price is 1 USD, token1 is relative to USDC.
+            token0_price = {
+                block_num: 1 for block_num in token0_price_raw
+            }
+            token1_price = token1_price_raw
+        else:
+            # token1 is USDC: price is 1 USD, token0 is relative to USDC.
+            token0_price = token0_price_raw
+            token1_price = {
+                block_num: 1 for block_num in token1_price_raw
+            }
+    else:
+        # For other tokens, identify the best pool (with WETH or USDC) to use as a price reference.
+        best_pool_token_address = await identify_best_pool_to_calculate_price(
+            pair_metadata=pair_metadata,
+            rpc_helper=rpc_helper,
+        )
+        # Generate pool metadata for the best reference pool.
+        best_pool_metadata = await get_uniswap_v3_pool_metadata(
+            pool_address=best_pool_token_address,
+            rpc_helper=rpc_helper,
+            anchor_rpc_helper=anchor_rpc_helper,
+            protocol_state_contract=protocol_state_contract,
         )
 
-        if token_eth_quote:
-            token_eth_quote = [quote[0] for quote in token_eth_quote]
-            for block_num, price in zip(range(from_block, to_block + 1), token_eth_quote):
-                token_eth_price_dict[block_num] = price
+        # Get the addresses of the tokens in the best pool.
+        best_pool_tokens = [Web3.to_checksum_address(best_pool_metadata.token0.address), Web3.to_checksum_address(best_pool_metadata.token1.address)]
+        # Recursively fetch the USD prices for the tokens in the best pool.
+        _, _, best_pool_token0_price_usd, best_pool_token1_price_usd = await get_token_price_in_usd_in_block_range(
+            pair_metadata=best_pool_metadata,
+            from_block=from_block,
+            to_block=to_block,
+            anchor_rpc_helper=anchor_rpc_helper,
+            protocol_state_contract=protocol_state_contract,
+            rpc_helper=rpc_helper,
+        )
 
-        return token_eth_price_dict
+        # Determine which token in the best pool matches token0 or token1 of the original pair.
+        if Web3.to_checksum_address(pair_metadata.token0.address) in best_pool_tokens:
+            # If token0 is in the best pool, use its USD price directly.
+            if Web3.to_checksum_address(pair_metadata.token0.address) == Web3.to_checksum_address(best_pool_metadata.token0.address):
+                reference_token_price_usd = best_pool_token0_price_usd
+            else:
+                reference_token_price_usd = best_pool_token1_price_usd
 
-    except Exception as e:
-        helper_logger.debug(f'error while fetching token price for {token_address}, error_msg:{e}')
-        raise e
+            token0_price = reference_token_price_usd
+            # token1 price is token0 price * token1/token0 price ratio.
+            token1_price = {
+                block_num: reference_token_price_usd[block_num] * token1_price_raw[block_num]
+                for block_num in token1_price_raw
+            }
+        else:
+            # If token1 is in the best pool, use its USD price directly.
+            if Web3.to_checksum_address(pair_metadata.token1.address) == Web3.to_checksum_address(best_pool_metadata.token0.address):
+                reference_token_price_usd = best_pool_token0_price_usd
+            else:
+                reference_token_price_usd = best_pool_token1_price_usd
+
+            # token0 price is token1 price * token0/token1 price ratio.
+            token0_price = {
+                block_num: reference_token_price_usd[block_num] * token0_price_raw[block_num]
+                for block_num in token0_price_raw
+            }
+            token1_price = reference_token_price_usd
+
+    return token0_price_raw, token1_price_raw, token0_price, token1_price
 
 
-async def get_token_pair_address_with_fees(
+async def identify_best_liquidity_pool(
     token0: str,
     token1: str,
     rpc_helper: RpcHelper,
 ):
     """
-    Get the best pair address for two tokens based on liquidity across different fee tiers.
+    Get the best Uniswap V3 pair address for two tokens based on liquidity across different fee tiers.
+
+    This function queries the Uniswap V3 factory for all possible pools between token0 and token1
+    at common fee tiers, then fetches the liquidity for each pool, and returns the address of the pool
+    with the highest liquidity.
 
     Args:
         token0 (str): The address of the first token.
         token1 (str): The address of the second token.
+        redis_conn (aioredis.Redis): Redis connection for caching.
         rpc_helper (RpcHelper): Helper for making RPC calls.
 
     Returns:
-        str: The address of the best pair contract.
+        Tuple[str, int]: The address of the best pair contract and its liquidity.
     """
+    # Prepare tasks to get the pool address for each fee tier.
     tasks = [
         get_pair(
             factory_contract_obj=factory_contract_obj, token0=token0, token1=token1,
@@ -296,10 +703,13 @@ async def get_token_pair_address_with_fees(
             fee=int(100), rpc_helper=rpc_helper,
         ),
     ]
+    # Fetch all pool addresses for the given token pair and fee tiers.
     pair_address_list = await asyncio.gather(*tasks)
+    # Filter out zero addresses (non-existent pools).
     pair_address_list = [pair for pair in pair_address_list if pair != ZER0_ADDRESS]
 
     if len(pair_address_list) > 0:
+        # For each valid pool, create a contract object.
         pair_contracts = [
             current_node['web3_client'].eth.contract(
                 address=Web3.to_checksum_address(pair),
@@ -307,214 +717,290 @@ async def get_token_pair_address_with_fees(
             ) for pair in pair_address_list
         ]
 
+        # Prepare tasks to fetch the liquidity for each pool.
         tasks = [
             asyncio.create_task(
                 rpc_helper.web3_call(
-                    tasks=[pair_contract.functions.liquidity()],
+                    tasks=[('liquidity', [])],
+                    contract_addr=pair_contract.address,
+                    abi=pair_contract.abi,
                 )
             ) for pair_contract in pair_contracts
         ]
 
+        # Fetch all liquidity values.
         liquidity_list = await asyncio.gather(*tasks)
+        # Pair each pool address with its liquidity.
+        pair_liquidity_dict = zip(pair_address_list, liquidity_list)
+        # Find the pool with the highest liquidity.
+        best_pair, best_liquidity = max(pair_liquidity_dict, key=lambda x: x[1])
+        return best_pair, best_liquidity[0]
 
-        pair_liquidity_dict = dict(zip(pair_address_list, liquidity_list))
-        best_pair = max(pair_liquidity_dict, key=pair_liquidity_dict.get)
-    else:
-        best_pair = ZER0_ADDRESS
-
-    return best_pair
+    # If no valid pools found, return zero address and zero liquidity.
+    return ZER0_ADDRESS, 0
 
 
-async def get_token_stable_pair_data(
-    token: str,
-    token_decimals: int,
+async def identify_best_pool_to_calculate_price(
+    pair_metadata: UniswapPoolMetadata,
     rpc_helper: RpcHelper,
 ):
     """
-    Get the stable pair data for a given token.
+    Identify the best Uniswap V3 pool to use as a price reference for a given pair.
 
-    This function attempts to find a pair between the given token and a stable token.
+    This function checks if the best pool is already cached in Redis. If not, it tries all combinations
+    of the pair's tokens with WETH and USDC, finds the pool with the highest liquidity, and caches the result.
 
     Args:
-        token (str): The address of the token.
-        token_decimals (int): The number of decimals for the token.
+        pair_metadata (UniswapPoolMetadata): Metadata for the Uniswap V3 pool.
+        redis_conn: Redis connection object.
         rpc_helper (RpcHelper): Helper for making RPC calls.
 
     Returns:
-        dict: A dictionary containing token pair data.
+        str: The address of the best pool to use for price calculation.
     """
-    token_stable_pair = ZER0_ADDRESS
-    token0 = token
-    token1 = ZER0_ADDRESS
-    token0_decimals = token_decimals
-    token1_decimals = 0
-    for stable_token in STABLE_TOKENS_LIST:
-        if int(token, 16) < int(stable_token, 16):
-            token0, token1 = token, stable_token
-            token0_decimals, token1_decimals = token_decimals, TOKENS_DECIMALS.get(stable_token, 0)
-        else:
-            token0, token1 = stable_token, token
-            token0_decimals, token1_decimals = TOKENS_DECIMALS.get(stable_token, 0), token_decimals
 
-        pair = await get_token_pair_address_with_fees(
-            token0=token0,
-            token1=token1,
-            rpc_helper=rpc_helper,
-        )
+    # Prepare all token combinations with WETH and USDC.
+    token_options = [WETH_ADDRESS, USDC_ADDRESS]
+    all_token_options = (
+        [(pair_metadata.token0.address, token_option) for token_option in token_options] +
+        [(pair_metadata.token1.address, token_option) for token_option in token_options]
+    )
 
-        if pair != ZER0_ADDRESS:
-            token_stable_pair = pair
-            break
+    best_pair_address, best_liquidity = ZER0_ADDRESS, 0
+    # Prepare tasks to identify the best liquidity pool for each token combination.
+    tasks = [
+        asyncio.create_task(
+            identify_best_liquidity_pool(
+                token0=token_option[0], token1=token_option[1], rpc_helper=rpc_helper)
+        ) for token_option in all_token_options
+    ]
+    # Fetch all results.
+    results = await asyncio.gather(*tasks)
+    # Find the pool with the highest liquidity among all combinations.
+    for pair_address, liquidity in results:
+        helper_logger.info(f"Pair address: {pair_address}, liquidity: {liquidity}")
+        if pair_address != ZER0_ADDRESS and liquidity > best_liquidity:
+            best_pair_address = pair_address
+            best_liquidity = liquidity
 
-    return {
-        'token0': token0,
-        'token1': token1,
-        'token0_decimals': int(token0_decimals),
-        'token1_decimals': int(token1_decimals),
-        'pair': token_stable_pair,
-    }
+    return best_pair_address
 
 
-async def get_token_eth_quote_from_uniswap(
-    token_address,
-    token_decimals,
+async def get_events(
+    pair_address: str,
+    rpc: RpcHelper,
     from_block,
     to_block,
-    rpc_helper: RpcHelper,
-    eth_price_dict: dict,
 ):
     """
-    Get the ETH quote for a token from Uniswap.
-
-    This function first attempts to price from a token-WETH pool. If that fails,
-    it tries to find a token-stable coin pool and calculates the ETH price.
+    Fetch events for a given pair address within a block range.
 
     Args:
-        token_address (str): The address of the token.
-        token_decimals (int): The number of decimals for the token.
-        from_block (int): The starting block number.
-        to_block (int): The ending block number.
+        pair_address (str): The address of the token pair.
+        rpc (RpcHelper): An instance of RpcHelper for making RPC calls.
+        from_block: The starting block number.
+        to_block: The ending block number.
+
+    Returns:
+        list: A list of events for the specified pair and block range.
+    """
+    event_sig, event_abi = get_event_sig_and_abi(
+        UNISWAP_TRADE_EVENT_SIGS,
+        UNISWAP_EVENTS_ABI,
+    )
+
+    events = await rpc.get_events_logs(
+        contract_address=pair_address,
+        to_block=to_block,
+        from_block=from_block,
+        topics=[event_sig],
+        event_abi=event_abi,
+    )
+
+    return events
+
+
+async def get_pair(
+    factory_contract_obj,
+    token0,
+    token1,
+    fee,
+    rpc_helper: RpcHelper,
+):
+    """
+    Get the pair address for two tokens and the given fee, using Redis cache when available.
+
+    Args:
+        factory_contract_obj: The factory contract object.
+        token0 (str): The address of the first token.
+        token1 (str): The address of the second token.
+        fee (int): The fee for the pair.
+        redis_conn (aioredis.Redis): Redis connection for caching.
         rpc_helper (RpcHelper): Helper for making RPC calls.
 
     Returns:
-        list: A list of tuples containing token prices in ETH for each block.
-
-    Raises:
-        Exception: If there's an error fetching token prices.
+        str: The pair address.
     """
-    token0 = token_address
-    token1 = worker_settings.contract_addresses.WETH
-    token0_decimals = token_decimals
-    token1_decimals = TOKENS_DECIMALS.get(worker_settings.contract_addresses.WETH, 18)
-    if int(token1, 16) < int(token0, 16):
-        token0, token1 = token1, token0
-        token0_decimals, token1_decimals = token1_decimals, token0_decimals
 
-    try:
-        token_weth_pair = await get_token_pair_address_with_fees(
-            token0=token0,
-            token1=token1,
-            rpc_helper=rpc_helper,
-        )
+    # If not cached, fetch from chain
+    tasks = [
+        ('getPool', [Web3.to_checksum_address(token0), Web3.to_checksum_address(token1), fee]),
+    ]
 
-        token_eth_quote = []
+    result = await rpc_helper.web3_call(
+        tasks=tasks,
+        contract_addr=factory_contract_obj.address,
+        abi=factory_contract_obj.abi,
+    )
+    pair = result[0]
 
-        if token_weth_pair != ZER0_ADDRESS:
-            response = await rpc_helper.batch_eth_call_on_block_range(
-                abi_dict=get_contract_abi_dict(
-                    abi=pair_contract_abi,
-                ),
-                contract_address=token_weth_pair,
-                from_block=from_block,
-                to_block=to_block,
-                function_name='slot0',
-                params=[],
-            )
-            sqrtP_list = [slot0[0] for slot0 in response]
-            for sqrtP in sqrtP_list:
-                price0, price1 = eth_price_preloader.sqrtPriceX96ToTokenPrices(
-                    sqrtP,
-                    token0_decimals,
-                    token1_decimals,
-                )
-
-                if token0.lower() == token_address.lower():
-                    token_eth_quote.append((price0,))
-                else:
-                    token_eth_quote.append((price1,))
-
-            return token_eth_quote
-        else:
-            # since we couldnt find a token/weth pool, attempt to find a token/stable pool
-            token_stable_pair_data = await get_token_stable_pair_data(
-                token=token_address,
-                token_decimals=token_decimals,
-                rpc_helper=rpc_helper,
-            )
-
-            if token_stable_pair_data['pair'] != ZER0_ADDRESS:
-                response = await rpc_helper.batch_eth_call_on_block_range(
-                    abi_dict=get_contract_abi_dict(
-                        abi=pair_contract_abi,
-                    ),
-                    contract_address=token_stable_pair_data['pair'],
-                    from_block=from_block,
-                    to_block=to_block,
-                    function_name='slot0',
-                    params=[],
-                )
-
-                eth_usd_price_dict = eth_price_dict
-
-                token0_decimals = token_stable_pair_data['token0_decimals']
-                token1_decimals = token_stable_pair_data['token1_decimals']
-
-                sqrtP_list = [slot0[0] for slot0 in response]
-                sqrtP_eth_list = [block_price for block_price in eth_usd_price_dict.values()]
-                token_eth_quote = []
-
-                for i in range(len(sqrtP_list)):
-                    sqrtP = sqrtP_list[i]
-                    eth_price = sqrtP_eth_list[i]
-                    price0, price1 = eth_price_preloader.sqrtPriceX96ToTokenPrices(
-                        sqrtP,
-                        token0_decimals,
-                        token1_decimals,
-                    )
-                    if token0.lower() == token_address.lower():
-                        token_eth_quote.append((price0 / eth_price,))
-                    else:
-                        token_eth_quote.append((price1 / eth_price,))
-
-                return token_eth_quote
-            else:
-                return [(0,) for _ in range(from_block, to_block + 1)]
-    except Exception as e:
-        helper_logger.debug(f'error while fetching token price for {token_address}, error_msg:{e}')
-        raise e
+    return pair
 
 
-def truncate(number, decimals=5):
-    """
-    Truncate a number to a specific number of decimal places.
+async def get_pool_metadata(
+    pool_address: Union[str, Address],
+    rpc_helper: RpcHelper,
+) -> Optional[Dict[str, Any]]:
+    """Get comprehensive metadata from a UniswapV3Pool.
 
     Args:
-        number (float): The number to truncate.
-        decimals (int): The number of decimal places to keep (default: 5).
+        pool_address: The address of the UniswapV3Pool contract
 
     Returns:
-        float: The truncated number.
-
-    Raises:
-        TypeError: If decimals is not an integer.
-        ValueError: If decimals is negative.
+        Dict containing pool metadata or None if not a valid pool
     """
-    if not isinstance(decimals, int):
-        raise TypeError('decimal places must be an integer.')
-    elif decimals < 0:
-        raise ValueError('decimal places has to be 0 or more.')
-    elif decimals == 0:
-        return math.trunc(number)
+    try:
+        pool_address = Web3.to_checksum_address(pool_address)
 
-    factor = 10.0 ** decimals
-    return math.trunc(number * factor) / factor
+        # Create pool contract instance
+        current_node = rpc_helper.get_current_node()
+        pool_contract = current_node['web3_client'].eth.contract(address=pool_address, abi=POOL_ABI)
+
+        # Get basic pool data
+        try:
+            token0_address = await pool_contract.functions.token0().call()
+            token1_address = await pool_contract.functions.token1().call()
+            factory_address = await pool_contract.functions.factory().call()
+            fee = await pool_contract.functions.fee().call()
+            tick_spacing = await pool_contract.functions.tickSpacing().call()
+        except Exception as e:
+            logger.error(f"Failed to get basic pool data for {pool_address}: {str(e)}")
+            return None
+
+        # Normalize addresses
+        token0_address = Web3.to_checksum_address(token0_address)
+        token1_address = Web3.to_checksum_address(token1_address)
+        factory_address = Web3.to_checksum_address(factory_address)
+
+        # Get token metadata
+        token0_metadata = await _get_erc20_metadata(token0_address, rpc_helper)
+        token1_metadata = await _get_erc20_metadata(token1_address, rpc_helper)
+
+        if not token0_metadata or not token1_metadata:
+            logger.error(f"Failed to get token metadata for pool {pool_address}")
+            return None
+
+        # Build metadata
+        pool_metadata = {
+            'address': pool_address,
+            'token0': {
+                'address': token0_address,
+                **token0_metadata
+            },
+            'token1': {
+                'address': token1_address,
+                **token1_metadata
+            },
+            'fee': fee,
+            'tick_spacing': tick_spacing,
+            'factory': factory_address
+        }
+
+        return pool_metadata
+
+    except Exception as e:
+        logger.error(f"Error getting pool metadata for {pool_address}: {str(e)}")
+        return None
+
+
+async def _get_erc20_metadata(
+    token_address: Union[str, Address], 
+    rpc_helper: RpcHelper,
+) -> Optional[Dict[str, Any]]:
+    """Get ERC20 token metadata with robust error handling."""
+    try:
+        token_address = Web3.to_checksum_address(token_address)
+
+        # Create token contract
+        current_node = rpc_helper.get_current_node()
+        token_contract = current_node['web3_client'].eth.contract(address=token_address, abi=ERC20_ABI)
+
+        # Get metadata with fallbacks
+        try:
+            name = await token_contract.functions.name().call()
+        except Exception:
+            name = "Unknown Token"
+
+        try:
+            symbol = await token_contract.functions.symbol().call()
+        except Exception:
+            symbol = "UNKNOWN"
+
+        try:
+            decimals = await token_contract.functions.decimals().call()
+        except Exception:
+            decimals = 18  # Default to 18 decimals
+
+        metadata = {
+            'name': name,
+            'symbol': symbol,
+            'decimals': decimals
+        }
+
+        return metadata
+
+    except Exception as e:
+        logger.error(f"Error getting ERC20 metadata for {token_address}: {str(e)}")
+        return None
+
+
+async def get_uniswap_v3_pool_metadata(
+        pool_address: str, 
+        rpc_helper: RpcHelper,
+        anchor_rpc_helper: RpcHelper,
+        protocol_state_contract,    
+    ) -> Optional[UniswapPoolMetadata]:
+    """
+    Retrieves metadata for a Uniswap V3 pool from the snapshotter system.
+    
+    This function first checks the Redis cache for existing pool metadata. If not found,
+    it fetches the latest snapshot data for the pool from the protocol state and 
+    constructs the metadata object.
+    
+    Args:
+        pool_address (str): The Ethereum address of the Uniswap V3 pool
+        redis_conn (aioredis.Redis): Redis connection for caching
+        anchor_rpc_helper (RpcHelper): RPC helper for blockchain interactions
+        ipfs_reader (AsyncIPFSClient): IPFS client for reading snapshot data
+        protocol_state_contract: Smart contract object for protocol state
+        
+    Returns:
+        Optional[UniswapPoolMetadata]: Pool metadata object containing token information,
+                                     decimals, symbols, etc. Returns None if metadata 
+                                     cannot be retrieved.
+                                     
+    Raises:
+        Exception: If there's an error fetching the latest snapshot data
+    """
+    
+    # If not cached, fetch from latest snapshot
+    try:
+        pool_metadata_raw = await get_pool_metadata(pool_address, rpc_helper)
+        if not pool_metadata_raw:
+            logger.error(f"Unable to get pool metadata for pool {pool_address}")
+            return None
+        return UniswapPoolMetadata(**pool_metadata_raw)
+
+    except Exception as e:
+        logger.opt(exception=e).error(f"Error getting latest snapshot for pool {pool_address} while processing metadata")
+        return None

@@ -1,8 +1,4 @@
-from typing import List
-from typing import Dict
-from typing import Any
 from pydantic import BaseModel
-from pydantic import Field
 
 
 class UniswapContractAbis(BaseModel):
@@ -10,10 +6,12 @@ class UniswapContractAbis(BaseModel):
     pair_contract: str
     erc20: str
     trade_events: str
-
+    uniswap_v3_helper: str
 
 class ContractAddresses(BaseModel):
     uniswap_v3_factory: str
+    uniswap_v3_helper: str
+    chainlink_eth_usd_oracle: str
     DAI_WETH_PAIR: str
     USDC_WETH_PAIR: str
     USDT_WETH_PAIR: str
@@ -27,7 +25,3 @@ class ContractAddresses(BaseModel):
 class Settings(BaseModel):
     uniswap_contract_abis: UniswapContractAbis
     contract_addresses: ContractAddresses
-    uniswap_v2_whitelist: List[str]
-    initial_pairs: List[str]
-    metadata_cache: Dict[str, Any]
-    static_pairs: bool

@@ -1,117 +1,30 @@
 import time
+from typing import List, Tuple
+from typing import Optional
 
-from ipfs_client.main import AsyncIPFSClient
-from snapshotter.utils.callback_helpers import GenericProcessor
-from snapshotter.utils.default_logger import logger
+from rpc_helper.rpc import RpcHelper
+
+from computes.utils.core import base_snapshot_from_block_range
 from snapshotter.utils.models.message_models import SnapshotProcessMessage
-from snapshotter.utils.rpc import RpcHelper
-
-from computes.settings.config import settings as module_settings
-from computes.utils.core import get_pair_reserves
-from computes.utils.helpers import gen_data_source_idx_to_compute
-from computes.utils.models.message_models import EpochBaseSnapshot
-from computes.utils.models.message_models import UniswapPairTotalReservesSnapshot
+from snapshotter.utils.callback_helpers import GenericProcessorSnapshot
+from snapshotter.utils.default_logger import logger
+from computes.utils.models.message_models import UniswapBaseSnapshot
+from ipfs_client.main import AsyncIPFSClient
 
 
-class PairTotalReservesProcessor(GenericProcessor):
+class PairTotalReservesProcessor(GenericProcessorSnapshot):
+    """
+    Processor for calculating and snapshotting total reserves for Uniswap pairs.
+    
+    This class handles the computation of total reserves for Uniswap V3 pools within a given epoch.
+    It fetches block details, identifies active pools, and calculates reserves for each pool.
+    """
 
     def __init__(self) -> None:
-        self._logger = logger.bind(module='PairTotalReservesProcessor')
-
-    async def _compute_single(
-        self,
-        data_source_contract_address: str,
-        min_chain_height: int,
-        max_chain_height: int,
-        rpc_helper: RpcHelper,
-        preloader_results: dict,
-    ):
-        
-        eth_price_dict = preloader_results.get('eth_price', None)
-        block_details_dict = preloader_results.get('block_details', None)
-
-        if not eth_price_dict:
-            self._logger.error(
-                'Eth price dict in PairTotalReservesProcessor for contract: {}',
-                data_source_contract_address,
-            )
-            return None
-
-        epoch_reserves_snapshot_map_token0 = dict()
-        epoch_prices_snapshot_map_token0 = dict()
-        epoch_prices_snapshot_map_token1 = dict()
-        epoch_reserves_snapshot_map_token1 = dict()
-        epoch_usd_reserves_snapshot_map_token0 = dict()
-        epoch_usd_reserves_snapshot_map_token1 = dict()
-        max_block_timestamp = int(time.time())
-
-        pair_reserve_total = await get_pair_reserves(
-            pair_address=data_source_contract_address,
-            from_block=min_chain_height,
-            to_block=max_chain_height,
-            rpc_helper=rpc_helper,
-            eth_price_dict=eth_price_dict,
-            block_details_dict=block_details_dict,
-        )
-
-        for block_num in range(min_chain_height, max_chain_height + 1):
-            block_pair_total_reserves = pair_reserve_total.get(block_num)
-
-            epoch_reserves_snapshot_map_token0[
-                f'block{block_num}'
-            ] = block_pair_total_reserves['token0']
-            epoch_reserves_snapshot_map_token1[
-                f'block{block_num}'
-            ] = block_pair_total_reserves['token1']
-            epoch_usd_reserves_snapshot_map_token0[
-                f'block{block_num}'
-            ] = block_pair_total_reserves['token0USD']
-            epoch_usd_reserves_snapshot_map_token1[
-                f'block{block_num}'
-            ] = block_pair_total_reserves['token1USD']
-
-            epoch_prices_snapshot_map_token0[
-                f'block{block_num}'
-            ] = block_pair_total_reserves['token0Price']
-
-            epoch_prices_snapshot_map_token1[
-                f'block{block_num}'
-            ] = block_pair_total_reserves['token1Price']
-
-            
-            if not block_pair_total_reserves.get('timestamp', None):
-                self._logger.error(
-                    (
-                        'Could not fetch timestamp against max block'
-                        ' height in epoch {} - {}to calculate pair'
-                        ' reserves for contract {}. Using current time'
-                        ' stamp for snapshot construction'
-                    ),
-                    data_source_contract_address,
-                    min_chain_height,
-                    max_chain_height,
-                )
-            else:
-                max_block_timestamp = block_pair_total_reserves.get(
-                    'timestamp',
-                )
-
-        pair_total_reserves_snapshot = UniswapPairTotalReservesSnapshot(
-            **{
-                'token0Reserves': epoch_reserves_snapshot_map_token0,
-                'token1Reserves': epoch_reserves_snapshot_map_token1,
-                'token0ReservesUSD': epoch_usd_reserves_snapshot_map_token0,
-                'token1ReservesUSD': epoch_usd_reserves_snapshot_map_token1,
-                'token0Prices': epoch_prices_snapshot_map_token0,
-                'token1Prices': epoch_prices_snapshot_map_token1,
-                'chainHeightRange': EpochBaseSnapshot(
-                    begin=min_chain_height, end=max_chain_height,
-                ),
-                'timestamp': max_block_timestamp,
-                'contract': data_source_contract_address,
-            },
-        )
-        return pair_total_reserves_snapshot
+        """
+        Initialize the processor with a logger instance.
+        """
+        self._logger = logger.bind(module="PairTotalReservesProcessor")
 
     async def compute(
         self,
@@ -121,25 +34,74 @@ class PairTotalReservesProcessor(GenericProcessor):
         ipfs_reader: AsyncIPFSClient,
         protocol_state_contract,
         preloader_results: dict,
-    ):
+    ) -> List[Tuple[str, UniswapBaseSnapshot]]:
+        """
+        Compute the total reserves for Uniswap pairs within the given epoch.
 
+        Args:
+            epoch (SnapshotProcessMessage): The epoch information containing begin and end block heights.
+            redis_conn (aioredis.Redis): Redis connection for caching and data storage.
+            rpc_helper (RpcHelper): RPC helper for main blockchain interactions.
+            anchor_rpc_helper (RpcHelper): RPC helper for anchor chain interactions.
+            ipfs_reader (AsyncIPFSClient): IPFS client for reading data.
+            protocol_state_contract: Contract instance for protocol state queries.
+            task_type (str): Format string for task identification.
+
+        Returns:
+            List[Tuple[str, UniswapBaseSnapshot]]: List of tuples containing task identifiers and their corresponding snapshot data.
+        """
+        
         min_chain_height = msg_obj.begin
         max_chain_height = msg_obj.end
+        snapshots = list()
 
-        monitored_pairs = module_settings.initial_pairs
-        self._logger.debug(f'pair reserves computation init time {time.time()}')
+        block_details_dict = preloader_results.get('block_details', None)
 
-        data_source_idx = gen_data_source_idx_to_compute(msg_obj)
-        data_source_contract_address = monitored_pairs[data_source_idx]
+        test_address = "0xc7bBeC68d12a0d1830360F8Ec58fA599bA1b0e9b"
+        # Process each active pool to compute reserves
+        for pool_address in [test_address]:
+            self._logger.debug(
+                "[Epoch {}-{}] Processing pool {} | Starting computation",
+                min_chain_height,
+                max_chain_height,
+                pool_address
+            )
 
-        snapshot = await self._compute_single(
-            data_source_contract_address=data_source_contract_address,
-            min_chain_height=min_chain_height,
-            max_chain_height=max_chain_height,
-            rpc_helper=rpc_helper,
-            preloader_results=preloader_results,
-        )
+            self._logger.debug(
+                "[Epoch {}-{}] Pool {} | Starting token pair reserves computation (will return UniswapBaseSnapshot) | Wall time: {}",
+                min_chain_height,
+                max_chain_height,
+                pool_address,
+                time.time()
+            )
+            
+            # Fetch and compute reserves for the current pool
+            base_snapshot_data: Optional[UniswapBaseSnapshot] = await base_snapshot_from_block_range(
+                pair_address=pool_address,
+                from_block=min_chain_height,
+                to_block=max_chain_height,
+                rpc_helper=rpc_helper,
+                anchor_rpc_helper=anchor_rpc_helper,
+                protocol_state_contract=protocol_state_contract,
+                block_details_dict=block_details_dict,
+            )
 
-        self._logger.debug(f'pair reserves, computation end time {time.time()}')
+            if not base_snapshot_data:
+                self._logger.error(
+                    "[Epoch {}-{}] Pool {} | No UniswapBaseSnapshot data returned by 'get_pair_reserves()'",
+                    min_chain_height,
+                    max_chain_height,
+                    pool_address
+                )
+                continue
 
-        return [(data_source_contract_address, snapshot)]
+            self._logger.debug(
+                "[Epoch {}-{}] Pool {} | Computation completed (UniswapBaseSnapshot received) | Wall time: {}",
+                min_chain_height,
+                max_chain_height,
+                pool_address,
+                time.time()
+            )
+            snapshots.append((pool_address, base_snapshot_data))
+
+        return snapshots
