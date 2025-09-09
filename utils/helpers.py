@@ -5,15 +5,15 @@ from decimal import getcontext
 from eth_typing import Address
 from functools import reduce
 from eth_typing.evm import ChecksumAddress
-
+from collections import defaultdict
 from typing import Optional, Union, List, Tuple, Dict, Any
 from snapshotter.utils.default_logger import logger
 from rpc_helper.rpc import get_contract_abi_dict
 from rpc_helper.rpc import RpcHelper
+from rpc_helper.rpc import get_event_sig_and_abi
 from web3 import Web3
 from computes.utils.constants import UNISWAP_TRADE_EVENT_SIGS
 from computes.utils.constants import UNISWAP_EVENTS_ABI
-from computes.utils.helpers import get_event_sig_and_abi
 
 from computes.settings.config import settings as worker_settings
 from computes.utils.constants import current_node
@@ -414,11 +414,11 @@ async def get_tick_info(
 
         try:
             # Batched call to fetch tick data for all segments at the given block
-            tickDataResponse = await rpc_helper.web3_call(
+            tickDataResponse = await rpc_helper.web3_call_with_override(
                 tasks=tick_tasks, 
                 contract_addr=constants.helper_contract.address,
                 abi=constants.helper_contract.abi,
-                tasks_block_override=[at_block for _ in range(len(tick_tasks))],
+                overrides=[at_block for _ in range(len(tick_tasks))],
             )
         except Exception as e:
             helper_logger.opt(exception=True).error(
@@ -786,7 +786,7 @@ async def identify_best_pool_to_calculate_price(
     return best_pair_address
 
 
-async def get_events(
+async def get_events_by_block(
     pair_address: str,
     rpc: RpcHelper,
     from_block,
@@ -809,7 +809,7 @@ async def get_events(
         UNISWAP_EVENTS_ABI,
     )
 
-    events = await rpc.get_events_logs(
+    events_log = await rpc.get_events_logs(
         contract_address=pair_address,
         to_block=to_block,
         from_block=from_block,
@@ -817,7 +817,11 @@ async def get_events(
         event_abi=event_abi,
     )
 
-    return events
+    events_by_block = defaultdict(list)
+    for event in events_log:
+        events_by_block[event.blockNumber].append(event)
+
+    return events_by_block
 
 
 async def get_pair(

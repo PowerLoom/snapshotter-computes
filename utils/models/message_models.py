@@ -1,263 +1,268 @@
-"""
-This module contains constants and initializations for the Uniswap-related computations.
-It sets up contract objects, loads ABIs, and defines various constants used throughout the project.
-"""
+from enum import Enum
+from typing import Dict
+from typing import List
+from typing import Any
 
-from snapshotter.settings.config import settings
-from snapshotter.utils.default_logger import logger
-from snapshotter.utils.file_utils import read_json_file
-from rpc_helper.rpc import RpcHelper
-from web3 import Web3
-import asyncio
-import threading
-from computes.settings.config import settings as worker_settings
-
-# Maximum gas limit for static calls
-max_gas_static_call = 30_000_000_000
-
-# Uniswap V3 tick range
-MIN_TICK = int(-887272)
-MAX_TICK = -MIN_TICK
-
-# Zero address constant
-ZER0_ADDRESS = str('0x' + '0' * 40)
-
-# Uniswap V3 fee divisor
-UNISWAPV3_FEE_DIV = int(1000000)
-
-# Set up logger for this module
-constants_logger = logger.bind(module='PowerLoom|Uniswap|Constants')
-
-# Bytecode for Uniswap V3 helper contract
-# https://github.com/getjiggy/evm-helpers
-univ3_helper_bytecode_json = read_json_file(
-    'computes/static/bytecode/univ3_helper.json',
-    constants_logger,
-)
-univ3_helper_bytecode = univ3_helper_bytecode_json['bytecode']
-
-# Initialize RPC helper and get current node
-# Initialize RPC helper and get current node
-rpc_helper = RpcHelper(settings.rpc)
-_rpc_initialized = False
-_rpc_init_lock = threading.Lock() # Lock to prevent race conditions if imported concurrently
+from pydantic import BaseModel
+from pydantic import Field
+from typing import Tuple
 
 
-async def _async_init_rpc():
-    """Internal async function to initialize RpcHelper."""
-    global _rpc_initialized
-    # Ensure initialization happens only once
-    if not _rpc_initialized:
-        with _rpc_init_lock:
-            if not _rpc_initialized:
-                constants_logger.info("Initializing RpcHelper...")
-                await rpc_helper.init()
-                _rpc_initialized = True
-                constants_logger.info("RpcHelper initialization complete.")
-            else:
-                constants_logger.debug("RpcHelper already initialized by another thread/import.")
-    else:
-        constants_logger.debug("RpcHelper already initialized.")
+class EpochBaseSnapshot(BaseModel):
+    """Represents a block range for an epoch."""
+    begin: int  # Start of the epoch 
+    end: int    # End of the epoch 
 
 
-def _run_init_in_new_loop():
-    """Runs the async init function in a new event loop."""
-    try:
-        asyncio.run(_async_init_rpc())
-    except Exception:
-        constants_logger.exception("Exception during RpcHelper initialization in new loop.")
-        # Ensure flag is not set if init failed
-        global _rpc_initialized
-        _rpc_initialized = False
+class SnapshotBase(BaseModel):
+    """Base class for snapshot models."""
+    contract: str                    # Contract address
+    chainHeightRange: EpochBaseSnapshot  # Range of blocks for this snapshot
+    timestamp: int                   # Timestamp of the snapshot
 
 
-# --- Initialization Logic ---
-# Check if already initialized (e.g., by a concurrent import) before proceeding
-if not _rpc_initialized:
-    try:
-        # Try to get the running event loop
-        loop = asyncio.get_running_loop()
-        constants_logger.debug(f"Detected running event loop: {loop}")
+class UniswapBaseSnapshot(BaseModel):
+    """
+    Base Snapshot Model for Uniswap Pools/Pairs
+    
+    This model captures comprehensive data about a Uniswap liquidity pool including
+    reserves, prices, and trading activity across a specific block range (epoch).
+    
+    Attributes:
+        address (str): The contract address of the Uniswap pair.
+        epoch (EpochBaseSnapshot): The block range this snapshot covers.
+        token0Reserves (Dict[int, float]): Mapping of block numbers to token0 reserves.
+        token1Reserves (Dict[int, float]): Mapping of block numbers to token1 reserves.
+        token0ReservesUSD (Dict[int, float]): USD value of token0 reserves by block.
+        token1ReservesUSD (Dict[int, float]): USD value of token1 reserves by block.
+        token0Prices (Dict[int, float]): Prices of token0 in terms of token1 by block.
+        token1Prices (Dict[int, float]): Prices of token1 in terms of token0 by block.
+        token0PricesUSD (Dict[int, float]): USD prices of token0 by block.
+        token1PricesUSD (Dict[int, float]): USD prices of token1 by block.
+        totalTrade (float): Total trading volume in USD for this epoch.
+        totalFee (float): Total fees collected in USD for this epoch.
+        token0TradeVolume (float): Trading volume for token0 in its native units.
+        token1TradeVolume (float): Trading volume for token1 in its native units.
+        token0TradeVolumeUSD (float): USD value of token0 trading volume.
+        token1TradeVolumeUSD (float): USD value of token1 trading volume.
+        previousSnapshots (List[Tuple[int, str]]): References to previous snapshots
+            as tuples of (epoch_number, snapshot_cid).
+    """
+    # Generic data
+    address: str                    # Contract address
+    epoch: EpochBaseSnapshot        # Range of blocks for this snapshot
+    timestamps: Dict[int, int]      # Timestamp of the snapshot
+    token0: str
+    token1: str
+    # Reserve Data
+    token0Reserves: Dict[int, float]     # Block number to corresponding total reserves for token0
+    token1Reserves: Dict[int, float]     # Block number to corresponding total reserves for token1
+    token0ReservesUSD: Dict[int, float]  # USD value of token0 reserves
+    token1ReservesUSD: Dict[int, float]  # USD value of token1 reserves
+    token0Prices: Dict[int, float]       # Prices of token0 (in terms of token1)
+    token1Prices: Dict[int, float]       # Prices of token1 (in terms of token0)
+    token0PricesUSD: Dict[int, float]    # Prices of token0 (in USD)
+    token1PricesUSD: Dict[int, float]    # Prices of token1 (in USD)
+    # Trade Volume Data
+    totalTrade: float  # Total trade volume in USD
+    totalTradeMintBurn: float = 0
+    totalFee: float    # Total fees collected in USD
+    token0MintBurnVolume: float = 0
+    token1MintBurnVolume: float = 0
+    token0MintBurnVolumeUSD: float = 0
+    token1MintBurnVolumeUSD: float = 0
+    token0TradeVolume: float      # Trade volume for token0 in its native decimals
+    token1TradeVolume: float      # Trade volume for token1 in its native decimals
+    token0TradeVolumeUSD: float   # Trade volume for token0 in USD
+    token1TradeVolumeUSD: float   # Trade volume for token1 in USD
+    # Previous Snapshot Links
+    previousSnapshots: List[Tuple[int, str]] = []  # Will be filled by snapshot worker
 
-        # If a loop is running, we cannot block it directly.
-        # Run the initialization in a separate thread using a new loop via asyncio.run().
-        # This blocks the *current* (importing) thread until init is done,
-        # without interfering with the already running event loop.
-        constants_logger.info("Running loop detected. Initializing RPC in separate thread.")
-        init_thread = threading.Thread(target=_run_init_in_new_loop, daemon=True)
-        init_thread.start()
-        init_thread.join() # Wait for the initialization thread to complete
 
-    except RuntimeError:
-        # No event loop is running in this thread.
-        constants_logger.info("No running loop detected. Initializing RPC synchronously.")
-        # Run the initialization directly using asyncio.run().
-        _run_init_in_new_loop()
+class ActivePoolsSnapshot(BaseModel):
+    """
+    Snapshot of active pools for a Uniswap pair.
+    """
+    pools: Dict[str, int]  # Dictionary mapping pool addresses to frequency of occurrence
+    epoch: EpochBaseSnapshot  # Range of blocks for this snapshot
+    previousSnapshots: List[Tuple[int, str]] = []  # Will be filled by snapshot worker
 
-# --- Post-Initialization ---
-# Check if initialization was successful
-if not _rpc_initialized:
-    # Log error and raise, as subsequent code depends on this.
-    error_msg = "RPC Helper failed to initialize. Cannot proceed."
-    constants_logger.error(error_msg)
-    raise RuntimeError(error_msg)
 
-current_node = rpc_helper.get_current_node()
+class ActiveTokensSnapshot(BaseModel):
+    """
+    Snapshot of active tokens for a Uniswap pair.
+    """
+    tokens: Dict[str, int]  # Dictionary mapping token addresses to frequency of occurrence
+    epoch: EpochBaseSnapshot  # Range of blocks for this snapshot
+    previousSnapshots: List[Tuple[int, str]] = []  # Will be filled by snapshot worker
 
-if not current_node:
-    # This might happen if init() succeeded but get_current_node() failed.
-    error_msg = "Failed to get current_node after RPC initialization."
-    constants_logger.error(error_msg)
-    raise RuntimeError(error_msg)
 
-# Load contract ABIs
-pair_contract_abi = read_json_file(
-    worker_settings.uniswap_contract_abis.pair_contract,
-    constants_logger,
-)
-erc20_abi = read_json_file(
-    worker_settings.uniswap_contract_abis.erc20,
-    constants_logger,
-)
-uniswap_trade_events_abi = read_json_file(
-    worker_settings.uniswap_contract_abis.trade_events,
-    constants_logger,
-)
-factory_contract_abi = read_json_file(
-    worker_settings.uniswap_contract_abis.factory,
-    constants_logger,
-)
+class UniswapPairTotalReservesSnapshot(SnapshotBase):
+    """
+    Snapshot of total reserves for a Uniswap pair.
+    """
+    token0Reserves: Dict[str, float]     # Block number to corresponding total reserves for token0
+    token1Reserves: Dict[str, float]     # Block number to corresponding total reserves for token1
+    token0ReservesUSD: Dict[str, float]  # USD value of token0 reserves
+    token1ReservesUSD: Dict[str, float]  # USD value of token1 reserves
+    token0Prices: Dict[str, float]       # Prices of token0
+    token1Prices: Dict[str, float]       # Prices of token1
 
-# Load helper contract ABI
-helper_contract_abi = read_json_file(
-    worker_settings.uniswap_contract_abis.uniswap_v3_helper,
-    constants_logger,
-)
 
-# Initialize helper contract
-helper_contract = current_node['web3_client'].eth.contract(
-    address=Web3.to_checksum_address(
-        worker_settings.contract_addresses.uniswap_v3_helper,
-    ),
-    abi=helper_contract_abi,
-)
-factory_contract_obj = current_node['web3_client'].eth.contract(
-    address=Web3.to_checksum_address(
-        worker_settings.contract_addresses.uniswap_v3_factory,
-    ),
-    abi=factory_contract_abi,
-)
-pool_contract_obj = current_node['web3_client'].eth.contract(
-    address=Web3.to_checksum_address(
-        '0x' + '1' * 40,  # Placeholder address for getting event ABIs
-    ),
-    abi=pair_contract_abi,
-)
+class UniswapEthPriceSnapshot(BaseModel):
+    """
+    Snapshot of ETH price for a Uniswap pair.
+    """
+    epoch: EpochBaseSnapshot  # Range of blocks for this snapshot
+    ethPrice: Dict[int, float]  # Block number to corresponding ETH price
+    previousSnapshots: List[Tuple[int, str]] = []  # Will be filled by snapshot worker
 
-# Define Uniswap trade event signatures
-UNISWAP_TRADE_EVENT_SIGS = {
-    'Swap': 'Swap(address,address,int256,int256,uint160,uint128,int24)',
-    'Mint': 'Mint(address,address,int24,int24,uint128,uint256,uint256)',
-    'Burn': 'Burn(address,int24,int24,uint128,uint256,uint256)',
-}
 
-# Define Uniswap event ABIs
-UNISWAP_EVENTS_ABI = {
-    'Swap': pool_contract_obj.events.Swap._get_event_abi(),
-    'Mint': pool_contract_obj.events.Mint._get_event_abi(),
-    'Burn': pool_contract_obj.events.Burn._get_event_abi(),
-}
+class UniswapTokenMetadata(BaseModel):
+    """
+    Metadata for a Uniswap token.
+    """
+    address: str  # Contract address of the token
+    name: str  # Name of the token
+    symbol: str  # Symbol of the token
+    decimals: int  # Number of decimals for the token
 
-# Define token decimals for common tokens
-TOKENS_DECIMALS = {
-    worker_settings.contract_addresses.USDT: 6,
-    worker_settings.contract_addresses.DAI: 18,
-    worker_settings.contract_addresses.USDC: 6,
-    worker_settings.contract_addresses.WETH: 18,
-}
 
-# List of stable tokens
-STABLE_TOKENS_LIST = [
-    worker_settings.contract_addresses.USDC,
-    worker_settings.contract_addresses.USDT,
-    worker_settings.contract_addresses.DAI,
-]
+class UniswapPoolMetadata(BaseModel):
+    """
+    Metadata for a Uniswap pair.
+    """
+    address: str  # Contract address of the pair
+    token0: UniswapTokenMetadata  # Metadata for token0
+    token1: UniswapTokenMetadata  # Metadata for token1
+    fee: int  # Fee for the pair
+    factory: str  # Factory address for the pair
 
-# Minimal ABI for pool verification
-POOL_ABI = [
-    {
-        "inputs": [],
-        "name": "factory",
-        "outputs": [{"internalType": "address", "name": "", "type": "address"}],
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "inputs": [],
-        "name": "token0",
-        "outputs": [{"internalType": "address", "name": "", "type": "address"}],
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "inputs": [],
-        "name": "token1",
-        "outputs": [{"internalType": "address", "name": "", "type": "address"}],
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "inputs": [],
-        "name": "fee",
-        "outputs": [{"internalType": "uint24", "name": "", "type": "uint24"}],
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "inputs": [],
-        "name": "tickSpacing",
-        "outputs": [{"internalType": "int24", "name": "", "type": "int24"}],
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "inputs": [],
-        "name": "slot0",
-        "outputs": [
-            {"internalType": "uint160", "name": "sqrtPriceX96", "type": "uint160"},
-            {"internalType": "int24", "name": "tick", "type": "int24"},
-            {"internalType": "uint16", "name": "observationIndex", "type": "uint16"},
-            {"internalType": "uint16", "name": "observationCardinality", "type": "uint16"},
-            {"internalType": "uint16", "name": "observationCardinalityNext", "type": "uint16"},
-            {"internalType": "uint8", "name": "feeProtocol", "type": "uint8"},
-            {"internalType": "bool", "name": "unlocked", "type": "bool"}
-        ],
-        "stateMutability": "view",
-        "type": "function"
-    }
-]
 
-# ERC20 ABI for token verification
-ERC20_ABI = [
-    {
-        "inputs": [],
-        "name": "name",
-        "outputs": [{"internalType": "string", "name": "", "type": "string"}],
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "inputs": [],
-        "name": "symbol",
-        "outputs": [{"internalType": "string", "name": "", "type": "string"}],
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "inputs": [],
-        "name": "decimals",
-        "outputs": [{"internalType": "uint8", "name": "", "type": "uint8"}],
-        "stateMutability": "view",
-        "type": "function"
-    }
-]
+class UniswapTokenPoolsSnapshot(BaseModel):
+    """
+    Snapshot of token pools for a Uniswap pair.
+    """
+    pools: Dict[str, UniswapPoolMetadata]  # Dictionary mapping token addresses to pool metadata
+
+
+class LiquidityDepthSnapshot(SnapshotBase):
+    """Snapshot of liquidity depth for a Uniswap pair."""
+    ticks_by_block: Dict[str, dict]
+
+
+class logsTradeModel(BaseModel):
+    """
+    Logs and trades in a Uniswap event.
+    """
+    logs: List  # List of log entries for the event
+    trades: Dict[str, float]  # Dictionary mapping trade identifiers to trade amounts
+
+
+class UniswapTradeEvents(BaseModel):
+    """
+    A collection of Uniswap trade events.
+    """
+    Swap: logsTradeModel  # Swap event details
+    Mint: logsTradeModel  # Mint (liquidity addition) event details
+    Burn: logsTradeModel  # Burn (liquidity removal) event details
+    Trades: Dict[str, float]  # Aggregated trades data
+
+
+class UniswapTopTokenSnapshot(BaseModel):
+    """
+    Represents a snapshot of a top token on Uniswap.
+    """
+    name: str  # Token name
+    symbol: str  # Token symbol
+    decimals: int  # Number of decimal places for the token
+    address: str  # Token contract address
+    price: float  # Current price of the token
+    priceChange24h: float  # 24-hour price change percentage
+    volume24h: float  # 24-hour trading volume
+    liquidity: float  # Total liquidity for the token
+
+
+class UniswapTopPair24hSnapshot(BaseModel):
+    """
+    Represents a snapshot of a top Uniswap pair's performance over the last 24 hours.
+    """
+    name: str       # Name of the trading pair 
+    address: str    # Contract address of the trading pair
+    liquidity: float  # Total liquidity in the pair
+    volume24h: float  # Trading volume in the last 24 hours
+    fee24h: float   # Fees generated in the last 24 hours
+
+
+class UniswapTopPair7dSnapshot(BaseModel):
+    """
+    Represents a snapshot of a top Uniswap pair's performance over the last 7 days.
+    """
+    name: str       # Name of the trading pair
+    address: str    # Contract address of the trading pair
+    volume7d: float # Trading volume in the last 7 days
+    fee7d: float    # Fees generated in the last 7 days
+
+
+class MonitoredPairsSnapshot(BaseModel):
+    """Snapshot of monitored Uniswap pairs."""
+    pairs: List[str] = []  # List of monitored pair addresses
+
+
+class TradeType(str, Enum):
+    """
+    Defines the different types of Uniswap trade events.
+    
+    Enum values:
+        SWAP: Regular token exchange events.
+        MINT: Liquidity provision events.
+        BURN: Liquidity withdrawal events.
+    """
+    SWAP = "Swap"
+    MINT = "Mint"
+    BURN = "Burn"
+
+
+class UniswapTrade(BaseModel):
+    """
+    Represents a single Uniswap trade event with associated data.
+    
+    Captures both the raw log data and the decoded trade information.
+    
+    Attributes:
+        tradeType (TradeType): The type of trade event (Swap, Mint, or Burn).
+        log (Dict[str, Any]): The raw blockchain log data for this trade.
+        data (Dict[str, Any]): The decoded trade data with human-readable values.
+    """
+    tradeType: TradeType = Field(..., description="The type of trade event")
+    log: Dict[str, Any]  # Raw log data
+    data: Dict[str, Any]  # Decoded trade data
+
+
+class UniswapTradesSnapshot(BaseModel):
+    """
+    Uniswap Trades Snapshot Model
+    
+    Collects all trade events that occurred within a specific block range for a pool.
+    
+    Attributes:
+        address (str): The contract address of the Uniswap pair.
+        epoch (EpochBaseSnapshot): The block range this snapshot covers.
+        trades (List[UniswapTrade]): List of trade events sorted by transaction index.
+        previousSnapshots (List[Tuple[int, str]]): References to previous snapshots
+            as tuples of (epoch_number, snapshot_cid).
+    """
+    address: str                 # The contract address
+    epoch: EpochBaseSnapshot     # Range of blocks for this snapshot
+    trades: List[UniswapTrade]   # Sorted by transaction index
+    # Previous Snapshot Links
+    previousSnapshots: List[Tuple[int, str]] = []  # Will be filled by snapshot worker
+
+
+class AllUniswapTradesSnapshot(BaseModel):
+    """
+    All Uniswap Trades Snapshot Model
+    """
+    epoch: EpochBaseSnapshot     # Range of blocks for this snapshot
+    tradeData: Dict[str, UniswapTradesSnapshot]  # Dictionary mapping pool addresses to trades
+    previousSnapshots: List[Tuple[int, str]] = []  # Will be filled by snapshot worker

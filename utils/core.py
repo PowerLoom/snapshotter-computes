@@ -1,4 +1,3 @@
-import json
 import time
 from typing import Dict, Optional, Any, Tuple, List
 
@@ -10,7 +9,7 @@ from web3 import Web3
 
 from computes.utils.helpers import calculate_reserves
 from computes.utils.constants import UNISWAPV3_FEE_DIV
-from computes.utils.helpers import get_events
+from computes.utils.helpers import get_events_by_block
 from computes.utils.models.data_models import UniswapEvent, UniswapProcessedLog
 from computes.utils.models.data_models import PairBlockDetail
 from computes.utils.models.data_models import TradeData
@@ -116,7 +115,7 @@ async def generate_pair_reserves_dict_and_trade_data(
     epoch_total_trade_data = TradeData()
 
     # Fetch all events for the pool in the block range from cache
-    events_dict = await get_events(
+    events_dict = await get_events_by_block(
         pair_address=pair_address,
         rpc=rpc_helper,
         from_block=from_block,
@@ -133,15 +132,18 @@ async def generate_pair_reserves_dict_and_trade_data(
     for block_num in range(from_block, to_block + 1):
         event_list = events_dict.get(block_num, [])
 
+        print(event_list)
+        print(events_dict)
+
         # Track the net change in reserves for this block
         block_delta_token0 = 0
         block_delta_token1 = 0
 
         # Process each event in the block
-        for i, event_data_obj in enumerate(event_list):
+        for event_data_obj in event_list:
             # Extract trade data from the event log
             current_event_trade_data, _ = extract_trade_volume_log(
-                event_name=event_data_obj.eventName,
+                event_name=event_data_obj.event,
                 log=event_data_obj,
                 pair_per_token_metadata=pair_per_token_metadata,
                 token0_price_map=token0_price_map,
@@ -761,7 +763,7 @@ async def get_pair_trade_volume(
         pair_address
     )
 
-    events_by_block = await get_events(
+    events_by_block = await get_events_by_block(
         pair_address=pair_address,
         rpc=rpc_helper,
         from_block=from_block,

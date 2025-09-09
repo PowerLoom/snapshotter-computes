@@ -3,11 +3,13 @@ This module contains constants and initializations for the Uniswap-related compu
 It sets up contract objects, loads ABIs, and defines various constants used throughout the project.
 """
 
+from snapshotter.settings.config import settings
 from snapshotter.utils.default_logger import logger
 from snapshotter.utils.file_utils import read_json_file
-from snapshotter.utils.rpc import RpcHelper
+from rpc_helper.rpc import RpcHelper
 from web3 import Web3
-
+import asyncio
+import threading
 from computes.settings.config import settings as worker_settings
 
 # Maximum gas limit for static calls
@@ -35,8 +37,78 @@ univ3_helper_bytecode_json = read_json_file(
 univ3_helper_bytecode = univ3_helper_bytecode_json['bytecode']
 
 # Initialize RPC helper and get current node
-rpc_helper = RpcHelper()
+# Initialize RPC helper and get current node
+rpc_helper = RpcHelper(settings.rpc)
+_rpc_initialized = False
+_rpc_init_lock = threading.Lock() # Lock to prevent race conditions if imported concurrently
+
+
+async def _async_init_rpc():
+    """Internal async function to initialize RpcHelper."""
+    global _rpc_initialized
+    # Ensure initialization happens only once
+    if not _rpc_initialized:
+        with _rpc_init_lock:
+            if not _rpc_initialized:
+                constants_logger.info("Initializing RpcHelper...")
+                await rpc_helper.init()
+                _rpc_initialized = True
+                constants_logger.info("RpcHelper initialization complete.")
+            else:
+                constants_logger.debug("RpcHelper already initialized by another thread/import.")
+    else:
+        constants_logger.debug("RpcHelper already initialized.")
+
+
+def _run_init_in_new_loop():
+    """Runs the async init function in a new event loop."""
+    try:
+        asyncio.run(_async_init_rpc())
+    except Exception:
+        constants_logger.exception("Exception during RpcHelper initialization in new loop.")
+        # Ensure flag is not set if init failed
+        global _rpc_initialized
+        _rpc_initialized = False
+
+
+# --- Initialization Logic ---
+# Check if already initialized (e.g., by a concurrent import) before proceeding
+if not _rpc_initialized:
+    try:
+        # Try to get the running event loop
+        loop = asyncio.get_running_loop()
+        constants_logger.debug(f"Detected running event loop: {loop}")
+
+        # If a loop is running, we cannot block it directly.
+        # Run the initialization in a separate thread using a new loop via asyncio.run().
+        # This blocks the *current* (importing) thread until init is done,
+        # without interfering with the already running event loop.
+        constants_logger.info("Running loop detected. Initializing RPC in separate thread.")
+        init_thread = threading.Thread(target=_run_init_in_new_loop, daemon=True)
+        init_thread.start()
+        init_thread.join() # Wait for the initialization thread to complete
+
+    except RuntimeError:
+        # No event loop is running in this thread.
+        constants_logger.info("No running loop detected. Initializing RPC synchronously.")
+        # Run the initialization directly using asyncio.run().
+        _run_init_in_new_loop()
+
+# --- Post-Initialization ---
+# Check if initialization was successful
+if not _rpc_initialized:
+    # Log error and raise, as subsequent code depends on this.
+    error_msg = "RPC Helper failed to initialize. Cannot proceed."
+    constants_logger.error(error_msg)
+    raise RuntimeError(error_msg)
+
 current_node = rpc_helper.get_current_node()
+
+if not current_node:
+    # This might happen if init() succeeded but get_current_node() failed.
+    error_msg = "Failed to get current_node after RPC initialization."
+    constants_logger.error(error_msg)
+    raise RuntimeError(error_msg)
 
 # Load contract ABIs
 pair_contract_abi = read_json_file(
@@ -58,18 +130,16 @@ factory_contract_abi = read_json_file(
 
 # Load helper contract ABI
 helper_contract_abi = read_json_file(
-    'computes/static/abis/UniV3Helper.json',
+    worker_settings.uniswap_contract_abis.uniswap_v3_helper,
     constants_logger,
 )
-
-# Override address for helper contract
-override_address = Web3.to_checksum_address('0x' + '1' * 40)
 
 # Initialize helper contract
 helper_contract = current_node['web3_client'].eth.contract(
     address=Web3.to_checksum_address(
-        override_address,
-    ), abi=helper_contract_abi,
+        worker_settings.contract_addresses.uniswap_v3_helper,
+    ),
+    abi=helper_contract_abi,
 )
 factory_contract_obj = current_node['web3_client'].eth.contract(
     address=Web3.to_checksum_address(
@@ -111,4 +181,83 @@ STABLE_TOKENS_LIST = [
     worker_settings.contract_addresses.USDC,
     worker_settings.contract_addresses.USDT,
     worker_settings.contract_addresses.DAI,
+]
+
+# Minimal ABI for pool verification
+POOL_ABI = [
+    {
+        "inputs": [],
+        "name": "factory",
+        "outputs": [{"internalType": "address", "name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "token0",
+        "outputs": [{"internalType": "address", "name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "token1",
+        "outputs": [{"internalType": "address", "name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "fee",
+        "outputs": [{"internalType": "uint24", "name": "", "type": "uint24"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "tickSpacing",
+        "outputs": [{"internalType": "int24", "name": "", "type": "int24"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "slot0",
+        "outputs": [
+            {"internalType": "uint160", "name": "sqrtPriceX96", "type": "uint160"},
+            {"internalType": "int24", "name": "tick", "type": "int24"},
+            {"internalType": "uint16", "name": "observationIndex", "type": "uint16"},
+            {"internalType": "uint16", "name": "observationCardinality", "type": "uint16"},
+            {"internalType": "uint16", "name": "observationCardinalityNext", "type": "uint16"},
+            {"internalType": "uint8", "name": "feeProtocol", "type": "uint8"},
+            {"internalType": "bool", "name": "unlocked", "type": "bool"}
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    }
+]
+
+# ERC20 ABI for token verification
+ERC20_ABI = [
+    {
+        "inputs": [],
+        "name": "name",
+        "outputs": [{"internalType": "string", "name": "", "type": "string"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "symbol",
+        "outputs": [{"internalType": "string", "name": "", "type": "string"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "decimals",
+        "outputs": [{"internalType": "uint8", "name": "", "type": "uint8"}],
+        "stateMutability": "view",
+        "type": "function"
+    }
 ]

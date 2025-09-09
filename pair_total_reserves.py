@@ -6,13 +6,13 @@ from rpc_helper.rpc import RpcHelper
 
 from computes.utils.core import base_snapshot_from_block_range
 from snapshotter.utils.models.message_models import SnapshotProcessMessage
-from snapshotter.utils.callback_helpers import GenericProcessorSnapshot
+from snapshotter.utils.callback_helpers import GenericProcessor
 from snapshotter.utils.default_logger import logger
 from computes.utils.models.message_models import UniswapBaseSnapshot
 from ipfs_client.main import AsyncIPFSClient
 
 
-class PairTotalReservesProcessor(GenericProcessorSnapshot):
+class PairTotalReservesProcessor(GenericProcessor):
     """
     Processor for calculating and snapshotting total reserves for Uniswap pairs.
     
@@ -40,18 +40,17 @@ class PairTotalReservesProcessor(GenericProcessorSnapshot):
 
         Args:
             epoch (SnapshotProcessMessage): The epoch information containing begin and end block heights.
-            redis_conn (aioredis.Redis): Redis connection for caching and data storage.
             rpc_helper (RpcHelper): RPC helper for main blockchain interactions.
             anchor_rpc_helper (RpcHelper): RPC helper for anchor chain interactions.
             ipfs_reader (AsyncIPFSClient): IPFS client for reading data.
             protocol_state_contract: Contract instance for protocol state queries.
-            task_type (str): Format string for task identification.
+            preloader_results (dict): Preloader results for the epoch.
 
         Returns:
             List[Tuple[str, UniswapBaseSnapshot]]: List of tuples containing task identifiers and their corresponding snapshot data.
         """
         
-        min_chain_height = msg_obj.begin
+        min_chain_height = msg_obj.end
         max_chain_height = msg_obj.end
         snapshots = list()
 

@@ -1,5 +1,3 @@
-from redis import asyncio as aioredis
-
 from rpc_helper.rpc import RpcHelper
 from rpc_helper.rpc import get_contract_abi_dict
 
@@ -8,7 +6,7 @@ from snapshotter.utils.default_logger import logger
 from snapshotter.utils.models.message_models import EpochBase
 from snapshotter.utils.file_utils import read_json_file
 from computes.settings.config import settings as worker_settings
-
+from snapshotter.utils.models.data_models import PreloaderResult
 
 class EthPricePreloader(GenericPreloader):
     """
@@ -57,7 +55,6 @@ class EthPricePreloader(GenericPreloader):
         self,
         from_block,
         to_block,
-        redis_conn: aioredis.Redis,
         rpc_helper: RpcHelper,
     ):
         """
@@ -66,7 +63,6 @@ class EthPricePreloader(GenericPreloader):
         Args:
             from_block (int): The starting block number.
             to_block (int): The ending block number.
-            redis_conn (aioredis.Redis): The Redis connection object.
             rpc_helper (RpcHelper): The RPC helper object.
 
         Returns:
@@ -111,7 +107,6 @@ class EthPricePreloader(GenericPreloader):
     async def compute(
             self,
             epoch: EpochBase,
-            redis_conn: aioredis.Redis,
             rpc_helper: RpcHelper,
     ):
         """
@@ -119,7 +114,6 @@ class EthPricePreloader(GenericPreloader):
 
         Args:
             epoch (EpochBase): The epoch containing the block range.
-            redis_conn (aioredis.Redis): Redis connection for caching.
             rpc_helper (RpcHelper): Helper for making RPC calls.
 
         Returns:
@@ -130,19 +124,20 @@ class EthPricePreloader(GenericPreloader):
 
         try:
             # Fetch Ethereum prices for all blocks in the specified range
-            await self.get_eth_price_usd(
+            eth_price_usd_dict = await self.get_eth_price_usd(
                 from_block=min_chain_height,
                 to_block=max_chain_height,
-                redis_conn=redis_conn,
                 rpc_helper=rpc_helper,
             )
+            return PreloaderResult(
+                keyword='eth_price',
+                result=eth_price_usd_dict,
+            )
+
         except Exception as e:
             # Log any errors that occur during price fetching
             self._logger.error(f'Error in Eth Price preloader: {e}')
             raise e
-        finally:
-            # Ensure Redis connection is closed after operation
-            await redis_conn.close()
 
     async def cleanup(self):
         """
