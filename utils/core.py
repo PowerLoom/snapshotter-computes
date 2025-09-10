@@ -121,7 +121,7 @@ async def generate_pair_reserves_dict_and_trade_data(
         from_block=from_block,
         to_block=to_block,
     )
-    
+
     # Normalize initial reserves
     token0AmountNormalized = token0Amount / (10 ** int(pair_per_token_metadata.token0.decimals))
     token1AmountNormalized = token1Amount / (10 ** int(pair_per_token_metadata.token1.decimals))
@@ -132,9 +132,6 @@ async def generate_pair_reserves_dict_and_trade_data(
     for block_num in range(from_block, to_block + 1):
         event_list = events_dict.get(block_num, [])
 
-        print(event_list)
-        print(events_dict)
-
         # Track the net change in reserves for this block
         block_delta_token0 = 0
         block_delta_token1 = 0
@@ -143,7 +140,7 @@ async def generate_pair_reserves_dict_and_trade_data(
         for event_data_obj in event_list:
             # Extract trade data from the event log
             current_event_trade_data, _ = extract_trade_volume_log(
-                event_name=event_data_obj.event,
+                event_name=event_data_obj.eventName,
                 log=event_data_obj,
                 pair_per_token_metadata=pair_per_token_metadata,
                 token0_price_map=token0_price_map,
@@ -170,7 +167,7 @@ async def generate_pair_reserves_dict_and_trade_data(
             
             core_logger.debug(
                 "[Block {}] Pool {} | Event {} | Post-event deltas: token0_delta={}, token1_delta={}",
-                block_num, pair_address, i+1, block_delta_token0, block_delta_token1
+                block_num, pair_address, event_data_obj.eventName, block_delta_token0, block_delta_token1
             )
         
         token0Amount += block_delta_token0

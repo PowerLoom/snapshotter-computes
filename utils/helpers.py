@@ -14,6 +14,7 @@ from rpc_helper.rpc import get_event_sig_and_abi
 from web3 import Web3
 from computes.utils.constants import UNISWAP_TRADE_EVENT_SIGS
 from computes.utils.constants import UNISWAP_EVENTS_ABI
+from computes.utils.models.data_models import UniswapEvent
 
 from computes.settings.config import settings as worker_settings
 from computes.utils.constants import current_node
@@ -413,12 +414,11 @@ async def get_tick_info(
             tick_tasks.append(('getTicks', [pair_address, from_tick, to_tick]))
 
         try:
-            # Batched call to fetch tick data for all segments at the given block
-            tickDataResponse = await rpc_helper.web3_call_with_override(
-                tasks=tick_tasks, 
+            tickDataResponse = await rpc_helper.web3_call(
+                tasks=tick_tasks,
                 contract_addr=constants.helper_contract.address,
                 abi=constants.helper_contract.abi,
-                overrides=[at_block for _ in range(len(tick_tasks))],
+                tasks_block_override=[at_block for _ in range(len(tick_tasks))],
             )
         except Exception as e:
             helper_logger.opt(exception=True).error(
@@ -819,7 +819,20 @@ async def get_events_by_block(
 
     events_by_block = defaultdict(list)
     for event in events_log:
-        events_by_block[event.blockNumber].append(event)
+        event_obj = UniswapEvent(
+            eventName=event.event,
+            filterName="",
+            txHash=event.transactionHash.hex(),
+            blockNumber=event.blockNumber,
+            txIndex=event.transactionIndex,
+            logIndex=event.logIndex,
+            address=event.address,
+            topics=[],
+            data="",
+            args=dict(event.args),
+            score="",
+        )
+        events_by_block[event.blockNumber].append(event_obj)
 
     return events_by_block
 
