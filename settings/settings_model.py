@@ -25,3 +25,4 @@ class ContractAddresses(BaseModel):
 class Settings(BaseModel):
     uniswap_contract_abis: UniswapContractAbis
     contract_addresses: ContractAddresses
+    bds_api_url: str
