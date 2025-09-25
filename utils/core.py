@@ -29,6 +29,7 @@ async def fetch_initial_reserves(
     redis_conn: aioredis.Redis,
     rpc_helper: RpcHelper,
     pair_per_token_metadata: UniswapPoolMetadata,
+    use_cache: bool = False,
 ) -> Optional[Tuple[int, int]]:
     """
     Fetch the initial reserves for a given Uniswap V3 pool contract address at a specific block.
@@ -46,41 +47,42 @@ async def fetch_initial_reserves(
     Returns:
         Optional[Tuple[int, int]]: Tuple of (token0_reserves, token1_reserves) or None if not found.
     """
-    # Attempt to fetch previous epoch end block reserves from Redis cache
-    cached_reserves_dict = await redis_conn.zrangebyscore(
-        name=uniswap_pair_cached_block_height_reserves.format(
-            Web3.to_checksum_address(pair_address),
-        ),
-        min=int(at_block - 1),
-        max=int(at_block - 1),
-    )
+    if use_cache:
+        # Attempt to fetch previous epoch end block reserves from Redis cache
+        cached_reserves_dict = await redis_conn.zrangebyscore(
+            name=uniswap_pair_cached_block_height_reserves.format(
+                Web3.to_checksum_address(pair_address),
+            ),
+            min=int(at_block - 1),
+            max=int(at_block - 1),
+        )
 
-    if cached_reserves_dict:
-        # Cached reserves found, use them
-        loaded_dict = json.loads(cached_reserves_dict[0])
-        initial_reserves = [int(loaded_dict['token0_reserves']), int(loaded_dict['token1_reserves'])]
-        core_logger.debug(
-            "[Block {}] Pool {} | Using cached reserves: token0={}, token1={}",
-            at_block,
-            pair_address,
-            initial_reserves[0],
-            initial_reserves[1]
-        )
-    else:
-        # No cache found, calculate reserves from chain
-        initial_reserves = await calculate_reserves(
-            pair_address,
-            at_block - 1,
-            pair_per_token_metadata,
-            rpc_helper,
-        )
-        core_logger.info(
-            "[Block {}] Pool {} | Calculated initial reserves: token0={}, token1={}",
-            at_block,
-            pair_address,
-            initial_reserves[0],
-            initial_reserves[1]
-        )
+        if cached_reserves_dict:
+            # Cached reserves found, use them
+            loaded_dict = json.loads(cached_reserves_dict[0])
+            initial_reserves = [int(loaded_dict['token0_reserves']), int(loaded_dict['token1_reserves'])]
+            core_logger.debug(
+                "[Block {}] Pool {} | Using cached reserves: token0={}, token1={}",
+                at_block,
+                pair_address,
+                initial_reserves[0],
+                initial_reserves[1]
+            )
+            return initial_reserves
+    # No cache found, calculate reserves from chain
+    initial_reserves = await calculate_reserves(
+        pair_address,
+        at_block - 1,
+        pair_per_token_metadata,
+        rpc_helper,
+    )
+    core_logger.info(
+        "[Block {}] Pool {} | Calculated initial reserves: token0={}, token1={}",
+        at_block,
+        pair_address,
+        initial_reserves[0],
+        initial_reserves[1]
+    )
 
     return initial_reserves
 
