@@ -106,7 +106,7 @@ async def generate_pair_reserves_dict_and_trade_data(
     # Initialize reserve amounts
     token0Amount = initial_reserves[0]
     token1Amount = initial_reserves[1]
-    
+
     core_logger.info(
         "[Epoch {}-{}] Pool {} | Initial reserves: token0={}, token1={}",
         from_block, to_block, pair_address, token0Amount, token1Amount
@@ -125,7 +125,7 @@ async def generate_pair_reserves_dict_and_trade_data(
     # Normalize initial reserves
     token0AmountNormalized = token0Amount / (10 ** int(pair_per_token_metadata.token0.decimals))
     token1AmountNormalized = token1Amount / (10 ** int(pair_per_token_metadata.token1.decimals))
-    
+
     pair_reserves_dict = dict()
 
     # Iterate over each block in the range
@@ -154,7 +154,7 @@ async def generate_pair_reserves_dict_and_trade_data(
             # Update reserve deltas based on event type
             event_amount0 = event_data_obj.args['amount0']
             event_amount1 = event_data_obj.args['amount1']
-            
+
             if event_data_obj.eventName == 'Burn':
                 # Burn events remove liquidity from the pool
                 block_delta_token0 -= event_amount0
@@ -164,12 +164,12 @@ async def generate_pair_reserves_dict_and_trade_data(
                 # Swap events use a negative value for the token that was removed from the pool
                 block_delta_token0 += event_amount0
                 block_delta_token1 += event_amount1
-            
+
             core_logger.debug(
                 "[Block {}] Pool {} | Event {} | Post-event deltas: token0_delta={}, token1_delta={}",
                 block_num, pair_address, event_data_obj.eventName, block_delta_token0, block_delta_token1
             )
-        
+
         token0Amount += block_delta_token0
         token1Amount += block_delta_token1
 
@@ -345,7 +345,7 @@ async def base_snapshot_from_block_range(
         pair_address,
         time.time()
     )
-    
+
     try:
         # Normalize address format to checksum
         pair_address = Web3.to_checksum_address(pair_address)

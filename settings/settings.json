@@ -33,6 +33,6 @@
 
       "uniswap_v3_helper": "computes/static/abis/UniV3Helper.json" 
   },
-  "bds_api_url": "http://host.docker.internal:9003"
+  "bds_api_url": "https://bds-api.powerloom.io"
   
 }

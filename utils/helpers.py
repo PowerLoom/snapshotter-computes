@@ -223,11 +223,11 @@ async def calculate_reserves(
         at_block=at_block,
         pair_per_token_metadata=pair_per_token_metadata,
     )
-    
+
     if ticks_list is None:
         helper_logger.warning(f"Could not get required tick info for {pair_address} at block {at_block}")
         return (0, 0)
-    
+
     # Fetch slot0 data for the pool at the given block
     slot0_data_dict_at_block = await get_slot0_data_for_block_range(
         rpc_helper=rpc_helper,
@@ -239,7 +239,7 @@ async def calculate_reserves(
         helper_logger.warning(f"Could not get required slot0 data for {pair_address} at block {at_block}")
         return (0, 0)
     sqrt_price = slot0_data_dict_at_block[at_block].sqrtPriceX96
-    
+
     # Calculate TVL from ticks and slot0 price
     t0_reserves, t1_reserves = calculate_tvl_from_ticks(
         ticks_list,
@@ -314,7 +314,7 @@ async def get_slot0_data_for_block_range(
         )
         helper_logger.error(msg)
         raise Slot0DataError(msg)
-        
+
     slot0_data_dict: Dict[int, Slot0Data] = {}
     expected_len = to_block - from_block + 1
 
@@ -326,26 +326,26 @@ async def get_slot0_data_for_block_range(
         )
         helper_logger.error(msg)
         raise Slot0DataError(msg)
-         
+
     for i in range(expected_len):
         block_num = from_block + i
         slot0_tuple = slot0ResponseListRaw[i]
         try:
             # Field names must match the order in Slot0Data model and the tuple from eth_abi.decode
             field_names = [
-                "sqrtPriceX96", 
-                "tick", 
-                "observationIndex", 
-                "observationCardinality", 
-                "observationCardinalityNext", 
-                "feeProtocol", 
+                "sqrtPriceX96",
+                "tick",
+                "observationIndex",
+                "observationCardinality",
+                "observationCardinalityNext",
+                "feeProtocol",
                 "unlocked"
             ]
             if len(slot0_tuple) != len(field_names):
                 raise ValueError(
                     f"Tuple length {len(slot0_tuple)} does not match expected number of fields {len(field_names)}"
                 )
-            
+
             data_dict = dict(zip(field_names, slot0_tuple))
             slot0_data_obj = Slot0Data(**data_dict)
             slot0_data_dict[block_num] = slot0_data_obj
@@ -356,7 +356,7 @@ async def get_slot0_data_for_block_range(
             )
             helper_logger.error(msg)
             raise Slot0DataError(msg) from e_slot0_parse
-    
+
     helper_logger.info(
         'Processed slot0 data ({}) for pool {} range {}-{}',
         len(slot0_data_dict), pair_address, from_block, to_block
@@ -388,7 +388,7 @@ async def get_tick_info(
     )
     try:
         fee = int(pair_per_token_metadata.fee)
-        
+
         # Determine number of segments to split tick range by fee tier
         if fee < 500:
             num_segments = 16
@@ -398,7 +398,7 @@ async def get_tick_info(
             num_segments = 2
         elif fee >= 10000:
             num_segments = 1
-        
+
         tick_tasks = []
         total_range = constants.MAX_TICK - constants.MIN_TICK + 1
         segment_size = total_range // num_segments
@@ -410,7 +410,7 @@ async def get_tick_info(
                 to_tick = constants.MAX_TICK
             else:
                 to_tick = from_tick + segment_size - 1
-            
+
             tick_tasks.append(('getTicks', [pair_address, from_tick, to_tick]))
 
         try:
@@ -442,7 +442,7 @@ async def get_tick_info(
                 helper_logger.warning(f"A batched RPC call for tick data failed: {ticks_bytes}")
                 continue
             temp_ticks_list_of_lists.append(transform_tick_bytes_to_list(ticks_bytes))
-        
+
         if temp_ticks_list_of_lists:
             # Flatten the list of lists, skipping empty lists
             non_empty_tick_lists = [lst for lst in temp_ticks_list_of_lists if lst]
@@ -568,7 +568,7 @@ async def get_token_price_in_usd_in_block_range(
         to_block=to_block,
         rpc_helper=rpc_helper,
     )
- 
+
     # If either token0 or token1 is WETH, use ETH/USD price for conversion.
     if Web3.to_checksum_address(pair_metadata.token0.address) == WETH_ADDRESS or Web3.to_checksum_address(pair_metadata.token1.address) == WETH_ADDRESS:
         # Fetch ETH/USD price for the block range.
@@ -986,30 +986,30 @@ async def get_uniswap_v3_pool_metadata(
         rpc_helper: RpcHelper,
         anchor_rpc_helper: RpcHelper,
         protocol_state_contract,    
-    ) -> Optional[UniswapPoolMetadata]:
+) -> Optional[UniswapPoolMetadata]:
     """
     Retrieves metadata for a Uniswap V3 pool from the snapshotter system.
-    
+
     This function first checks the Redis cache for existing pool metadata. If not found,
     it fetches the latest snapshot data for the pool from the protocol state and 
     constructs the metadata object.
-    
+
     Args:
         pool_address (str): The Ethereum address of the Uniswap V3 pool
         redis_conn (aioredis.Redis): Redis connection for caching
         anchor_rpc_helper (RpcHelper): RPC helper for blockchain interactions
         ipfs_reader (AsyncIPFSClient): IPFS client for reading snapshot data
         protocol_state_contract: Smart contract object for protocol state
-        
+
     Returns:
         Optional[UniswapPoolMetadata]: Pool metadata object containing token information,
                                      decimals, symbols, etc. Returns None if metadata 
                                      cannot be retrieved.
-                                     
+
     Raises:
         Exception: If there's an error fetching the latest snapshot data
     """
-    
+
     # If not cached, fetch from latest snapshot
     try:
         pool_metadata_raw = await get_pool_metadata(pool_address, rpc_helper)

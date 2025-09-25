@@ -10,8 +10,8 @@ from typing import Tuple
 
 class EpochBaseSnapshot(BaseModel):
     """Represents a block range for an epoch."""
-    begin: int  # Start of the epoch 
-    end: int    # End of the epoch 
+    begin: int  # Start of the epoch
+    end: int    # End of the epoch
 
 
 class SnapshotBase(BaseModel):
@@ -24,10 +24,10 @@ class SnapshotBase(BaseModel):
 class UniswapBaseSnapshot(BaseModel):
     """
     Base Snapshot Model for Uniswap Pools/Pairs
-    
+
     This model captures comprehensive data about a Uniswap liquidity pool including
     reserves, prices, and trading activity across a specific block range (epoch).
-    
+
     Attributes:
         address (str): The contract address of the Uniswap pair.
         epoch (EpochBaseSnapshot): The block range this snapshot covers.
@@ -212,7 +212,7 @@ class MonitoredPairsSnapshot(BaseModel):
 class TradeType(str, Enum):
     """
     Defines the different types of Uniswap trade events.
-    
+
     Enum values:
         SWAP: Regular token exchange events.
         MINT: Liquidity provision events.
@@ -226,9 +226,9 @@ class TradeType(str, Enum):
 class UniswapTrade(BaseModel):
     """
     Represents a single Uniswap trade event with associated data.
-    
+
     Captures both the raw log data and the decoded trade information.
-    
+
     Attributes:
         tradeType (TradeType): The type of trade event (Swap, Mint, or Burn).
         log (Dict[str, Any]): The raw blockchain log data for this trade.
@@ -242,9 +242,9 @@ class UniswapTrade(BaseModel):
 class UniswapTradesSnapshot(BaseModel):
     """
     Uniswap Trades Snapshot Model
-    
+
     Collects all trade events that occurred within a specific block range for a pool.
-    
+
     Attributes:
         address (str): The contract address of the Uniswap pair.
         epoch (EpochBaseSnapshot): The block range this snapshot covers.

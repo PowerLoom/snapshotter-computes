@@ -8,10 +8,11 @@ from snapshotter.utils.file_utils import read_json_file
 from computes.settings.config import settings as worker_settings
 from snapshotter.utils.models.data_models import PreloaderResult
 
+
 class EthPricePreloader(GenericPreloader):
     """
     A preloader class for fetching Ethereum prices for a range of blocks.
-    
+
     This class extends GenericPreloader and implements methods to compute
     and store Ethereum prices for a given epoch range.
     """
@@ -73,7 +74,7 @@ class EthPricePreloader(GenericPreloader):
         """
         try:
             eth_price_usd_dict = dict()
-            
+
             pair_abi_dict = get_contract_abi_dict(self.pair_contract_abi)
 
             # Fetch reserves for each pair across the block range

@@ -13,10 +13,11 @@ from ipfs_client.main import AsyncIPFSClient
 from computes.settings.config import settings as computes_settings
 import requests
 
+
 class PairTotalReservesProcessor(GenericProcessor):
     """
     Processor for calculating and snapshotting total reserves for Uniswap pairs.
-    
+
     This class handles the computation of total reserves for Uniswap V3 pools within a given epoch.
     It fetches block details, identifies active pools, and calculates reserves for each pool.
     """
@@ -50,7 +51,7 @@ class PairTotalReservesProcessor(GenericProcessor):
         Returns:
             List[Tuple[str, UniswapBaseSnapshot]]: List of tuples containing task identifiers and their corresponding snapshot data.
         """
-        
+
         min_chain_height = msg_obj.begin
         max_chain_height = msg_obj.begin
         snapshots = list()
@@ -80,6 +81,8 @@ class PairTotalReservesProcessor(GenericProcessor):
             self._logger.error(f"Failed to fetch previous snapshots data from bds: {previous_snapshot_response.status_code}")
             raise Exception(f"Failed to fetch previous snapshots data from bds: {previous_snapshot_response.status_code}")
         previous_snapshot_data = previous_snapshot_response.json()
+        # parse into proper format
+        previous_snapshot_data = [tuple(data) for data in previous_snapshot_data]
 
         self._logger.debug(
             "[Epoch {}-{}] Processing pool {} | Starting computation",
@@ -95,7 +98,7 @@ class PairTotalReservesProcessor(GenericProcessor):
             pool_address,
             time.time()
         )
-        
+
         # Fetch and compute reserves for the current pool
         base_snapshot_data: Optional[UniswapBaseSnapshot] = await base_snapshot_from_block_range(
             pair_address=pool_address,
