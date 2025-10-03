@@ -12,7 +12,7 @@ from computes.utils.models.message_models import UniswapBaseSnapshot
 from ipfs_client.main import AsyncIPFSClient
 from computes.settings.config import settings as computes_settings
 import requests
-
+from computes.utils.helpers import gen_data_source_idx_to_compute
 
 class PairTotalReservesProcessor(GenericProcessor):
     """
@@ -66,9 +66,9 @@ class PairTotalReservesProcessor(GenericProcessor):
             raise Exception(f"Failed to fetch active pools from bds: {response.status_code}")
         active_pools = list(response.json()['pools'].keys())
 
-        # selected pool
         # pick a pool randomly
-        pool_address = random.choice(active_pools)
+        data_source_idx = gen_data_source_idx_to_compute(msg_obj) % len(active_pools)
+        pool_address = active_pools[data_source_idx]
 
         self._logger.info(f"Selected pool {pool_address} from {active_pools}")
 

@@ -16,6 +16,7 @@ from computes.utils.constants import UNISWAP_TRADE_EVENT_SIGS
 from computes.utils.constants import UNISWAP_EVENTS_ABI
 from computes.utils.models.data_models import UniswapEvent
 
+from snapshotter.settings.config import settings
 from computes.settings.config import settings as worker_settings
 from computes.utils.constants import current_node
 from computes.utils.constants import factory_contract_obj
@@ -27,6 +28,7 @@ from computes.preloaders.eth_price.preloader import eth_price_preloader
 from computes.utils.models.message_models import UniswapPoolMetadata
 from computes.utils.constants import ERC20_ABI
 from computes.utils.constants import POOL_ABI
+from snapshotter.utils.models.message_models import SnapshotProcessMessage
 
 AddressLike = Union[Address, ChecksumAddress]
 getcontext().prec = 36
@@ -37,6 +39,35 @@ SCORE_BLOCK_MULTIPLIER = 1_000_000
 
 WETH_ADDRESS = Web3.to_checksum_address(worker_settings.contract_addresses.WETH)
 USDC_ADDRESS = Web3.to_checksum_address(worker_settings.contract_addresses.USDC)
+
+
+def gen_data_source_idx_to_compute(msg_obj: SnapshotProcessMessage) -> int:
+    """
+    Generate a deterministic index for the data source to compute, based on the current epoch,
+    the instance's unique identifier, the slot ID, and the current day.
+
+    This function is used to select or partition work among multiple snapshotter instances
+    in a distributed system, ensuring that each instance computes a unique or appropriate
+    data source index for the given epoch and day.
+
+    Args:
+        msg_obj (SnapshotProcessMessage): The message object containing epoch and day information.
+
+    Returns:
+        int: The computed data source index for this snapshotter instance.
+    """
+    # Extract the current epoch ID from the message object
+    current_epoch = msg_obj.epochId
+
+    # Convert the instance ID (hex string) to an integer for deterministic computation
+    snapshotter_int_value = int(settings.instance_id.lower(), 16)
+
+    # Extract the current day from the message object
+    current_day = msg_obj.day
+
+    # Compute the data source index by summing epoch, instance value, slot ID, and day
+    # This ensures a unique and reproducible index for each instance and epoch
+    return current_epoch + snapshotter_int_value + settings.slot_id + current_day
 
 
 class Slot0DataError(Exception):
