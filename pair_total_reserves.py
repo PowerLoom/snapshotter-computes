@@ -103,6 +103,10 @@ class PairTotalReservesProcessor(GenericProcessor):
         # fetch active pools from bds
         active_pools = await self._get_epoch_active_pools(min_chain_height)
 
+        if len(active_pools) == 0:
+            self._logger.error(f"No active pools found for epoch {msg_obj.epochId} at block {min_chain_height}")
+            return []
+
         # pick a pool randomly
         data_source_idx = gen_data_source_idx_to_compute(msg_obj) % len(active_pools)
         pool_address = active_pools[data_source_idx]
