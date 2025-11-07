@@ -373,7 +373,7 @@ async def get_uniswap_v3_all_trades_snapshot(
         Optional[UniswapTradesSnapshot]: Trades snapshot data for the pool,
                                        or None if not found
     """
-    project_id = f"allTradesSnapshot:{settings.namespace}"
+    project_id = f"allTradesSnapshot:{settings.data_market}:{settings.namespace}"
     result = await get_uniswapv3_snapshot(
         redis_conn=redis_conn,
         anchor_rpc_helper=anchor_rpc_helper,

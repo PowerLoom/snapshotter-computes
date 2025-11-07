@@ -67,7 +67,7 @@ class AllTradesProcessor(GenericProcessorSnapshot):
             begin=msg_obj.begin,
             end=msg_obj.end,
         )
-        aggregate_project_id = task_type.format(Namespace=settings.namespace)
+        aggregate_project_id = task_type.format(Namespace=settings.namespace, dataMarketAddress=settings.data_market)
         
         all_uniswap_trades_snapshot = AllUniswapTradesSnapshot(
             epoch=epoch_snapshot_model,
