@@ -101,6 +101,10 @@ async def get_uniswapv3_snapshot(
         seek = True
         
     # Fetch snapshot data for the determined epoch
+    logger.debug(
+        f"Fetching snapshot from IPFS for project {project_id} at epoch {target_epoch} "
+        f"(seek={seek})"
+    )
     snapshot_response = await get_project_epoch_snapshot(
         redis_conn=redis_conn,
         state_contract_obj=protocol_state_contract,
@@ -113,6 +117,10 @@ async def get_uniswapv3_snapshot(
     
     # Process exact match response
     if snapshot_response.exact_match:
+        logger.debug(
+            f"Found exact match snapshot for project {project_id} at epoch {target_epoch}, "
+            f"CID: {snapshot_response.exact_match.snapshot_cid}"
+        )
         try:
             parsed_snapshot = message_model(**snapshot_response.exact_match.data)
             return target_epoch, parsed_snapshot
@@ -374,6 +382,11 @@ async def get_uniswap_v3_all_trades_snapshot(
                                        or None if not found
     """
     project_id = f"allTradesSnapshot:{settings.data_market}:{settings.namespace}"
+    logger.info(
+        f"Starting allTrades snapshot fetch - project_id: {project_id}, "
+        f"block_number: {block_number or 'latest'}"
+    )
+    
     result = await get_uniswapv3_snapshot(
         redis_conn=redis_conn,
         anchor_rpc_helper=anchor_rpc_helper,
@@ -384,10 +397,24 @@ async def get_uniswap_v3_all_trades_snapshot(
         block_number=block_number,
     )
     if not result:
-        logger.error(f"No snapshot data found for project {project_id}")
+        logger.error(f"No snapshot data found for project {project_id} at block {block_number or 'latest'}")
         return None
         
     snapshot_epoch, snapshot_data = result
+    
+    # Count pools and trades in the snapshot
+    pool_count = len(snapshot_data.tradeData) if hasattr(snapshot_data, 'tradeData') else 0
+    total_trades = 0
+    if hasattr(snapshot_data, 'tradeData'):
+        for pool_trades in snapshot_data.tradeData.values():
+            if hasattr(pool_trades, 'trades'):
+                total_trades += len(pool_trades.trades)
+    
+    logger.info(
+        f"Successfully fetched allTrades snapshot - epoch: {snapshot_epoch}, "
+        f"pools: {pool_count}, total_trades: {total_trades}"
+    )
+    
     return snapshot_data
 
 
@@ -779,6 +806,11 @@ async def get_active_pools(
     Returns:
         Tuple[List[Dict], int]: List of pool data with pagination info and total count
     """
+    logger.info(
+        f"Starting daily active pools fetch - time_interval: {time_interval}s, "
+        f"page: {page}, size: {size}, metadata: {metadata}"
+    )
+    
     # Input validation
     if time_interval <= 0:
         raise ValueError(f"Invalid time_interval: {time_interval}. Must be > 0")
@@ -788,15 +820,18 @@ async def get_active_pools(
         raise ValueError(f"Invalid size: {size}. Must be > 0")
     
     # Check last indexed epoch
+    logger.debug(f"Checking Redis for cached active pool data - time_interval: {time_interval}")
     last_indexed_epoch = await redis_conn.get(
         f"active_pool_data:{time_interval}:latest:epoch"
     )
     if last_indexed_epoch:
         last_indexed_epoch = int(last_indexed_epoch)
+        logger.debug(f"Found cached indexed epoch: {last_indexed_epoch}")
     else:
         last_indexed_epoch = 0
+        logger.debug("No cached indexed epoch found, starting from scratch")
     
-    project_id = f"activePools:{settings.namespace}"
+    project_id = f"activePools:{settings.data_market}:{settings.namespace}"
     
     try:
         last_submitted_snapshot_data = await get_last_submitted_snapshot_data(redis_conn, project_id)
@@ -835,6 +870,10 @@ async def get_active_pools(
         )
         if active_pools_cached:
             active_pools = json.loads(active_pools_cached)
+            logger.info(
+                f"Found cached active pools data for epoch {last_indexed_epoch} "
+                f"with {len(active_pools)} unique pools"
+            )
             # Fetch snapshots for epochs_to_correct
             if epochs_to_correct > 0:
                 logger.info(
@@ -846,6 +885,10 @@ async def get_active_pools(
                     ipfs_reader, last_indexed_epoch + 1, last_submitted_epoch, project_id
                 )
                 logger.info(
+                    f"Fetched {len(new_snapshots)} new snapshots from IPFS "
+                    f"for epochs {last_indexed_epoch + 1} to {last_submitted_epoch}"
+                )
+                logger.info(
                     f"Fetching old snapshots for epochs "
                     f"{tail_epoch_id - epochs_to_correct} to {tail_epoch_id}"
                 )
@@ -854,16 +897,23 @@ async def get_active_pools(
                     ipfs_reader, tail_epoch_id - epochs_to_correct, 
                     tail_epoch_id - 1, project_id
                 )
+                logger.info(
+                    f"Fetched {len(old_snapshots)} old snapshots from IPFS "
+                    f"for epochs {tail_epoch_id - epochs_to_correct} to {tail_epoch_id - 1}"
+                )
                 
                 # Add new snapshots to indexed data
+                pools_added = 0
                 for snapshot in new_snapshots:
                     if snapshot and 'pools' in snapshot:
                         for pool_address, frequency in snapshot['pools'].items():
                             if pool_address not in active_pools:
                                 active_pools[pool_address] = 0
                             active_pools[pool_address] += frequency
+                            pools_added += 1
 
                 # Remove old snapshots from indexed data
+                pools_removed = 0
                 for snapshot in old_snapshots:
                     if snapshot and 'pools' in snapshot:
                         for pool_address, frequency in snapshot['pools'].items():
@@ -872,6 +922,13 @@ async def get_active_pools(
                                 # Remove pools with zero or negative frequency
                                 if active_pools[pool_address] <= 0:
                                     del active_pools[pool_address]
+                                    pools_removed += 1
+                
+                logger.info(
+                    f"Processed snapshots - added {pools_added} pool entries, "
+                    f"removed {pools_removed} pool entries, "
+                    f"total unique pools: {len(active_pools)}"
+                )
         else:
             # No cached data found, fall back to fetching all snapshots
             logger.info(
@@ -882,25 +939,51 @@ async def get_active_pools(
                 redis_conn, protocol_state_contract, anchor_rpc_helper, 
                 ipfs_reader, tail_epoch_id, last_submitted_epoch, project_id
             )
+            logger.info(
+                f"Fetched {len(snapshots)} snapshots from IPFS "
+                f"for epochs {tail_epoch_id} to {last_submitted_epoch}"
+            )
             active_pools = {}
+            pools_processed = 0
             for snapshot in snapshots:
                 if snapshot and 'pools' in snapshot:
                     for pool_address, frequency in snapshot['pools'].items():
                         if pool_address not in active_pools:
                             active_pools[pool_address] = 0
                         active_pools[pool_address] += frequency
+                        pools_processed += 1
+            
+            logger.info(
+                f"Processed {len(snapshots)} snapshots - found {pools_processed} pool entries, "
+                f"total unique pools: {len(active_pools)}"
+            )
     else:
+        logger.info(
+            f"Fetching all snapshots from IPFS for epochs "
+            f"{tail_epoch_id} to {last_submitted_epoch}"
+        )
         snapshots = await get_project_epoch_snapshot_bulk(
             redis_conn, protocol_state_contract, anchor_rpc_helper, 
             ipfs_reader, tail_epoch_id, last_submitted_epoch, project_id
         )
+        logger.info(
+            f"Fetched {len(snapshots)} snapshots from IPFS "
+            f"for epochs {tail_epoch_id} to {last_submitted_epoch}"
+        )
         active_pools = {}
+        pools_processed = 0
         for snapshot in snapshots:
             if snapshot and 'pools' in snapshot:
                 for pool_address, frequency in snapshot['pools'].items():
                     if pool_address not in active_pools:
                         active_pools[pool_address] = 0
                     active_pools[pool_address] += frequency
+                    pools_processed += 1
+        
+        logger.info(
+            f"Processed {len(snapshots)} snapshots - found {pools_processed} pool entries, "
+            f"total unique pools: {len(active_pools)}"
+        )
 
     # Set data in redis
     await redis_conn.set(
@@ -943,6 +1026,7 @@ async def get_active_pools(
     
     # Add metadata if requested (parallelized in batches)
     if metadata:
+        logger.info(f"Fetching metadata for {len(pools_data)} pools in batches")
         # Process pools in batches of 50
         batch_size = 50
         for i in range(0, len(pools_data), batch_size):
@@ -982,7 +1066,14 @@ async def get_active_pools(
                 # Set metadata to None for all pools in this batch
                 for pool_data in batch:
                     pool_data["metadata"] = None
-
+        
+        logger.info(f"Completed metadata fetching for {len(pools_data)} pools")
+    
+    logger.info(
+        f"Completed daily active pools fetch - total pools: {total_pools}, "
+        f"returning page {page} with {len(pools_data)} pools"
+    )
+    
     return pools_data, total_pools
 
 
@@ -1070,6 +1161,11 @@ async def get_active_tokens(
     Returns:
         Tuple[List[Dict], int]: List of token data with pagination info and total count
     """
+    logger.info(
+        f"Starting daily active tokens fetch - time_interval: {time_interval}s, "
+        f"page: {page}, size: {size}, metadata: {metadata}"
+    )
+    
     # Input validation
     if time_interval <= 0:
         raise ValueError(f"Invalid time_interval: {time_interval}. Must be > 0")
@@ -1079,15 +1175,18 @@ async def get_active_tokens(
         raise ValueError(f"Invalid size: {size}. Must be > 0")
     
     # Check last indexed epoch
+    logger.debug(f"Checking Redis for cached active token data - time_interval: {time_interval}")
     last_indexed_epoch = await redis_conn.get(
         f"active_token_data:{time_interval}:latest:epoch"
     )
     if last_indexed_epoch:
         last_indexed_epoch = int(last_indexed_epoch)
+        logger.debug(f"Found cached indexed epoch: {last_indexed_epoch}")
     else:
         last_indexed_epoch = 0
+        logger.debug("No cached indexed epoch found, starting from scratch")
     
-    project_id = f"activeTokens:{settings.namespace}"
+    project_id = f"activeTokens:{settings.data_market}:{settings.namespace}"
     
     try:
         last_submitted_snapshot_data = await get_last_submitted_snapshot_data(redis_conn, project_id)
@@ -1127,6 +1226,10 @@ async def get_active_tokens(
         )
         if active_tokens_cached:
             active_tokens = json.loads(active_tokens_cached)
+            logger.info(
+                f"Found cached active tokens data for epoch {last_indexed_epoch} "
+                f"with {len(active_tokens)} unique tokens"
+            )
             if epochs_to_correct > 0:
                 # Fetch snapshots for epochs_to_correct
                 logger.info(
@@ -1138,6 +1241,10 @@ async def get_active_tokens(
                     ipfs_reader, last_indexed_epoch + 1, last_submitted_epoch, project_id
                 )
                 logger.info(
+                    f"Fetched {len(new_snapshots)} new snapshots from IPFS "
+                    f"for epochs {last_indexed_epoch + 1} to {last_submitted_epoch}"
+                )
+                logger.info(
                     f"Fetching old snapshots for epochs "
                     f"{tail_epoch_id - epochs_to_correct} to {tail_epoch_id}"
                 )
@@ -1146,16 +1253,23 @@ async def get_active_tokens(
                     ipfs_reader, tail_epoch_id - epochs_to_correct, 
                     tail_epoch_id - 1, project_id
                 )
+                logger.info(
+                    f"Fetched {len(old_snapshots)} old snapshots from IPFS "
+                    f"for epochs {tail_epoch_id - epochs_to_correct} to {tail_epoch_id - 1}"
+                )
                 
                 # Add new snapshots to indexed data
+                tokens_added = 0
                 for snapshot in new_snapshots:
                     if snapshot and 'tokens' in snapshot:
                         for token_address, frequency in snapshot['tokens'].items():
                             if token_address not in active_tokens:
                                 active_tokens[token_address] = 0
                             active_tokens[token_address] += frequency
+                            tokens_added += 1
 
                 # Remove old snapshots from indexed data
+                tokens_removed = 0
                 for snapshot in old_snapshots:
                     if snapshot and 'tokens' in snapshot:
                         for token_address, frequency in snapshot['tokens'].items():
@@ -1164,6 +1278,13 @@ async def get_active_tokens(
                                 # Remove tokens with zero or negative frequency
                                 if active_tokens[token_address] <= 0:
                                     del active_tokens[token_address]
+                                    tokens_removed += 1
+                
+                logger.info(
+                    f"Processed snapshots - added {tokens_added} token entries, "
+                    f"removed {tokens_removed} token entries, "
+                    f"total unique tokens: {len(active_tokens)}"
+                )
         else:
             # No cached data found, fall back to fetching all snapshots
             logger.info(
@@ -1174,25 +1295,51 @@ async def get_active_tokens(
                 redis_conn, protocol_state_contract, anchor_rpc_helper, 
                 ipfs_reader, tail_epoch_id, last_submitted_epoch, project_id
             )
+            logger.info(
+                f"Fetched {len(snapshots)} snapshots from IPFS "
+                f"for epochs {tail_epoch_id} to {last_submitted_epoch}"
+            )
             active_tokens = {}
+            tokens_processed = 0
             for snapshot in snapshots:
                 if snapshot and 'tokens' in snapshot:
                     for token_address, frequency in snapshot['tokens'].items():
                         if token_address not in active_tokens:
                             active_tokens[token_address] = 0
                         active_tokens[token_address] += frequency
+                        tokens_processed += 1
+            
+            logger.info(
+                f"Processed {len(snapshots)} snapshots - found {tokens_processed} token entries, "
+                f"total unique tokens: {len(active_tokens)}"
+            )
     else:    
+        logger.info(
+            f"Fetching all snapshots from IPFS for epochs "
+            f"{tail_epoch_id} to {last_submitted_epoch}"
+        )
         snapshots = await get_project_epoch_snapshot_bulk(
             redis_conn, protocol_state_contract, anchor_rpc_helper, 
             ipfs_reader, tail_epoch_id, last_submitted_epoch, project_id
         )
+        logger.info(
+            f"Fetched {len(snapshots)} snapshots from IPFS "
+            f"for epochs {tail_epoch_id} to {last_submitted_epoch}"
+        )
         active_tokens = {}
+        tokens_processed = 0
         for snapshot in snapshots:
             if snapshot and 'tokens' in snapshot:
                 for token_address, frequency in snapshot['tokens'].items():
                     if token_address not in active_tokens:
                         active_tokens[token_address] = 0
                     active_tokens[token_address] += frequency
+                    tokens_processed += 1
+        
+        logger.info(
+            f"Processed {len(snapshots)} snapshots - found {tokens_processed} token entries, "
+            f"total unique tokens: {len(active_tokens)}"
+        )
 
     # Set data in redis
     await redis_conn.set(
@@ -1280,7 +1427,14 @@ async def get_active_tokens(
                 # Set metadata to None for all tokens in this batch
                 for token_data in batch:
                     token_data["metadata"] = None
-
+        
+        logger.info(f"Completed metadata fetching for {len(tokens_data)} tokens")
+    
+    logger.info(
+        f"Completed daily active tokens fetch - total tokens: {total_tokens}, "
+        f"returning page {page} with {len(tokens_data)} tokens"
+    )
+    
     return tokens_data, total_tokens
 
 

@@ -353,6 +353,9 @@ async def get_all_trades_snapshot(
     Returns:
         dict: Trades snapshot or error message.
     """
+    rest_logger.info(
+        f"Fetching allTrades snapshot - block_number: {block_number or 'latest'}"
+    )
     try:
         trades_snapshot = await get_uniswap_v3_all_trades_snapshot(
             redis_conn=request.app.state.redis_conn,
@@ -362,13 +365,22 @@ async def get_all_trades_snapshot(
             block_number=block_number,
         )
         if not trades_snapshot:
+            rest_logger.warning(
+                f"AllTrades snapshot not found for block_number: {block_number or 'latest'}"
+            )
             response.status_code = 404
             return {"error": "Trades snapshot not found"}
         else:
+            # Count pools in the snapshot
+            pool_count = len(trades_snapshot.get('tradeData', {})) if isinstance(trades_snapshot, dict) else 0
+            rest_logger.info(
+                f"Successfully fetched allTrades snapshot - block_number: {block_number or 'latest'}, "
+                f"pools: {pool_count}"
+            )
             response.status_code = 200
             return trades_snapshot
     except Exception as e:
-        rest_logger.error(f"Error getting trades snapshot for all pools at block {block_number}: {e}")
+        rest_logger.opt(exception=True).error(f"Error getting trades snapshot for all pools at block {block_number}: {e}")
         response.status_code = 500
         return {"error": str(e)}
 
@@ -647,6 +659,10 @@ async def get_daily_active_tokens(
         dict: List of active tokens with their frequencies and optional metadata,
               plus pagination metadata.
     """
+    rest_logger.info(
+        f"Fetching daily active tokens - page: {page}, size: {size}, "
+        f"time_interval: {time_interval}s, metadata: {metadata}"
+    )
     try:
         tokens_data, total_tokens = await get_active_tokens(
             redis_conn=request.app.state.redis_conn,
@@ -657,6 +673,11 @@ async def get_daily_active_tokens(
             page=page,
             size=size,
             metadata=metadata,
+        )
+        
+        rest_logger.info(
+            f"Successfully fetched daily active tokens - total: {total_tokens}, "
+            f"returned: {len(tokens_data)}, page: {page}/{((total_tokens + size - 1) // size)}"
         )
         
         response.status_code = 200
@@ -726,6 +747,10 @@ async def get_daily_active_pools(
         dict: List of active pools with their frequencies and optional metadata,
               plus pagination metadata.
     """
+    rest_logger.info(
+        f"Fetching daily active pools - page: {page}, size: {size}, "
+        f"time_interval: {time_interval}s, metadata: {metadata}"
+    )
     try:
         pools_data, total_pools = await get_active_pools(
             redis_conn=request.app.state.redis_conn,
@@ -739,6 +764,11 @@ async def get_daily_active_pools(
             metadata=metadata,
         )
     
+        rest_logger.info(
+            f"Successfully fetched daily active pools - total: {total_pools}, "
+            f"returned: {len(pools_data)}, page: {page}/{((total_pools + size - 1) // size)}"
+        )
+        
         response.status_code = 200
         return {
             "active_pools": pools_data,
