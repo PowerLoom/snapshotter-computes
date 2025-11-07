@@ -94,4 +94,4 @@ class ActivePoolsProcessor(GenericProcessorSnapshot):
         self._logger.info(f"Snapshot: {snapshot}")
 
         # Return task identifier and snapshot
-        return [(task_type.format(Namespace=settings.namespace), snapshot)]
+        return [(task_type.format(Namespace=settings.namespace, dataMarketAddress=settings.data_market), snapshot)]
