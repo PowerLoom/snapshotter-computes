@@ -862,7 +862,8 @@ async def get_active_pools(
         # Fetch indexed data
         logger.info(
             f"Correcting indexed data for epochs {last_indexed_epoch} "
-            f"to {last_submitted_epoch} for time interval {time_interval}"
+            f"to {last_submitted_epoch} for time interval {time_interval}, "
+            f"epochs_to_correct: {epochs_to_correct}"
         )
         active_pools_cached = await redis_conn.get(
             f"active_pool_data:{time_interval}:{last_indexed_epoch}:"
@@ -877,8 +878,11 @@ async def get_active_pools(
             # Fetch snapshots for epochs_to_correct
             if epochs_to_correct > 0:
                 logger.info(
-                    f"Fetching new snapshots for epochs {last_indexed_epoch} "
-                    f"to {last_indexed_epoch + epochs_to_correct}"
+                    f"Epochs to correct: {epochs_to_correct}, fetching new and old snapshots"
+                )
+                logger.info(
+                    f"Fetching new snapshots for epochs {last_indexed_epoch + 1} "
+                    f"to {last_submitted_epoch}"
                 )
                 new_snapshots = await get_project_epoch_snapshot_bulk(
                     redis_conn, protocol_state_contract, anchor_rpc_helper, 
@@ -928,6 +932,12 @@ async def get_active_pools(
                     f"Processed snapshots - added {pools_added} pool entries, "
                     f"removed {pools_removed} pool entries, "
                     f"total unique pools: {len(active_pools)}"
+                )
+            else:
+                # epochs_to_correct == 0, using cached data as-is
+                logger.info(
+                    f"No epochs to correct (epochs_to_correct={epochs_to_correct}), "
+                    f"using cached data directly with {len(active_pools)} unique pools"
                 )
         else:
             # No cached data found, fall back to fetching all snapshots
@@ -1002,6 +1012,11 @@ async def get_active_pools(
             f"{settings.namespace}"
         )
 
+    logger.info(
+        f"Processing active_pools dict - total keys: {len(active_pools)}, "
+        f"sample keys: {list(active_pools.keys())[:5] if active_pools else 'empty'}"
+    )
+    
     active_pool_data = [
         (pool_address, frequency) 
         for pool_address, frequency in active_pools.items()
@@ -1014,6 +1029,11 @@ async def get_active_pools(
 
     total_pools = len(active_pool_data)
     active_pools_page = active_pool_data[start_idx:end_idx + 1]
+    
+    logger.info(
+        f"After sorting and pagination - total_pools: {total_pools}, "
+        f"page: {page}, size: {size}, active_pools_page length: {len(active_pools_page)}"
+    )
     
     # Format the response
     pools_data = []
@@ -1218,7 +1238,8 @@ async def get_active_tokens(
         # Fetch indexed data
         logger.info(
             f"Correcting indexed data for epochs {last_indexed_epoch} "
-            f"to {last_submitted_epoch} for time interval {time_interval}"
+            f"to {last_submitted_epoch} for time interval {time_interval}, "
+            f"epochs_to_correct: {epochs_to_correct}"
         )
         active_tokens_cached = await redis_conn.get(
             f"active_token_data:{time_interval}:{last_indexed_epoch}:"
@@ -1231,6 +1252,9 @@ async def get_active_tokens(
                 f"with {len(active_tokens)} unique tokens"
             )
             if epochs_to_correct > 0:
+                logger.info(
+                    f"Epochs to correct: {epochs_to_correct}, fetching new and old snapshots"
+                )
                 # Fetch snapshots for epochs_to_correct
                 logger.info(
                     f"Fetching new snapshots for epochs {last_indexed_epoch} "
@@ -1284,6 +1308,12 @@ async def get_active_tokens(
                     f"Processed snapshots - added {tokens_added} token entries, "
                     f"removed {tokens_removed} token entries, "
                     f"total unique tokens: {len(active_tokens)}"
+                )
+            else:
+                # epochs_to_correct == 0, using cached data as-is
+                logger.info(
+                    f"No epochs to correct (epochs_to_correct={epochs_to_correct}), "
+                    f"using cached data directly with {len(active_tokens)} unique tokens"
                 )
         else:
             # No cached data found, fall back to fetching all snapshots
