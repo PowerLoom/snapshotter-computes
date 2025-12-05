@@ -356,6 +356,9 @@ async def get_all_trades_snapshot(
     import asyncio
     import time
     
+    # Log immediately at function entry
+    rest_logger.info(f"[allTrades] ENDPOINT HANDLER CALLED - block_number: {block_number}")
+    
     request_start = time.time()
     rest_logger.info(
         f"[allTrades] Request received - block_number: {block_number or 'latest'}, "
