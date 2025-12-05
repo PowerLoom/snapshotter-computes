@@ -6,6 +6,7 @@ from rpc_helper.rpc import RpcHelper
 from typing import List, Optional, Tuple, Type, Dict, Any
 from web3 import Web3
 from ipfs_client.main import AsyncIPFSClient
+from ipfs_client.dag import IPFSAsyncClientError
 
 from computes.utils.redis_keys import uniswap_eth_usd_price_zset
 from computes.settings.config import settings as computes_settings
@@ -133,36 +134,52 @@ async def get_uniswapv3_snapshot(
             logger.info(f"No exact match found for project {project_id} against epoch {target_epoch}, but nearby epochs found: {snapshot_response.closest_epochs}") 
             
             # Try previous epoch first
-            previous_epoch = snapshot_response.closest_epochs.previous        
+            previous_epoch = snapshot_response.closest_epochs.previous
             if previous_epoch:
-                logger.info(f"Fetching previous epoch {previous_epoch} CID for project {project_id} against actual sought epoch {target_epoch}")
-                target_epoch = previous_epoch.epoch_id
-                snapshot_response = await get_submission_data(
-                    cid=previous_epoch.snapshot_cid,
-                    ipfs_reader=ipfs_reader,
-                )
-                if snapshot_response:
-                    parsed_snapshot = message_model(**snapshot_response)
-                    return target_epoch, parsed_snapshot
-                else:
-                    logger.error(f"No snapshot data found for project {project_id} against nearby epoch {previous_epoch.epoch_id} with CID {previous_epoch.snapshot_cid}")
-                    return None
+                logger.info(f"Fetching previous epoch {previous_epoch.epoch_id} CID for project {project_id} against actual sought epoch {target_epoch}")
+                try:
+                    snapshot_response = await asyncio.wait_for(
+                        get_submission_data(
+                            cid=previous_epoch.snapshot_cid,
+                            ipfs_reader=ipfs_reader,
+                        ),
+                        timeout=15.0  # Shorter timeout for fallback fetches
+                    )
+                    if snapshot_response:
+                        parsed_snapshot = message_model(**snapshot_response)
+                        return previous_epoch.epoch_id, parsed_snapshot
+                    else:
+                        logger.warning(f"No snapshot data found for project {project_id} against nearby epoch {previous_epoch.epoch_id} with CID {previous_epoch.snapshot_cid}")
+                except asyncio.TimeoutError:
+                    logger.warning(f"Timeout fetching previous epoch {previous_epoch.epoch_id} for project {project_id}")
+                except IPFSAsyncClientError as e:
+                    logger.warning(f"IPFS client error fetching previous epoch {previous_epoch.epoch_id} for project {project_id}: {e}")
+                except Exception as e:
+                    logger.warning(f"Error fetching previous epoch {previous_epoch.epoch_id} for project {project_id}: {e}")
                     
-            # Fallback to next epoch if previous not available        
+            # Fallback to next epoch if previous not available
             next_epoch = snapshot_response.closest_epochs.next
             if next_epoch:
-                logger.info(f"Fetching next epoch {next_epoch} CID for project {project_id} against actual sought epoch {target_epoch}")
-                target_epoch = next_epoch.epoch_id
-                snapshot_response = await get_submission_data(
-                    cid=next_epoch.snapshot_cid,
-                    ipfs_reader=ipfs_reader,
-                )
-                if snapshot_response:
-                    parsed_snapshot = message_model(**snapshot_response)
-                    return target_epoch, parsed_snapshot
-                else:
-                    logger.error(f"No snapshot data found for project {project_id} against nearby epoch {next_epoch.epoch_id} with CID {next_epoch.snapshot_cid}")
-                    return None
+                logger.info(f"Fetching next epoch {next_epoch.epoch_id} CID for project {project_id} against actual sought epoch {target_epoch}")
+                try:
+                    snapshot_response = await asyncio.wait_for(
+                        get_submission_data(
+                            cid=next_epoch.snapshot_cid,
+                            ipfs_reader=ipfs_reader,
+                        ),
+                        timeout=15.0  # Shorter timeout for fallback fetches
+                    )
+                    if snapshot_response:
+                        parsed_snapshot = message_model(**snapshot_response)
+                        return next_epoch.epoch_id, parsed_snapshot
+                    else:
+                        logger.warning(f"No snapshot data found for project {project_id} against nearby epoch {next_epoch.epoch_id} with CID {next_epoch.snapshot_cid}")
+                except asyncio.TimeoutError:
+                    logger.warning(f"Timeout fetching next epoch {next_epoch.epoch_id} for project {project_id}")
+                except IPFSAsyncClientError as e:
+                    logger.warning(f"IPFS client error fetching next epoch {next_epoch.epoch_id} for project {project_id}: {e}")
+                except Exception as e:
+                    logger.warning(f"Error fetching next epoch {next_epoch.epoch_id} for project {project_id}: {e}")
         return None
 
 
@@ -397,11 +414,11 @@ async def get_uniswap_v3_all_trades_snapshot(
         block_number=block_number,
     )
     if not result:
-        logger.error(f"No snapshot data found for project {project_id} at block {block_number or 'latest'}")
+        logger.warning(f"No snapshot data found for project {project_id} at block {block_number or 'latest'}")
         return None
-        
+
     snapshot_epoch, snapshot_data = result
-    
+
     # Count pools and trades in the snapshot
     pool_count = len(snapshot_data.tradeData) if hasattr(snapshot_data, 'tradeData') else 0
     total_trades = 0
@@ -409,12 +426,12 @@ async def get_uniswap_v3_all_trades_snapshot(
         for pool_trades in snapshot_data.tradeData.values():
             if hasattr(pool_trades, 'trades'):
                 total_trades += len(pool_trades.trades)
-    
+
     logger.info(
         f"Successfully fetched allTrades snapshot - epoch: {snapshot_epoch}, "
         f"pools: {pool_count}, total_trades: {total_trades}"
     )
-    
+
     return snapshot_data
 
 

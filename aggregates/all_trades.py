@@ -84,18 +84,32 @@ class AllTradesProcessor(GenericProcessorSnapshot):
             all_cids,
             ipfs_reader,
             None,
-            ensure_complete=True,
+            ensure_complete=False,  # Allow partial data to handle missing snapshots
         )
 
         parsed_snapshot_data = []
-        for snapshot_data in all_snapshot_data:
-            snapshot = UniswapTradesSnapshot(**snapshot_data)
-            snapshot.previousSnapshots = []
-            parsed_snapshot_data.append(snapshot)
+        successful_indices = []  # Track which indices have valid data
 
-        for project_id, snapshot_data in zip(all_project_ids, parsed_snapshot_data):
+        for i, snapshot_data in enumerate(all_snapshot_data):
+            if snapshot_data and snapshot_data != {}:  # Check for valid data
+                try:
+                    snapshot = UniswapTradesSnapshot(**snapshot_data)
+                    snapshot.previousSnapshots = []
+                    parsed_snapshot_data.append(snapshot)
+                    successful_indices.append(i)
+                except Exception as e:
+                    self._logger.warning(f"Failed to parse snapshot data for index {i}: {e}")
+            else:
+                self._logger.warning(f"Missing or empty snapshot data for index {i}")
+
+        # Only process successful snapshots
+        for idx in successful_indices:
+            project_id = all_project_ids[idx]
+            snapshot_data = parsed_snapshot_data[successful_indices.index(idx)]
             pair_address = project_id.split(":")[1]
             all_uniswap_trades_snapshot.tradeData[pair_address] = snapshot_data
+
+        self._logger.info(f"Successfully processed {len(successful_indices)} out of {len(all_cids)} pool snapshots")
 
         snapshots.append((aggregate_project_id, all_uniswap_trades_snapshot))
         return snapshots

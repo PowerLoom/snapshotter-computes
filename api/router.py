@@ -353,17 +353,25 @@ async def get_all_trades_snapshot(
     Returns:
         dict: Trades snapshot or error message.
     """
+    import asyncio
+
     rest_logger.info(
         f"Fetching allTrades snapshot - block_number: {block_number or 'latest'}"
     )
+
     try:
-        trades_snapshot = await get_uniswap_v3_all_trades_snapshot(
-            redis_conn=request.app.state.redis_conn,
-            protocol_state_contract=request.app.state.protocol_state_contract,
-            anchor_rpc_helper=request.app.state.anchor_rpc_helper,
-            ipfs_reader=request.app.state.ipfs_reader_client,
-            block_number=block_number,
+        # Add timeout to prevent hanging on data retrieval
+        trades_snapshot = await asyncio.wait_for(
+            get_uniswap_v3_all_trades_snapshot(
+                redis_conn=request.app.state.redis_conn,
+                protocol_state_contract=request.app.state.protocol_state_contract,
+                anchor_rpc_helper=request.app.state.anchor_rpc_helper,
+                ipfs_reader=request.app.state.ipfs_reader_client,
+                block_number=block_number,
+            ),
+            timeout=60.0  # 60 second timeout for the entire operation
         )
+
         if not trades_snapshot:
             rest_logger.warning(
                 f"AllTrades snapshot not found for block_number: {block_number or 'latest'}"
@@ -379,6 +387,12 @@ async def get_all_trades_snapshot(
             )
             response.status_code = 200
             return trades_snapshot
+    except asyncio.TimeoutError:
+        rest_logger.error(
+            f"Timeout fetching allTrades snapshot for block_number: {block_number or 'latest'}"
+        )
+        response.status_code = 504  # Gateway Timeout
+        return {"error": "Request timeout - data retrieval took too long"}
     except Exception as e:
         rest_logger.opt(exception=True).error(f"Error getting trades snapshot for all pools at block {block_number}: {e}")
         response.status_code = 500
