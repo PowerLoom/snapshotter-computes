@@ -354,13 +354,19 @@ async def get_all_trades_snapshot(
         dict: Trades snapshot or error message.
     """
     import asyncio
-
+    import time
+    
+    request_start = time.time()
     rest_logger.info(
-        f"Fetching allTrades snapshot - block_number: {block_number or 'latest'}"
+        f"[allTrades] Request received - block_number: {block_number or 'latest'}, "
+        f"redis_conn: {request.app.state.redis_conn is not None}, "
+        f"ipfs_reader: {request.app.state.ipfs_reader_client is not None}"
     )
 
     try:
         # Add timeout to prevent hanging on data retrieval
+        rest_logger.info(f"[allTrades] Starting data fetch with 60s timeout...")
+        fetch_start = time.time()
         trades_snapshot = await asyncio.wait_for(
             get_uniswap_v3_all_trades_snapshot(
                 redis_conn=request.app.state.redis_conn,
@@ -371,6 +377,8 @@ async def get_all_trades_snapshot(
             ),
             timeout=60.0  # 60 second timeout for the entire operation
         )
+        fetch_duration = time.time() - fetch_start
+        rest_logger.info(f"[allTrades] Data fetch completed in {fetch_duration:.2f}s")
 
         if not trades_snapshot:
             rest_logger.warning(

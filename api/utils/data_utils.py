@@ -68,29 +68,38 @@ async def get_uniswapv3_snapshot(
         Optional[Tuple[int, BaseModel]]: Tuple of (epoch_id, parsed_snapshot) if found,
                                         None if no valid snapshot data is available
     """
+    import time
+    start_time = time.time()
+    logger.info(f"[get_uniswapv3_snapshot] Starting for project {project_id}, block_number: {block_number}")
+    
     try:
         # Determine target epoch
         if block_number is not None:
             # When block_number is provided, use it as epoch (assumes epoch = block number)
             target_epoch = block_number
-            logger.debug(f"Using provided block number {target_epoch} as epoch for {project_id}")
+            logger.info(f"[get_uniswapv3_snapshot] Using provided block number {target_epoch} as epoch for {project_id}")
         else:
             # Get latest epoch for the project
+            logger.info(f"[get_uniswapv3_snapshot] Getting latest epoch for project {project_id}")
             last_submitted = await get_last_submitted_snapshot_data(redis_conn, project_id)
             if last_submitted:
                 target_epoch = last_submitted['epochId']
+                logger.info(f"[get_uniswapv3_snapshot] Found last submitted epoch {target_epoch} for project {project_id}")
             else:
+                logger.info(f"[get_uniswapv3_snapshot] No last submitted epoch, fetching finalized epoch for project {project_id}")
                 target_epoch = await get_project_last_finalized_epoch(
                     redis_conn=redis_conn,
                     state_contract_obj=protocol_state_contract,
                     rpc_helper=anchor_rpc_helper,
                     project_id=project_id,
                 )
+                if target_epoch:
+                    logger.info(f"[get_uniswapv3_snapshot] Found finalized epoch {target_epoch} for project {project_id}")
+                else:
+                    logger.warning(f"[get_uniswapv3_snapshot] No epoch found for project {project_id}")
+                    return None
 
-            if not target_epoch:
-                logger.warning(f"No epoch found for project {project_id}")
-                return None
-
+        logger.info(f"[get_uniswapv3_snapshot] Fetching snapshot for project {project_id}, epoch {target_epoch}")
         # Use get_project_epoch_snapshot which checks Redis cache first, then IPFS
         snapshot_response = await get_project_epoch_snapshot(
             redis_conn=redis_conn,
@@ -103,21 +112,26 @@ async def get_uniswapv3_snapshot(
             cleanup_previous_snapshots=True,
         )
         
+        duration = time.time() - start_time
+        
         if not snapshot_response.has_data or not snapshot_response.exact_match:
-            logger.debug(f"No snapshot data found for {project_id}:{target_epoch}")
+            logger.warning(f"[get_uniswapv3_snapshot] No snapshot data found for {project_id}:{target_epoch} after {duration:.2f}s")
             return None
 
         # Parse the data using the provided model
         try:
+            logger.info(f"[get_uniswapv3_snapshot] Parsing snapshot data for {project_id}:{target_epoch}")
             parsed_snapshot = message_model(**snapshot_response.exact_match.data)
-            logger.debug(f"Successfully retrieved and parsed snapshot for {project_id}:{target_epoch}")
+            total_duration = time.time() - start_time
+            logger.info(f"[get_uniswapv3_snapshot] Successfully retrieved and parsed snapshot for {project_id}:{target_epoch} in {total_duration:.2f}s")
             return target_epoch, parsed_snapshot
         except Exception as e:
-            logger.error(f"Failed to parse snapshot data for {project_id}:{target_epoch}: {e}")
+            logger.error(f"[get_uniswapv3_snapshot] Failed to parse snapshot data for {project_id}:{target_epoch}: {e}")
             return None
 
     except Exception as e:
-        logger.error(f"Error in get_uniswapv3_snapshot for {project_id}: {e}")
+        duration = time.time() - start_time
+        logger.error(f"[get_uniswapv3_snapshot] Error in get_uniswapv3_snapshot for {project_id} after {duration:.2f}s: {e}")
         return None
 
 
