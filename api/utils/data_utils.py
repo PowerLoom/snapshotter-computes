@@ -17,7 +17,6 @@ from computes.api.models.data_models import (
 )
 from computes.utils.helpers import get_uniswap_v3_pool_metadata
 
-from snapshotter.unified_cache import get_cached_data
 from snapshotter.utils.data_utils import (
     get_project_last_finalized_epoch,
     get_last_submitted_snapshot_data,
@@ -28,6 +27,8 @@ from snapshotter.utils.data_utils import (
     _fallback_fetch_block_at_timestamp,
     get_block_number_closest_to_timestamp,
     get_source_chain_block_time,
+    get_project_epoch_snapshot,
+    get_project_epoch_snapshot_bulk,
 )
 from snapshotter.settings.config import settings
 from snapshotter.utils.default_logger import default_logger
@@ -90,15 +91,25 @@ async def get_uniswapv3_snapshot(
                 logger.warning(f"No epoch found for project {project_id}")
                 return None
 
-        # Use simplified unified cache to get data
-        data = await get_cached_data(project_id, target_epoch)
-        if not data:
-            logger.debug(f"No cached data found for {project_id}:{target_epoch}")
+        # Use get_project_epoch_snapshot which checks Redis cache first, then IPFS
+        snapshot_response = await get_project_epoch_snapshot(
+            redis_conn=redis_conn,
+            state_contract_obj=protocol_state_contract,
+            rpc_helper=anchor_rpc_helper,
+            ipfs_reader=ipfs_reader,
+            epoch_id=target_epoch,
+            project_id=project_id,
+            seek=False,
+            cleanup_previous_snapshots=True,
+        )
+        
+        if not snapshot_response.has_data or not snapshot_response.exact_match:
+            logger.debug(f"No snapshot data found for {project_id}:{target_epoch}")
             return None
 
         # Parse the data using the provided model
         try:
-            parsed_snapshot = message_model(**data)
+            parsed_snapshot = message_model(**snapshot_response.exact_match.data)
             logger.debug(f"Successfully retrieved and parsed snapshot for {project_id}:{target_epoch}")
             return target_epoch, parsed_snapshot
         except Exception as e:
