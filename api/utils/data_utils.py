@@ -17,17 +17,13 @@ from computes.api.models.data_models import (
 )
 from computes.utils.helpers import get_uniswap_v3_pool_metadata
 
+from snapshotter.unified_cache import get_cached_data
 from snapshotter.utils.data_utils import (
-    get_project_latest_snapshot,
     get_project_last_finalized_epoch,
-    get_project_epoch_snapshot,
     get_last_submitted_snapshot_data,
-    get_submission_data,
     get_current_epoch_id,
     get_tail_epoch_id,
-    get_project_epoch_snapshot_bulk,
     get_source_chain_epoch_size,
-    _fetch_snapshots_for_epochs,
     _fetch_missing_timestamps,
     _fallback_fetch_block_at_timestamp,
     get_block_number_closest_to_timestamp,
@@ -52,134 +48,65 @@ async def get_uniswapv3_snapshot(
     block_number: Optional[int] = None,
 ) -> Optional[Tuple[int, BaseModel]]:
     """
-    Retrieves a Uniswap V3 snapshot for a given project and optionally a specific block number.
-    
-    This function handles the logic of determining the target epoch based on whether a block_number
-    is provided or not. If no block_number is given, it uses the last finalized epoch. If a 
-    block_number is provided, it seeks around that epoch to find the closest available data.
-    
+    Simplified Uniswap V3 snapshot retrieval using unified cache.
+
+    This function now uses the simplified unified cache service instead of
+    complex multi-layer caching logic. It provides the same API but with
+    much simpler implementation.
+
     Args:
         redis_conn (aioredis.Redis): Redis connection for data access
-        anchor_rpc_helper (RpcHelper): RPC helper for blockchain interactions  
+        anchor_rpc_helper (RpcHelper): RPC helper for blockchain interactions
         ipfs_reader (AsyncIPFSClient): IPFS client for reading snapshot data
         protocol_state_contract: Smart contract object for protocol state
         project_id (str): The project identifier for the snapshot
         message_model (Type[BaseModel]): Pydantic model class to parse the snapshot data
         block_number (Optional[int]): Specific block number to target, if None uses latest
-        
+
     Returns:
         Optional[Tuple[int, BaseModel]]: Tuple of (epoch_id, parsed_snapshot) if found,
                                         None if no valid snapshot data is available
-                                        
-    Note:
-        When block_number is provided, the function assumes epoch equals block number
-        in the data market contract configuration.
     """
-    # Determine target epoch based on input parameters
-    seek = False
-    if not block_number:
-        # Use last submitted or finalized epoch when no specific block requested
-        last_submitted_snapshot_data = await get_last_submitted_snapshot_data(redis_conn, project_id)
-        if last_submitted_snapshot_data:
-            target_epoch = last_submitted_snapshot_data['epochId']
+    try:
+        # Determine target epoch
+        if block_number is not None:
+            # When block_number is provided, use it as epoch (assumes epoch = block number)
+            target_epoch = block_number
+            logger.debug(f"Using provided block number {target_epoch} as epoch for {project_id}")
         else:
-            target_epoch = await get_project_last_finalized_epoch(
-                redis_conn=redis_conn,
-                state_contract_obj=protocol_state_contract,
-                rpc_helper=anchor_rpc_helper,
-                project_id=project_id,
-            )
+            # Get latest epoch for the project
+            last_submitted = await get_last_submitted_snapshot_data(redis_conn, project_id)
+            if last_submitted:
+                target_epoch = last_submitted['epochId']
+            else:
+                target_epoch = await get_project_last_finalized_epoch(
+                    redis_conn=redis_conn,
+                    state_contract_obj=protocol_state_contract,
+                    rpc_helper=anchor_rpc_helper,
+                    project_id=project_id,
+                )
 
-        if not target_epoch:
-            logger.error(f"No last finalized epoch found for project {project_id}")
+            if not target_epoch:
+                logger.warning(f"No epoch found for project {project_id}")
+                return None
+
+        # Use simplified unified cache to get data
+        data = await get_cached_data(project_id, target_epoch)
+        if not data:
+            logger.debug(f"No cached data found for {project_id}:{target_epoch}")
             return None
-        else:
-            logger.info(f"Using epoch {target_epoch} for fetch against project {project_id}")
-    # if block_number is provided, use that as the target epoch and seek around it if needed
-    else:
-        # TODO: assumes epoch is set to block number in data market contract, may need to add config flag for this and derive epoch from block number if false
-        target_epoch = block_number
-        seek = True
-        
-    # Fetch snapshot data for the determined epoch
-    logger.debug(
-        f"Fetching snapshot from IPFS for project {project_id} at epoch {target_epoch} "
-        f"(seek={seek})"
-    )
-    snapshot_response = await get_project_epoch_snapshot(
-        redis_conn=redis_conn,
-        state_contract_obj=protocol_state_contract,
-        rpc_helper=anchor_rpc_helper,
-        ipfs_reader=ipfs_reader,
-        epoch_id=target_epoch,
-        project_id=project_id,
-        seek=seek
-    )
-    
-    # Process exact match response
-    if snapshot_response.exact_match:
-        logger.debug(
-            f"Found exact match snapshot for project {project_id} at epoch {target_epoch}, "
-            f"CID: {snapshot_response.exact_match.snapshot_cid}"
-        )
+
+        # Parse the data using the provided model
         try:
-            parsed_snapshot = message_model(**snapshot_response.exact_match.data)
+            parsed_snapshot = message_model(**data)
+            logger.debug(f"Successfully retrieved and parsed snapshot for {project_id}:{target_epoch}")
             return target_epoch, parsed_snapshot
         except Exception as e:
-            logger.error(f"Failed to parse snapshot data for project {project_id} against epoch {target_epoch}: {e}")
+            logger.error(f"Failed to parse snapshot data for {project_id}:{target_epoch}: {e}")
             return None
-    else:
-        # Handle case when exact match not found but nearby epochs available
-        if snapshot_response.has_closest_epochs:
-            logger.info(f"No exact match found for project {project_id} against epoch {target_epoch}, but nearby epochs found: {snapshot_response.closest_epochs}") 
-            
-            # Try previous epoch first
-            previous_epoch = snapshot_response.closest_epochs.previous
-            if previous_epoch:
-                logger.info(f"Fetching previous epoch {previous_epoch.epoch_id} CID for project {project_id} against actual sought epoch {target_epoch}")
-                try:
-                    snapshot_response = await asyncio.wait_for(
-                        get_submission_data(
-                            cid=previous_epoch.snapshot_cid,
-                            ipfs_reader=ipfs_reader,
-                        ),
-                        timeout=15.0  # Shorter timeout for fallback fetches
-                    )
-                    if snapshot_response:
-                        parsed_snapshot = message_model(**snapshot_response)
-                        return previous_epoch.epoch_id, parsed_snapshot
-                    else:
-                        logger.warning(f"No snapshot data found for project {project_id} against nearby epoch {previous_epoch.epoch_id} with CID {previous_epoch.snapshot_cid}")
-                except asyncio.TimeoutError:
-                    logger.warning(f"Timeout fetching previous epoch {previous_epoch.epoch_id} for project {project_id}")
-                except IPFSAsyncClientError as e:
-                    logger.warning(f"IPFS client error fetching previous epoch {previous_epoch.epoch_id} for project {project_id}: {e}")
-                except Exception as e:
-                    logger.warning(f"Error fetching previous epoch {previous_epoch.epoch_id} for project {project_id}: {e}")
-                    
-            # Fallback to next epoch if previous not available
-            next_epoch = snapshot_response.closest_epochs.next
-            if next_epoch:
-                logger.info(f"Fetching next epoch {next_epoch.epoch_id} CID for project {project_id} against actual sought epoch {target_epoch}")
-                try:
-                    snapshot_response = await asyncio.wait_for(
-                        get_submission_data(
-                            cid=next_epoch.snapshot_cid,
-                            ipfs_reader=ipfs_reader,
-                        ),
-                        timeout=15.0  # Shorter timeout for fallback fetches
-                    )
-                    if snapshot_response:
-                        parsed_snapshot = message_model(**snapshot_response)
-                        return next_epoch.epoch_id, parsed_snapshot
-                    else:
-                        logger.warning(f"No snapshot data found for project {project_id} against nearby epoch {next_epoch.epoch_id} with CID {next_epoch.snapshot_cid}")
-                except asyncio.TimeoutError:
-                    logger.warning(f"Timeout fetching next epoch {next_epoch.epoch_id} for project {project_id}")
-                except IPFSAsyncClientError as e:
-                    logger.warning(f"IPFS client error fetching next epoch {next_epoch.epoch_id} for project {project_id}: {e}")
-                except Exception as e:
-                    logger.warning(f"Error fetching next epoch {next_epoch.epoch_id} for project {project_id}: {e}")
+
+    except Exception as e:
+        logger.error(f"Error in get_uniswapv3_snapshot for {project_id}: {e}")
         return None
 
 
