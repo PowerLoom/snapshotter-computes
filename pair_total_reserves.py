@@ -119,25 +119,25 @@ class PairTotalReservesProcessor(GenericProcessor):
             # Fallback: fetch block hash directly via RPC
             # NOTE: This should rarely happen - preloader should provide block hash
             self._logger.warning(
-                f"Block hash not found in preloader results for block {max_chain_height}, "
+                f"⚠️  Block hash not found in preloader results for block {max_chain_height}, "
                 f"falling back to RPC (this indicates preloader issue)"
             )
             try:
                 block = await rpc_helper.get_current_node()['web3_client'].eth.get_block(max_chain_height)
                 block_hash = block.get('hash', b'').hex() if block else None
             except Exception as e:
-                self._logger.error(f"Failed to fetch block hash for block {max_chain_height}: {e}")
+                self._logger.error(f"❌ Failed to fetch block hash for block {max_chain_height}: {e}")
                 return []
         
         if not block_hash:
-            self._logger.error(f"Could not obtain block hash for epoch {msg_obj.epochId}")
+            self._logger.error(f"❌ Could not obtain block hash for epoch {msg_obj.epochId}")
             return []
 
         # Fetch active pools from BDS API
         active_pools = await self._get_epoch_active_pools(min_chain_height)
 
         if len(active_pools) == 0:
-            self._logger.error(f"No active pools found for epoch {msg_obj.epochId} at block {min_chain_height}")
+            self._logger.error(f"❌ No active pools found for epoch {msg_obj.epochId} at block {min_chain_height}")
             return []
 
         # CRITICAL: Sort pool addresses for determinism across all nodes
@@ -151,13 +151,13 @@ class PairTotalReservesProcessor(GenericProcessor):
             pool_address = rng.choice(active_pools_sorted)
             
             self._logger.info(
-                f"Genesis epoch (epoch 0) - slot {slot_id} processing pool: {pool_address}"
+                f"🎲 Genesis epoch (epoch 0) - slot {slot_id} processing pool: {pool_address}"
             )
             
             # Fetch previous snapshots data
             previous_snapshot_response = requests.get(f"{bds_api_url}/previous_snapshots_data/{pool_address}/{min_chain_height}")
             if previous_snapshot_response.status_code != 200:
-                self._logger.error(f"Genesis epoch: Failed to fetch previous snapshots data: {previous_snapshot_response.status_code}")
+                self._logger.error(f"❌ Genesis epoch: Failed to fetch previous snapshots data: {previous_snapshot_response.status_code}")
                 return []
             
             previous_snapshot_data = previous_snapshot_response.json()
@@ -175,11 +175,11 @@ class PairTotalReservesProcessor(GenericProcessor):
             )
             
             if not base_snapshot_data:
-                self._logger.error(f"Genesis epoch: No snapshot data returned for pool {pool_address}")
+                self._logger.error(f"❌ Genesis epoch: No snapshot data returned for pool {pool_address}")
                 return []
             
             base_snapshot_data.previousSnapshots = previous_snapshot_data
-            self._logger.debug(f"Genesis epoch snapshot data: {base_snapshot_data.model_dump_json()}")
+            self._logger.debug(f"📊 Genesis epoch snapshot data: {base_snapshot_data.model_dump_json()}")
             
             return [
                 (
@@ -190,7 +190,7 @@ class PairTotalReservesProcessor(GenericProcessor):
         
         # Log determinism-critical parameters for debugging
         self._logger.debug(
-            f"Slot assignment inputs - epoch: {msg_obj.epochId}, block: {max_chain_height}, "
+            f"🔍 Slot assignment inputs - epoch: {msg_obj.epochId}, block: {max_chain_height}, "
             f"block_hash: {block_hash[:10]}..., slot_id: {slot_id}, total_slots: {total_slots}, "
             f"active_pools: {len(active_pools_sorted)}, first_3_pools: {active_pools_sorted[:3]}"
         )
@@ -206,14 +206,14 @@ class PairTotalReservesProcessor(GenericProcessor):
         
         if assigned_pool is None:
             self._logger.info(
-                f"Slot {slot_id} NOT selected for epoch {msg_obj.epochId} "
+                f"⏭️  Slot {slot_id} NOT selected for epoch {msg_obj.epochId} "
                 f"(total_slots={total_slots}, block_hash: {block_hash[:10]}...), skipping computation"
             )
             return []
         
         pool_address = assigned_pool
         self._logger.info(
-            f"Slot {slot_id} SELECTED for epoch {msg_obj.epochId}, "
+            f"🎯 Slot {slot_id} SELECTED for epoch {msg_obj.epochId}, "
             f"assigned pool: {pool_address} (total_slots={total_slots}, active_pools={len(active_pools_sorted)}, "
             f"block_hash: {block_hash[:10]}...)"
         )
@@ -221,24 +221,24 @@ class PairTotalReservesProcessor(GenericProcessor):
         # fetch previous snapshots data
         previous_snapshot_response = requests.get(f"{bds_api_url}/previous_snapshots_data/{pool_address}/{min_chain_height}")
 
-        self._logger.info(f"Fetching previous snapshots data for pool {pool_address} at block {min_chain_height}")
+        self._logger.info(f"📥 Fetching previous snapshots data for pool {pool_address} at block {min_chain_height}")
 
         if previous_snapshot_response.status_code != 200:
-            self._logger.error(f"Failed to fetch previous snapshots data from bds: {previous_snapshot_response.status_code}")
+            self._logger.error(f"❌ Failed to fetch previous snapshots data from bds: {previous_snapshot_response.status_code}")
             raise Exception(f"Failed to fetch previous snapshots data from bds: {previous_snapshot_response.status_code}")
         previous_snapshot_data = previous_snapshot_response.json()
         # parse into proper format
         previous_snapshot_data = [tuple(data) for data in previous_snapshot_data]
 
         self._logger.debug(
-            "[Epoch {}-{}] Processing pool {} | Starting computation",
+            "🔄 [Epoch {}-{}] Processing pool {} | Starting computation",
             min_chain_height,
             max_chain_height,
             pool_address
         )
 
         self._logger.debug(
-            "[Epoch {}-{}] Pool {} | Starting token pair reserves computation (will return UniswapBaseSnapshot) | Wall time: {}",
+            "⚙️  [Epoch {}-{}] Pool {} | Starting token pair reserves computation (will return UniswapBaseSnapshot) | Wall time: {}",
             min_chain_height,
             max_chain_height,
             pool_address,
@@ -258,7 +258,7 @@ class PairTotalReservesProcessor(GenericProcessor):
 
         if not base_snapshot_data:
             self._logger.error(
-                "[Epoch {}-{}] Pool {} | No UniswapBaseSnapshot data returned by 'get_pair_reserves()'",
+                "❌ [Epoch {}-{}] Pool {} | No UniswapBaseSnapshot data returned by 'get_pair_reserves()'",
                 min_chain_height,
                 max_chain_height,
                 pool_address
@@ -266,7 +266,7 @@ class PairTotalReservesProcessor(GenericProcessor):
             return
 
         self._logger.debug(
-            "[Epoch {}-{}] Pool {} | Computation completed (UniswapBaseSnapshot received) | Wall time: {}",
+            "✅ [Epoch {}-{}] Pool {} | Computation completed (UniswapBaseSnapshot received) | Wall time: {}",
             min_chain_height,
             max_chain_height,
             pool_address,
@@ -275,6 +275,6 @@ class PairTotalReservesProcessor(GenericProcessor):
 
         base_snapshot_data.previousSnapshots = previous_snapshot_data
 
-        self._logger.debug(f"Base snapshot data: {base_snapshot_data.model_dump_json()}")
+        self._logger.debug(f"📊 Base snapshot data: {base_snapshot_data.model_dump_json()}")
 
         return [(pool_address, base_snapshot_data)]

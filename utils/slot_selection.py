@@ -73,15 +73,15 @@ class SlotSelectionManager:
             )
             cls._node_count_cache = (node_count, current_time)
             slot_selection_logger.debug(
-                f"Fetched getTotalNodeCount from contract: {node_count}"
+                f"💾 Fetched getTotalNodeCount from contract: {node_count}"
             )
             return node_count
         except Exception as e:
-            slot_selection_logger.error(f"Failed to fetch getTotalNodeCount from contract: {e}")
+            slot_selection_logger.error(f"❌ Failed to fetch getTotalNodeCount from contract: {e}")
             # If we have a cached value, use it even if expired
             if cached_count > 0:
                 slot_selection_logger.warning(
-                    f"Using expired cached nodeCount: {cached_count}"
+                    f"⚠️  Using expired cached nodeCount: {cached_count}"
                 )
                 return cached_count
             raise
