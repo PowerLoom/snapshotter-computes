@@ -3,7 +3,6 @@ from typing import List, Tuple
 from typing import Optional
 
 from rpc_helper.rpc import RpcHelper
-import random
 from computes.utils.core import base_snapshot_from_block_range
 from snapshotter.utils.models.message_models import SnapshotProcessMessage
 from snapshotter.utils.callback_helpers import GenericProcessor
@@ -11,8 +10,9 @@ from snapshotter.utils.default_logger import logger
 from computes.utils.models.message_models import UniswapBaseSnapshot
 from ipfs_client.main import AsyncIPFSClient
 from computes.settings.config import settings as computes_settings
+from snapshotter.settings.config import settings
 import requests
-from computes.utils.helpers import gen_data_source_idx_to_compute
+from computes.utils.slot_selection import SlotSelectionManager
 from tenacity import retry, stop_after_attempt, wait_random_exponential
 
 class PairTotalReservesProcessor(GenericProcessor):
@@ -96,22 +96,69 @@ class PairTotalReservesProcessor(GenericProcessor):
         """
 
         min_chain_height = msg_obj.begin
-        max_chain_height = msg_obj.begin
+        max_chain_height = msg_obj.begin  # Single block epoch
         bds_api_url = computes_settings.bds_api_url
         block_details_dict = preloader_results.get('block_details', None)
 
-        # fetch active pools from bds
+        # Get current slot ID from settings
+        slot_id = settings.slot_id
+        
+        # Get total node count from contract (cached 30s)
+        # TODO: This uses nodeCount which includes burned/disabled nodes.
+        # Some selected slot IDs may have no active node - those epochs
+        # simply won't receive submissions from those slots.
+        total_slots = SlotSelectionManager.get_total_slots(protocol_state_contract)
+        
+        # Get epoch end block hash from preloader results or fetch directly
+        block_hash = None
+        if block_details_dict and max_chain_height in block_details_dict:
+            epoch_end_block = block_details_dict.get(max_chain_height, {})
+            block_hash = epoch_end_block.get('hash', None)
+        
+        if not block_hash:
+            # Fallback: fetch block hash directly via RPC
+            try:
+                block = await rpc_helper.get_current_node()['web3_client'].eth.get_block(max_chain_height)
+                block_hash = block.get('hash', b'').hex() if block else None
+            except Exception as e:
+                self._logger.error(f"Failed to fetch block hash for block {max_chain_height}: {e}")
+                return []
+        
+        if not block_hash:
+            self._logger.error(f"Could not obtain block hash for epoch {msg_obj.epochId}")
+            return []
+
+        # Fetch active pools from BDS API
         active_pools = await self._get_epoch_active_pools(min_chain_height)
 
         if len(active_pools) == 0:
             self._logger.error(f"No active pools found for epoch {msg_obj.epochId} at block {min_chain_height}")
             return []
 
-        # pick a pool randomly
-        data_source_idx = gen_data_source_idx_to_compute(msg_obj) % len(active_pools)
-        pool_address = active_pools[data_source_idx]
-
-        self._logger.info(f"Selected pool {pool_address} from {active_pools}")
+        # CRITICAL: Sort pool addresses for determinism across all nodes
+        active_pools_sorted = sorted(active_pools)
+        
+        # Check if this slot is selected and get assigned pool
+        assigned_pool = SlotSelectionManager.get_pool_for_slot(
+            slot_id=slot_id,
+            epoch_id=msg_obj.epochId,
+            block_hash=block_hash,
+            active_pool_addresses=active_pools_sorted,
+            total_slots=total_slots
+        )
+        
+        if assigned_pool is None:
+            self._logger.info(
+                f"Slot {slot_id} not selected for epoch {msg_obj.epochId} "
+                f"(total_slots={total_slots}), skipping computation"
+            )
+            return []
+        
+        pool_address = assigned_pool
+        self._logger.info(
+            f"Slot {slot_id} selected for epoch {msg_obj.epochId}, "
+            f"assigned pool: {pool_address} (total_slots={total_slots}, active_pools={len(active_pools_sorted)})"
+        )
 
         # fetch previous snapshots data
         previous_snapshot_response = requests.get(f"{bds_api_url}/previous_snapshots_data/{pool_address}/{min_chain_height}")
