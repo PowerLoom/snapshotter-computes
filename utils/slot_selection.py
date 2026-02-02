@@ -47,11 +47,12 @@ class SlotSelectionManager:
     _node_count_cache: Tuple[int, float] = (0, 0.0)
     
     @classmethod
-    async def get_total_slots(cls, protocol_state_contract) -> int:
+    async def get_total_slots(cls, rpc_helper, protocol_state_contract) -> int:
         """
         Get total node count from ProtocolState contract with 30s caching.
         
         Args:
+            rpc_helper: RPC helper for contract calls with retry/failover
             protocol_state_contract: Web3 contract instance for ProtocolState
             
         Returns:
@@ -65,7 +66,11 @@ class SlotSelectionManager:
         
         # Fetch from contract
         try:
-            node_count = await protocol_state_contract.functions.getTotalNodeCount().call()
+            [node_count] = await rpc_helper.web3_call(
+                tasks=[('getTotalNodeCount', [])],
+                contract_addr=protocol_state_contract.address,
+                abi=protocol_state_contract.abi
+            )
             cls._node_count_cache = (node_count, current_time)
             slot_selection_logger.debug(
                 f"Fetched getTotalNodeCount from contract: {node_count}"

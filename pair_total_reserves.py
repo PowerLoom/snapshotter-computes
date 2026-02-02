@@ -107,7 +107,7 @@ class PairTotalReservesProcessor(GenericProcessor):
         # TODO: This uses nodeCount which includes burned/disabled nodes.
         # Some selected slot IDs may have no active node - those epochs
         # simply won't receive submissions from those slots.
-        total_slots = await SlotSelectionManager.get_total_slots(protocol_state_contract)
+        total_slots = await SlotSelectionManager.get_total_slots(rpc_helper, protocol_state_contract)
         
         # Get epoch end block hash from preloader results
         block_hash = None
