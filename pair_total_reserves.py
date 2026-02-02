@@ -143,36 +143,25 @@ class PairTotalReservesProcessor(GenericProcessor):
         # CRITICAL: Sort pool addresses for determinism across all nodes
         active_pools_sorted = sorted(active_pools)
         
-        # Genesis epoch (epoch 0) is processed by all nodes for all pools
+        # Genesis epoch (epoch 0) is processed by all nodes with one random pool
         if msg_obj.epochId == 0:
+            # Use deterministic random selection based on slot_id for genesis epoch
+            import random
+            rng = random.Random(slot_id)
+            pool_address = rng.choice(active_pools_sorted)
+            
             self._logger.info(
-                f"Genesis epoch (epoch 0) - processing all {len(active_pools_sorted)} pools"
+                f"Genesis epoch (epoch 0) - slot {slot_id} processing pool: {pool_address}"
             )
-            # Process all pools for genesis epoch
-            tasks_list = []
-            for pool_address in active_pools_sorted:
-                task = asyncio.create_task(
-                    self._calculate_pair_total_reserves(
-                        pool_address=pool_address,
-                        min_chain_height=min_chain_height,
-                        max_chain_height=max_chain_height,
-                        rpc_helper=rpc_helper,
-                    ),
-                )
-                tasks_list.append(task)
             
-            all_snapshots = await asyncio.gather(*tasks_list, return_exceptions=True)
+            snapshot = await self._calculate_pair_total_reserves(
+                pool_address=pool_address,
+                min_chain_height=min_chain_height,
+                max_chain_height=max_chain_height,
+                rpc_helper=rpc_helper,
+            )
             
-            # Filter out exceptions and failed snapshots
-            successful_snapshots = []
-            for snapshot in all_snapshots:
-                if isinstance(snapshot, Exception):
-                    self._logger.error(f"Genesis epoch pool processing failed: {snapshot}")
-                    continue
-                if snapshot:
-                    successful_snapshots.append(snapshot)
-            
-            return successful_snapshots
+            return [snapshot] if snapshot else []
         
         # Log determinism-critical parameters for debugging
         self._logger.debug(
