@@ -138,6 +138,13 @@ class PairTotalReservesProcessor(GenericProcessor):
         # CRITICAL: Sort pool addresses for determinism across all nodes
         active_pools_sorted = sorted(active_pools)
         
+        # Log determinism-critical parameters for debugging
+        self._logger.debug(
+            f"Slot assignment inputs - epoch: {msg_obj.epochId}, block: {max_chain_height}, "
+            f"block_hash: {block_hash[:10]}..., slot_id: {slot_id}, total_slots: {total_slots}, "
+            f"active_pools: {len(active_pools_sorted)}, first_3_pools: {active_pools_sorted[:3]}"
+        )
+        
         # Check if this slot is selected and get assigned pool
         assigned_pool = SlotSelectionManager.get_pool_for_slot(
             slot_id=slot_id,
@@ -149,15 +156,16 @@ class PairTotalReservesProcessor(GenericProcessor):
         
         if assigned_pool is None:
             self._logger.info(
-                f"Slot {slot_id} not selected for epoch {msg_obj.epochId} "
-                f"(total_slots={total_slots}), skipping computation"
+                f"Slot {slot_id} NOT selected for epoch {msg_obj.epochId} "
+                f"(total_slots={total_slots}, block_hash: {block_hash[:10]}...), skipping computation"
             )
             return []
         
         pool_address = assigned_pool
         self._logger.info(
-            f"Slot {slot_id} selected for epoch {msg_obj.epochId}, "
-            f"assigned pool: {pool_address} (total_slots={total_slots}, active_pools={len(active_pools_sorted)})"
+            f"Slot {slot_id} SELECTED for epoch {msg_obj.epochId}, "
+            f"assigned pool: {pool_address} (total_slots={total_slots}, active_pools={len(active_pools_sorted)}, "
+            f"block_hash: {block_hash[:10]}...)"
         )
 
         # fetch previous snapshots data

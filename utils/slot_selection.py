@@ -177,10 +177,18 @@ class SlotSelectionManager:
             Pool address if slot is selected for this epoch, None otherwise
         """
         if not active_pool_addresses:
+            slot_selection_logger.warning(
+                f"No active pools provided for epoch {epoch_id}, slot {slot_id}"
+            )
             return None
             
         seed = cls.get_deterministic_seed(epoch_id, block_hash)
         selected_slots = cls.get_selected_slots(seed, total_slots)
+        
+        slot_selection_logger.debug(
+            f"Epoch {epoch_id}: Generated seed from block_hash {block_hash[:10]}..., "
+            f"selected {len(selected_slots)}/{total_slots} slots for epoch"
+        )
         
         if slot_id not in selected_slots:
             return None
@@ -188,6 +196,11 @@ class SlotSelectionManager:
         # Hash slot_id with seed for uniform distribution across pools
         slot_hash = hashlib.sha256(seed + slot_id.to_bytes(4, 'big')).digest()
         pool_index = int.from_bytes(slot_hash[:8], 'big') % len(active_pool_addresses)
+        
+        slot_selection_logger.debug(
+            f"Slot {slot_id} selected for epoch {epoch_id}, assigned to pool index {pool_index} "
+            f"({active_pool_addresses[pool_index]})"
+        )
         
         return active_pool_addresses[pool_index]
     
