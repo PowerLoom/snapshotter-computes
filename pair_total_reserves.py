@@ -154,14 +154,39 @@ class PairTotalReservesProcessor(GenericProcessor):
                 f"Genesis epoch (epoch 0) - slot {slot_id} processing pool: {pool_address}"
             )
             
-            snapshot = await self._calculate_pair_total_reserves(
-                pool_address=pool_address,
-                min_chain_height=min_chain_height,
-                max_chain_height=max_chain_height,
+            # Fetch previous snapshots data
+            previous_snapshot_response = requests.get(f"{bds_api_url}/previous_snapshots_data/{pool_address}/{min_chain_height}")
+            if previous_snapshot_response.status_code != 200:
+                self._logger.error(f"Genesis epoch: Failed to fetch previous snapshots data: {previous_snapshot_response.status_code}")
+                return []
+            
+            previous_snapshot_data = previous_snapshot_response.json()
+            previous_snapshot_data = [tuple(data) for data in previous_snapshot_data]
+            
+            # Compute snapshot for genesis epoch pool
+            base_snapshot_data: Optional[UniswapBaseSnapshot] = await base_snapshot_from_block_range(
+                pair_address=pool_address,
+                from_block=min_chain_height,
+                to_block=max_chain_height,
                 rpc_helper=rpc_helper,
+                anchor_rpc_helper=anchor_rpc_helper,
+                protocol_state_contract=protocol_state_contract,
+                block_details_dict=block_details_dict,
             )
             
-            return [snapshot] if snapshot else []
+            if not base_snapshot_data:
+                self._logger.error(f"Genesis epoch: No snapshot data returned for pool {pool_address}")
+                return []
+            
+            base_snapshot_data.previousSnapshots = previous_snapshot_data
+            self._logger.debug(f"Genesis epoch snapshot data: {base_snapshot_data.model_dump_json()}")
+            
+            return [
+                (
+                    f"baseSnapshot:{pool_address}:{settings.namespace}",
+                    base_snapshot_data,
+                ),
+            ]
         
         # Log determinism-critical parameters for debugging
         self._logger.debug(
