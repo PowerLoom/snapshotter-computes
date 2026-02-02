@@ -2,7 +2,7 @@
 Deterministic slot selection and pool assignment for BDS epochs.
 
 Network Parameters:
-- total_slots: Fetched from SnapshotterState contract (nodeCount)
+- total_slots: Fetched from ProtocolState contract (getTotalNodeCount)
 - SLOTS_PER_EPOCH: 1000 (slots selected per epoch)
 
 Algorithm:
@@ -11,7 +11,7 @@ Algorithm:
 3. Use Fisher-Yates shuffle with deterministic randomness to select 1000 slots
 4. Assign each selected slot to exactly one pool via hash-based modulo
 
-TODO: Currently uses nodeCount which includes ALL minted nodes (1 to nodeCount).
+TODO: Currently uses getTotalNodeCount which includes ALL minted nodes (1 to nodeCount).
       Burned/disabled nodes will still be in the slot ID pool, meaning some
       selected slot IDs may have no active node behind them. This is acceptable
       for now - those slots simply won't submit. Future enhancement could use
@@ -49,13 +49,13 @@ class SlotSelectionManager:
     @classmethod
     def get_total_slots(cls, protocol_state_contract) -> int:
         """
-        Get total node count from SnapshotterState contract with 30s caching.
+        Get total node count from ProtocolState contract with 30s caching.
         
         Args:
-            protocol_state_contract: Web3 contract instance for SnapshotterState
+            protocol_state_contract: Web3 contract instance for ProtocolState
             
         Returns:
-            Total node count (nodeCount from contract)
+            Total node count (getTotalNodeCount from contract)
         """
         current_time = time.time()
         cached_count, cached_at = cls._node_count_cache
@@ -65,14 +65,14 @@ class SlotSelectionManager:
         
         # Fetch from contract
         try:
-            node_count = protocol_state_contract.functions.nodeCount().call()
+            node_count = protocol_state_contract.functions.getTotalNodeCount().call()
             cls._node_count_cache = (node_count, current_time)
             slot_selection_logger.debug(
-                f"Fetched nodeCount from contract: {node_count}"
+                f"Fetched getTotalNodeCount from contract: {node_count}"
             )
             return node_count
         except Exception as e:
-            slot_selection_logger.error(f"Failed to fetch nodeCount from contract: {e}")
+            slot_selection_logger.error(f"Failed to fetch getTotalNodeCount from contract: {e}")
             # If we have a cached value, use it even if expired
             if cached_count > 0:
                 slot_selection_logger.warning(
