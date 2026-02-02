@@ -134,7 +134,18 @@ class PairTotalReservesProcessor(GenericProcessor):
             return []
 
         # Fetch active pools from BDS API
-        active_pools = await self._get_epoch_active_pools(min_chain_height)
+        # For genesis epoch (epoch 0), query with latest block - 1 since epoch 0 has no historical data
+        if msg_obj.epochId == 0:
+            try:
+                latest_block = await rpc_helper.get_current_node()['web3_client'].eth.get_block('latest')
+                query_epoch = latest_block['number'] - 1
+                self._logger.info(f"🎲 Genesis epoch: querying BDS with epoch {query_epoch} (latest - 1)")
+                active_pools = await self._get_epoch_active_pools(query_epoch)
+            except Exception as e:
+                self._logger.error(f"❌ Failed to get latest block for genesis epoch: {e}")
+                return []
+        else:
+            active_pools = await self._get_epoch_active_pools(min_chain_height)
 
         if len(active_pools) == 0:
             self._logger.error(f"❌ No active pools found for epoch {msg_obj.epochId} at block {min_chain_height}")
