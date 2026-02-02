@@ -192,12 +192,7 @@ class PairTotalReservesProcessor(GenericProcessor):
             base_snapshot_data.previousSnapshots = previous_snapshot_data
             self._logger.debug(f"📊 Genesis epoch snapshot data: {base_snapshot_data.model_dump_json()}")
             
-            return [
-                (
-                    f"baseSnapshot:{pool_address}:{settings.namespace}",
-                    base_snapshot_data,
-                ),
-            ]
+            return [(pool_address, base_snapshot_data)]
         
         # Log determinism-critical parameters for debugging
         self._logger.debug(
