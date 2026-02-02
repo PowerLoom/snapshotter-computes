@@ -109,7 +109,7 @@ class PairTotalReservesProcessor(GenericProcessor):
         # simply won't receive submissions from those slots.
         total_slots = SlotSelectionManager.get_total_slots(protocol_state_contract)
         
-        # Get epoch end block hash from preloader results or fetch directly
+        # Get epoch end block hash from preloader results
         block_hash = None
         if block_details_dict and max_chain_height in block_details_dict:
             epoch_end_block = block_details_dict.get(max_chain_height, {})
@@ -117,6 +117,11 @@ class PairTotalReservesProcessor(GenericProcessor):
         
         if not block_hash:
             # Fallback: fetch block hash directly via RPC
+            # NOTE: This should rarely happen - preloader should provide block hash
+            self._logger.warning(
+                f"Block hash not found in preloader results for block {max_chain_height}, "
+                f"falling back to RPC (this indicates preloader issue)"
+            )
             try:
                 block = await rpc_helper.get_current_node()['web3_client'].eth.get_block(max_chain_height)
                 block_hash = block.get('hash', b'').hex() if block else None
