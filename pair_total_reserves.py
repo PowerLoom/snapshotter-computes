@@ -143,6 +143,37 @@ class PairTotalReservesProcessor(GenericProcessor):
         # CRITICAL: Sort pool addresses for determinism across all nodes
         active_pools_sorted = sorted(active_pools)
         
+        # Genesis epoch (epoch 0) is processed by all nodes for all pools
+        if msg_obj.epochId == 0:
+            self._logger.info(
+                f"Genesis epoch (epoch 0) - processing all {len(active_pools_sorted)} pools"
+            )
+            # Process all pools for genesis epoch
+            tasks_list = []
+            for pool_address in active_pools_sorted:
+                task = asyncio.create_task(
+                    self._calculate_pair_total_reserves(
+                        pool_address=pool_address,
+                        min_chain_height=min_chain_height,
+                        max_chain_height=max_chain_height,
+                        rpc_helper=rpc_helper,
+                    ),
+                )
+                tasks_list.append(task)
+            
+            all_snapshots = await asyncio.gather(*tasks_list, return_exceptions=True)
+            
+            # Filter out exceptions and failed snapshots
+            successful_snapshots = []
+            for snapshot in all_snapshots:
+                if isinstance(snapshot, Exception):
+                    self._logger.error(f"Genesis epoch pool processing failed: {snapshot}")
+                    continue
+                if snapshot:
+                    successful_snapshots.append(snapshot)
+            
+            return successful_snapshots
+        
         # Log determinism-critical parameters for debugging
         self._logger.debug(
             f"Slot assignment inputs - epoch: {msg_obj.epochId}, block: {max_chain_height}, "
