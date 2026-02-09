@@ -77,7 +77,7 @@ class PairTotalReservesProcessor(GenericProcessor):
                 preloader_results=preloader_results,
             )
         except Exception as e:
-            self._logger.error(f"Failed to prepare epoch context: {e}")
+            self._logger.error(f"❌ Failed to prepare epoch context: {e}")
             return []
 
         # Genesis epoch (epoch 0): all nodes process one deterministic random pool
@@ -92,7 +92,7 @@ class PairTotalReservesProcessor(GenericProcessor):
                 )
 
             self._logger.info(
-                f"Genesis epoch (epoch 0) - slot {slot_id} processing pool: {pool_address}"
+                f"🎲 Genesis epoch (epoch 0) - slot {slot_id} processing pool: {pool_address}"
             )
 
             result = await compute_pool_snapshot(
@@ -109,7 +109,7 @@ class PairTotalReservesProcessor(GenericProcessor):
 
         # Regular epoch: check slot selection
         self._logger.debug(
-            f"Slot assignment inputs - epoch: {msg_obj.epochId}, block: {ctx.max_chain_height}, "
+            f"🔍 Slot assignment inputs - epoch: {msg_obj.epochId}, block: {ctx.max_chain_height}, "
             f"block_hash: {ctx.block_hash[:10]}..., slot_id: {slot_id}, total_slots: {ctx.total_slots}, "
             f"active_pools: {len(ctx.active_pools_sorted)}, first_3_pools: {ctx.active_pools_sorted[:3]}"
         )
@@ -132,13 +132,13 @@ class PairTotalReservesProcessor(GenericProcessor):
 
         if assigned_pool is None:
             self._logger.info(
-                f"Slot {slot_id} NOT selected for epoch {msg_obj.epochId} "
+                f"⏭️  Slot {slot_id} NOT selected for epoch {msg_obj.epochId} "
                 f"(total_slots={ctx.total_slots}, block_hash: {ctx.block_hash[:10]}...), skipping"
             )
             return []
 
         self._logger.info(
-            f"Slot {slot_id} SELECTED for epoch {msg_obj.epochId}, "
+            f"🎯 Slot {slot_id} SELECTED for epoch {msg_obj.epochId}, "
             f"assigned pool: {assigned_pool} (total_slots={ctx.total_slots}, "
             f"active_pools={len(ctx.active_pools_sorted)}, block_hash: {ctx.block_hash[:10]}...)"
         )

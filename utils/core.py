@@ -108,7 +108,7 @@ async def generate_pair_reserves_dict_and_trade_data(
     token1Amount = initial_reserves[1]
 
     core_logger.info(
-        "[Epoch {}-{}] Pool {} | Initial reserves: token0={}, token1={}",
+        "💰 [Epoch {}-{}] Pool {} | Initial reserves: token0={}, token1={}",
         from_block, to_block, pair_address, token0Amount, token1Amount
     )
     # Initialize accumulators for epoch-wide trade data
@@ -196,7 +196,7 @@ async def generate_pair_reserves_dict_and_trade_data(
         )
 
     core_logger.info(
-        "[Epoch {}-{}] Pool {} | Pair reserves dict: {}",
+        "📋 [Epoch {}-{}] Pool {} | Pair reserves dict: {}",
         from_block,
         to_block,
         pair_address,
@@ -204,7 +204,7 @@ async def generate_pair_reserves_dict_and_trade_data(
     )
 
     core_logger.info(
-        "[Epoch {}-{}] Pool {} | Epoch total trade data: {}",
+        "📈 [Epoch {}-{}] Pool {} | Epoch total trade data: {}",
         from_block,
         to_block,
         pair_address,
@@ -339,7 +339,7 @@ async def base_snapshot_from_block_range(
         Optional[UniswapBaseSnapshot]: Snapshot containing all pool data for the epoch, or None if failed.
     """
     core_logger.info(
-        "[Epoch {}-{}] Pool {} | Starting base snapshot generation | Wall time: {}",
+        "🚀 [Epoch {}-{}] Pool {} | Starting base snapshot generation | Wall time: {}",
         from_block,
         to_block,
         pair_address,
@@ -387,7 +387,7 @@ async def base_snapshot_from_block_range(
         if not pair_per_token_metadata:
             # If metadata could not be fetched, log error and return None
             core_logger.error(
-                "[Epoch {}-{}] Pool {} | Failed to fetch pool metadata",
+                "❌ [Epoch {}-{}] Pool {} | Failed to fetch pool metadata",
                 from_block,
                 to_block,
                 pair_address
@@ -480,7 +480,7 @@ async def base_snapshot_from_block_range(
 
         if base_snapshot:
             core_logger.info(
-                "[Epoch {}-{}] Pool {} | Base snapshot generated successfully | "
+                "✅ [Epoch {}-{}] Pool {} | Base snapshot generated successfully | "
                 "Total trade: ${:.2f} | Total fee: ${:.2f}",
                 from_block,
                 to_block,
@@ -490,7 +490,7 @@ async def base_snapshot_from_block_range(
             )
         else:
             core_logger.error(
-                "[Epoch {}-{}] Pool {} | Failed to generate base snapshot",
+                "❌ [Epoch {}-{}] Pool {} | Failed to generate base snapshot",
                 from_block,
                 to_block,
                 pair_address
@@ -694,7 +694,7 @@ async def get_pair_trade_volume(
     Fetch and calculate trade volume for a given Uniswap V3 pool contract address over a block range.
     """
     core_logger.info(
-        "[Epoch {}-{}] Pool {} | Starting trade volume computation",
+        "📊 [Epoch {}-{}] Pool {} | Starting trade volume computation",
         from_block,
         to_block,
         pair_address
@@ -737,7 +737,7 @@ async def get_pair_trade_volume(
 
     if not pair_per_token_metadata:
         core_logger.error(
-            "[Epoch {}-{}] Pool {} | Failed to fetch pair metadata",
+            "❌ [Epoch {}-{}] Pool {} | Failed to fetch pair metadata",
             from_block,
             to_block,
             pair_address
@@ -767,7 +767,7 @@ async def get_pair_trade_volume(
         to_block=to_block,
     )
     core_logger.info(
-        "[Epoch {}-{}] Pool {} | Found {} events_by_block entries to process",
+        "🔍 [Epoch {}-{}] Pool {} | Found {} events_by_block entries to process",
         from_block,
         to_block,
         pair_address,
@@ -825,7 +825,7 @@ async def get_pair_trade_volume(
         )
 
     core_logger.info(
-        "[Epoch {}-{}] Pool {} | Trade volume computation completed | Processed {} trades (from {} events attempted in cache)",
+        "✅ [Epoch {}-{}] Pool {} | Trade volume computation completed | Processed {} trades (from {} events attempted in cache)",
         from_block,
         to_block,
         pair_address,

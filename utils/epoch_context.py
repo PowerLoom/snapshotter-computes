@@ -64,15 +64,15 @@ async def get_epoch_active_pools(
 
         if response.status_code != 200:
             epoch_context_logger.error(
-                f"Failed to fetch active pools from BDS. Status code: {response.status_code}"
+                f"❌ Failed to fetch active pools from BDS. Status code: {response.status_code}"
             )
             raise Exception(f"Failed to fetch active pools from BDS. Status code: {response.status_code}")
 
-        epoch_context_logger.info(f"BDS response for active pools: {response.json()}")
+        epoch_context_logger.info(f"📋 BDS response for active pools: {response.json()}")
         active_pools = list(response.json()['pools'].keys())
 
     except Exception as e:
-        epoch_context_logger.error(f"Exception occurred while fetching active pools from BDS: {e}")
+        epoch_context_logger.error(f"❌ Exception occurred while fetching active pools from BDS: {e}")
         raise Exception(f"Failed to fetch active pools from BDS: {e}")
 
     return active_pools
@@ -121,14 +121,14 @@ async def prepare_epoch(
 
     if not block_hash:
         epoch_context_logger.warning(
-            f"Block hash not found in preloader results for block {max_chain_height}, "
+            f"⚠️  Block hash not found in preloader results for block {max_chain_height}, "
             f"falling back to RPC (this indicates preloader issue)"
         )
         try:
             block = await rpc_helper.get_current_node()['web3_client'].eth.get_block(max_chain_height)
             block_hash = block.get('hash', b'').hex() if block else None
         except Exception as e:
-            epoch_context_logger.error(f"Failed to fetch block hash for block {max_chain_height}: {e}")
+            epoch_context_logger.error(f"❌ Failed to fetch block hash for block {max_chain_height}: {e}")
             raise Exception(f"Failed to fetch block hash for block {max_chain_height}: {e}")
 
     if not block_hash:
@@ -140,16 +140,16 @@ async def prepare_epoch(
         try:
             latest_block = await rpc_helper.get_current_node()['web3_client'].eth.get_block('latest')
             query_epoch = latest_block['number'] - 1
-            epoch_context_logger.info(f"Genesis epoch: querying BDS with epoch {query_epoch} (latest - 1)")
+            epoch_context_logger.info(f"🎲 Genesis epoch: querying BDS with epoch {query_epoch} (latest - 1)")
             active_pools = await get_epoch_active_pools(query_epoch, bds_api_url)
         except Exception as e:
-            epoch_context_logger.error(f"Failed to get latest block for genesis epoch: {e}")
+            epoch_context_logger.error(f"❌ Failed to get latest block for genesis epoch: {e}")
             raise
     else:
         active_pools = await get_epoch_active_pools(min_chain_height, bds_api_url)
 
     if len(active_pools) == 0:
-        raise Exception(f"No active pools found for epoch {msg_obj.epochId} at block {min_chain_height}")
+        raise Exception(f"❌ No active pools found for epoch {msg_obj.epochId} at block {min_chain_height}")
 
     # CRITICAL: Sort pool addresses for determinism across all nodes
     active_pools_sorted = sorted(active_pools)
@@ -197,7 +197,7 @@ async def compute_pool_snapshot(
     """
     # Fetch previous snapshots data from BDS
     epoch_context_logger.info(
-        f"Fetching previous snapshots data for pool {pool_address} at block {min_chain_height}"
+        f"📡 Fetching previous snapshots data for pool {pool_address} at block {min_chain_height}"
     )
     previous_snapshot_response = requests.get(
         f"{bds_api_url}/previous_snapshots_data/{pool_address}/{min_chain_height}"
@@ -205,7 +205,7 @@ async def compute_pool_snapshot(
 
     if previous_snapshot_response.status_code != 200:
         epoch_context_logger.error(
-            f"Failed to fetch previous snapshots data from BDS: {previous_snapshot_response.status_code}"
+            f"❌ Failed to fetch previous snapshots data from BDS: {previous_snapshot_response.status_code}"
         )
         raise Exception(
             f"Failed to fetch previous snapshots data from BDS: {previous_snapshot_response.status_code}"
@@ -215,7 +215,7 @@ async def compute_pool_snapshot(
     previous_snapshot_data = [tuple(data) for data in previous_snapshot_data]
 
     epoch_context_logger.debug(
-        "[Epoch {}-{}] Processing pool {} | Starting computation",
+        "🔧 [Epoch {}-{}] Processing pool {} | Starting computation",
         min_chain_height, max_chain_height, pool_address,
     )
 
@@ -232,13 +232,13 @@ async def compute_pool_snapshot(
 
     if not base_snapshot_data:
         epoch_context_logger.error(
-            "[Epoch {}-{}] Pool {} | No snapshot data returned",
+            "❌ [Epoch {}-{}] Pool {} | No snapshot data returned",
             min_chain_height, max_chain_height, pool_address,
         )
         return None
 
     epoch_context_logger.debug(
-        "[Epoch {}-{}] Pool {} | Computation completed | Wall time: {}",
+        "✅ [Epoch {}-{}] Pool {} | Computation completed | Wall time: {}",
         min_chain_height, max_chain_height, pool_address, time.time(),
     )
 
