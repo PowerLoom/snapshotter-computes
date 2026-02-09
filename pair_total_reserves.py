@@ -79,6 +79,7 @@ class PairTotalReservesProcessor(GenericProcessor):
         ipfs_reader: AsyncIPFSClient,
         protocol_state_contract,
         preloader_results: dict,
+        slot_tracker=None,
     ) -> List[Tuple[str, UniswapBaseSnapshot]]:
         """
         Compute the total reserves for Uniswap pairs within the given epoch.
@@ -161,6 +162,14 @@ class PairTotalReservesProcessor(GenericProcessor):
             rng = random.Random(slot_id)
             pool_address = rng.choice(active_pools_sorted)
             
+            # Report selection status - genesis epoch is always selected
+            if slot_tracker:
+                slot_tracker.report_selection(
+                    epoch_id=msg_obj.epochId,
+                    was_selected=True,
+                    slot_id=slot_id
+                )
+            
             self._logger.info(
                 f"🎲 Genesis epoch (epoch 0) - slot {slot_id} processing pool: {pool_address}"
             )
@@ -209,6 +218,14 @@ class PairTotalReservesProcessor(GenericProcessor):
             active_pool_addresses=active_pools_sorted,
             total_slots=total_slots
         )
+        
+        # Report selection status to lite node
+        if slot_tracker:
+            slot_tracker.report_selection(
+                epoch_id=msg_obj.epochId,
+                was_selected=(assigned_pool is not None),
+                slot_id=slot_id
+            )
         
         if assigned_pool is None:
             self._logger.info(
