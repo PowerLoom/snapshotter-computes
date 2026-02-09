@@ -46,7 +46,7 @@ The `projects.json` config file specifies which module and class to load.
 
 ```
 computes/
-├── pair_total_reserves.py       # Main processor: PairTotalReservesProcessor
+├── pair_total_reserves.py       # Lite node processor (thin wrapper, slot-specific)
 ├── preloaders/
 │   └── eth_price/
 │       └── preloader.py         # ETH price preloader
@@ -59,16 +59,40 @@ computes/
 │   └── bytecode/                # Helper contract bytecode
 ├── utils/
 │   ├── constants.py             # Shared constants
-│   ├── core.py                  # Core computation functions
+│   ├── core.py                  # Core computation functions (per-pool snapshot math)
+│   ├── epoch_context.py         # Shared epoch context and pool computation (slot-agnostic)
 │   ├── helpers.py               # Utility helpers
 │   ├── models/                  # Data and message models
 │   └── slot_selection.py        # Deterministic slot selection algorithm
 └── tests/                       # Test suite
 ```
 
+## Architecture: Separation of Concerns
+
+The compute package separates slot-agnostic computation from slot-specific orchestration:
+
+**Shared layer (`utils/epoch_context.py`)** -- no slot awareness:
+- `EpochContext` dataclass: holds block hash, total slots, active pools, block details
+- `get_epoch_active_pools()`: fetch active pool addresses from BDS API
+- `prepare_epoch()`: gather all epoch-level data (called once per epoch)
+- `compute_pool_snapshot()`: compute base snapshot for a single pool (called once per unique pool)
+
+**Lite node wrapper (`pair_total_reserves.py`)** -- adds slot-specific behavior:
+- Reads `settings.slot_id`
+- Checks `SlotSelectionManager.get_pool_for_slot()` for this slot
+- Reports selection status via `slot_tracker`
+- Delegates all computation to `epoch_context` functions
+
+**Future bulk snapshotter service** can import the shared layer directly:
+```python
+from computes.utils.epoch_context import prepare_epoch, compute_pool_snapshot
+from computes.utils.slot_selection import SlotSelectionManager
+```
+And orchestrate multi-slot computation without touching `pair_total_reserves.py`.
+
 ## Processor Interface
 
-Compute processors implement a `compute()` method with the following signature:
+The lite node loads `PairTotalReservesProcessor` via `projects.json` config:
 
 ```python
 async def compute(
