@@ -138,8 +138,17 @@ When a slot is selected every few epochs (block gap 2–9 between consecutive as
 
 ### Flow
 
-1. **First work at block N**: compute base snapshot via ticks+slot0; process events in block N; cache `(token0, token1)` at block N.
+1. **First work at block N**: fetch initial reserves at block N−1 (ticks+slot0); process events in block N; cache reserves at block N.
 2. **Next work at block N+M**: lookup cache for reserves at block N; fetch events N+1..N+M; apply Mint/Burn/Swap deltas in one loop; result = reserves at N+M; cache for next time.
+
+### Log Semantics (N−1 vs N)
+
+For an epoch at block N (single-block epoch):
+
+- **CACHE_MISS at block N−1**: We need initial reserves (state at end of block N−1) before processing events in block N. We fetch via ticks+slot0 at block N−1.
+- **CACHE_STORE at block N**: After applying Mint/Burn/Swap deltas from block N to the initial reserves, we store the result — reserves at end of block N (i.e. initial at N−1 + deltas from N).
+
+So CACHE_MISS always references the block we *fetch* (N−1); CACHE_STORE always references the block we *store* (N). The stored value is the final reserves after applying event deltas.
 
 ### Config (`settings.json`)
 
@@ -164,11 +173,30 @@ If `lite_reserves_cache` is absent or disabled, behavior matches pre-cache (no c
 - `core.fetch_initial_reserves` returns `(reserves, cached_block)`; `cached_block` tells the caller to use event range `(cached_block+1)` to `to_block`.
 - Trade data and `PairBlockDetail` are only accumulated for epoch blocks `[from_block, to_block]`; gap blocks update running reserves only.
 
+### When CACHE_HIT Occurs
+
+CACHE_HIT only happens when the **same pool** is assigned to the same slot again. Slot selection assigns different pools each epoch; if your slot gets pool A, then pool B, then pool C, you will see CACHE_MISS every time. CACHE_HIT appears when the same pool (e.g. a busy USDC–WETH pool) is assigned to your slot in consecutive or near-consecutive epochs.
+
+### Memory Bounds and Growth
+
+- **Per-pool**: Bounded. Each pool keeps at most `memory_max_entries_per_pool` (default 20) block entries. When exceeded, the smallest block is evicted.
+- **Across pools**: Unbounded. Pools are never removed from the cache. With many unique pools over time (e.g. new pools joining the active set), memory can grow. Busy pools that repeat often benefit from the cache; one-off or rare pools add entries without eviction at the pool level.
+- **Mitigation**: Tune `memory_max_entries_per_pool` down if needed; the cache is optional (`enabled: false` disables it).
+
+### Quantifying RPC Savings
+
+A CACHE_MISS triggers `calculate_reserves`, which does:
+
+- **getTicks**: 1–16 `eth_call`s to the helper contract (depends on fee tier: 0.05%→16, 0.3%→2, 1%→4, etc.)
+- **slot0**: 1 `eth_call` per block
+
+Per CACHE_MISS: roughly **2–17 RPC calls**. CACHE_HIT avoids all of these for that pool.
+
+To measure: `grep "\[INCREMENTAL\] CACHE_MISS"` vs `grep "\[INCREMENTAL\] CACHE_HIT"` in logs. Hit rate = CACHE_HIT / (CACHE_HIT + CACHE_MISS).
+
 ### Logging
 
 All cache operations log with `[INCREMENTAL]` prefix (DEBUG/INFO) for production debugging.
-
-For full implementation details, event-delta rules, and validation checklist, see `ai-coord-docs/dsv_mainnet_launch/deterministic_slot_selection/LITE_NODE_INCREMENTAL_RESERVES.md` (if available in the workspace).
 
 ### Key Constants
 - `SLOTS_PER_EPOCH = 1000`: Number of slots selected per epoch
