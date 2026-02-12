@@ -1,7 +1,10 @@
 import time
-from typing import Dict, Optional, Any, Tuple, List
+from typing import TYPE_CHECKING, Dict, Optional, Any, Tuple, List
 
 from computes.utils.models.message_models import UniswapBaseSnapshot, UniswapPoolMetadata, EpochBaseSnapshot
+
+if TYPE_CHECKING:
+    from computes.utils.rpc_usage import RpcUsageTracker
 from snapshotter.utils.default_logger import logger
 from rpc_helper.rpc import RpcHelper
 from snapshotter.utils.snapshot_utils import get_block_details_in_block_range
@@ -16,6 +19,7 @@ from computes.utils.models.data_models import TradeData
 from computes.utils.helpers import get_token_price_in_usd_in_block_range
 from computes.utils.helpers import get_uniswap_v3_pool_metadata
 from computes.utils.reserves_cache import ReservesCache
+from computes.utils.rpc_usage import num_tick_segments_for_fee
 
 core_logger = logger.bind(module='PowerLoom|UniswapCore')
 
@@ -26,6 +30,8 @@ async def fetch_initial_reserves(
     rpc_helper: RpcHelper,
     pair_per_token_metadata: UniswapPoolMetadata,
     reserves_cache: Optional[ReservesCache] = None,
+    rpc_usage_tracker: Optional['RpcUsageTracker'] = None,
+    current_epoch: Optional[int] = None,
 ) -> Tuple[Tuple[int, int], Optional[int]]:
     """
     Fetch the initial reserves for a given Uniswap V3 pool at the block before at_block.
@@ -49,19 +55,28 @@ async def fetch_initial_reserves(
             "[INCREMENTAL] Pool {} | Need reserves at {} | Checking cache",
             pair_address[:18], at_block - 1,
         )
-        hit = reserves_cache.get_latest_before(pair_address, at_block)
+        hit = reserves_cache.get_latest_before(
+            pair_address, at_block, current_epoch=current_epoch,
+        )
         if hit is not None:
             cached_block, t0, t1 = hit
             core_logger.info(
                 "[INCREMENTAL] Pool {} | CACHE_HIT | Replaying events {} to {} | Cached block {} | t0={}, t1={}",
                 pair_address[:18], cached_block + 1, at_block, cached_block, t0, t1,
             )
+            if rpc_usage_tracker:
+                rpc_usage_tracker.record_reserves_hit(pair_address, cached_block, at_block)
             return (t0, t1), cached_block
         core_logger.info(
             "[INCREMENTAL] Pool {} | CACHE_MISS | Fetching ticks+slot0 at block {}",
             pair_address[:18], at_block - 1,
         )
     # Cache miss or disabled: calculate reserves from chain (ticks + slot0 at at_block-1)
+    tick_calls = num_tick_segments_for_fee(int(pair_per_token_metadata.fee))
+    if rpc_usage_tracker:
+        rpc_usage_tracker.record_reserves_miss(
+            pair_address, at_block - 1, tick_calls, slot0_calls=1,
+        )
     initial_reserves = await calculate_reserves(
         pair_address,
         at_block - 1,
@@ -90,6 +105,8 @@ async def generate_pair_reserves_dict_and_trade_data(
     token1_price_raw: Dict[int, float],
     block_details_dict: Dict[int, Dict[str, Any]],
     reserves_cache: Optional[ReservesCache] = None,
+    rpc_usage_tracker: Optional['RpcUsageTracker'] = None,
+    current_epoch: Optional[int] = None,
 ) -> Tuple[Dict[int, PairBlockDetail], TradeData]:
     """
     Generate a dictionary of reserves per block and aggregate trade data for a Uniswap V3 pool.
@@ -124,6 +141,8 @@ async def generate_pair_reserves_dict_and_trade_data(
         rpc_helper=rpc_helper,
         pair_per_token_metadata=pair_per_token_metadata,
         reserves_cache=reserves_cache,
+        rpc_usage_tracker=rpc_usage_tracker,
+        current_epoch=current_epoch,
     )
     # Initialize reserve amounts
     token0Amount = initial_reserves[0]
@@ -225,7 +244,12 @@ async def generate_pair_reserves_dict_and_trade_data(
 
     if reserves_cache and reserves_cache.enabled and to_block in pair_reserves_dict:
         end_data = pair_reserves_dict[to_block]
-        reserves_cache.set(pair_address, to_block, end_data.token0Reserves, end_data.token1Reserves)
+        reserves_cache.set(
+            pair_address, to_block, end_data.token0Reserves, end_data.token1Reserves,
+            current_epoch=current_epoch,
+        )
+        if rpc_usage_tracker:
+            rpc_usage_tracker.record_reserves_store(pair_address, to_block)
         core_logger.info(
             "[INCREMENTAL] Pool {} | CACHE_STORE | Block {} | t0={}, t1={}",
             pair_address[:18], to_block, end_data.token0Reserves, end_data.token1Reserves,
@@ -342,6 +366,8 @@ async def base_snapshot_from_block_range(
     protocol_state_contract,
     block_details_dict: dict = dict(),
     reserves_cache: Optional[ReservesCache] = None,
+    rpc_usage_tracker: Optional['RpcUsageTracker'] = None,
+    epoch_id: Optional[int] = None,
 ) -> Optional[UniswapBaseSnapshot]:
     """
     Generate a comprehensive base snapshot for a Uniswap V3 pool over a block range.
@@ -374,13 +400,6 @@ async def base_snapshot_from_block_range(
         pair_address,
         time.time()
     )
-    if from_block == to_block:
-        core_logger.warning(
-            "🔍 [Epoch {}-{}] Pool {} | From block and to block are the same",
-            from_block,
-            to_block,
-            pair_address
-        )
 
     try:
         # Normalize address format to checksum
@@ -489,6 +508,8 @@ async def base_snapshot_from_block_range(
             token1_price_raw=token1_price_raw,
             block_details_dict=block_details_dict,
             reserves_cache=reserves_cache,
+            rpc_usage_tracker=rpc_usage_tracker,
+            current_epoch=epoch_id,
         )
 
         core_logger.debug(

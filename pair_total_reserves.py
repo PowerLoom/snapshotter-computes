@@ -25,6 +25,7 @@ from computes.settings.config import settings as computes_settings
 from computes.utils.slot_selection import SlotSelectionManager
 from computes.utils.epoch_context import prepare_epoch, compute_pool_snapshot
 from computes.utils.reserves_cache import ReservesCache
+from computes.utils.rpc_usage import RpcUsageTracker
 
 
 def _get_reserves_cache() -> Optional[ReservesCache]:
@@ -37,7 +38,16 @@ def _get_reserves_cache() -> Optional[ReservesCache]:
         memory_max_entries_per_pool=cfg.memory_max_entries_per_pool,
         file_enabled=cfg.file_enabled,
         file_path=cfg.file_path,
+        pool_eviction_epoch_threshold=getattr(cfg, 'pool_eviction_epoch_threshold', 1000),
     )
+
+
+def _get_rpc_usage_tracker() -> Optional[RpcUsageTracker]:
+    """Build RpcUsageTracker if rpc_usage_tracking is enabled."""
+    cfg = getattr(computes_settings, 'lite_reserves_cache', None)
+    if cfg is None or not getattr(cfg, 'rpc_usage_tracking', False):
+        return None
+    return RpcUsageTracker(emit_structured_log=True)
 
 
 class PairTotalReservesProcessor(GenericProcessor):
@@ -52,6 +62,7 @@ class PairTotalReservesProcessor(GenericProcessor):
     def __init__(self) -> None:
         self._logger = logger.bind(module="PairTotalReservesProcessor")
         self._reserves_cache: Optional[ReservesCache] = _get_reserves_cache()
+        self._rpc_usage_tracker: Optional[RpcUsageTracker] = _get_rpc_usage_tracker()
 
     async def compute(
         self,
@@ -96,6 +107,15 @@ class PairTotalReservesProcessor(GenericProcessor):
             self._logger.error(f"❌ Failed to prepare epoch context: {e}")
             return []
 
+        # Prune pools not hit in pool_eviction_epoch_threshold epochs
+        if self._reserves_cache:
+            evicted = self._reserves_cache.prune_stale_pools(msg_obj.epochId)
+            if evicted > 0:
+                self._logger.debug(
+                    "[INCREMENTAL] Pruned {} stale pools (epoch {})",
+                    evicted, msg_obj.epochId,
+                )
+
         # Genesis epoch (epoch 0): all nodes process one deterministic random pool
         if msg_obj.epochId == 0:
             pool_address = random.Random(slot_id).choice(ctx.active_pools_sorted)
@@ -111,6 +131,8 @@ class PairTotalReservesProcessor(GenericProcessor):
                 f"🎲 Genesis epoch (epoch 0) - slot {slot_id} processing pool: {pool_address}"
             )
 
+            if self._rpc_usage_tracker:
+                self._rpc_usage_tracker.set_epoch(msg_obj.epochId)
             result = await compute_pool_snapshot(
                 pool_address=pool_address,
                 min_chain_height=ctx.min_chain_height,
@@ -121,7 +143,11 @@ class PairTotalReservesProcessor(GenericProcessor):
                 block_details_dict=ctx.block_details_dict,
                 bds_api_url=ctx.bds_api_url,
                 reserves_cache=self._reserves_cache,
+                rpc_usage_tracker=self._rpc_usage_tracker,
+                epoch_id=msg_obj.epochId,
             )
+            if self._rpc_usage_tracker:
+                self._rpc_usage_tracker.emit_summary()
             return [result] if result else []
 
         # Regular epoch: check slot selection
@@ -160,6 +186,8 @@ class PairTotalReservesProcessor(GenericProcessor):
             f"active_pools={len(ctx.active_pools_sorted)}, block_hash: {ctx.block_hash[:10]}...)"
         )
 
+        if self._rpc_usage_tracker:
+            self._rpc_usage_tracker.set_epoch(msg_obj.epochId)
         result = await compute_pool_snapshot(
             pool_address=assigned_pool,
             min_chain_height=ctx.min_chain_height,
@@ -170,5 +198,9 @@ class PairTotalReservesProcessor(GenericProcessor):
             block_details_dict=ctx.block_details_dict,
             bds_api_url=ctx.bds_api_url,
             reserves_cache=self._reserves_cache,
+            rpc_usage_tracker=self._rpc_usage_tracker,
+            epoch_id=msg_obj.epochId,
         )
+        if self._rpc_usage_tracker:
+            self._rpc_usage_tracker.emit_summary()
         return [result] if result else []

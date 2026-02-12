@@ -17,6 +17,7 @@ from typing import List, Optional, Tuple
 
 import requests
 from computes.utils.reserves_cache import ReservesCache
+from computes.utils.rpc_usage import RpcUsageTracker
 from tenacity import retry, stop_after_attempt, wait_random_exponential
 
 from rpc_helper.rpc import RpcHelper
@@ -176,6 +177,8 @@ async def compute_pool_snapshot(
     block_details_dict: dict,
     bds_api_url: str,
     reserves_cache: Optional[ReservesCache] = None,
+    rpc_usage_tracker: Optional[RpcUsageTracker] = None,
+    epoch_id: Optional[int] = None,
 ) -> Optional[Tuple[str, UniswapBaseSnapshot]]:
     """
     Compute base snapshot for a single pool. No slot awareness.
@@ -231,6 +234,8 @@ async def compute_pool_snapshot(
         protocol_state_contract=protocol_state_contract,
         block_details_dict=block_details_dict,
         reserves_cache=reserves_cache,
+        rpc_usage_tracker=rpc_usage_tracker,
+        epoch_id=epoch_id,
     )
 
     if not base_snapshot_data:

@@ -66,6 +66,7 @@ computes/
 │   ├── reserves_cache.py        # Lite reserves cache (incremental replay, see below)
 │   └── slot_selection.py        # Deterministic slot selection algorithm
 └── tests/                       # Test suite
+    └── test_reserves_cache.py   # Cache eviction, RPC usage, hit/miss equivalence
 ```
 
 ## Architecture: Separation of Concerns
@@ -157,13 +158,17 @@ So CACHE_MISS always references the block we *fetch* (N−1); CACHE_STORE always
   "enabled": true,
   "memory_max_entries_per_pool": 20,
   "file_enabled": false,
-  "file_path": "./.reserves_cache"
+  "file_path": "./.reserves_cache",
+  "pool_eviction_epoch_threshold": 1000,
+  "rpc_usage_tracking": false
 }
 ```
 
 - `enabled`: turn cache on/off
 - `memory_max_entries_per_pool`: per-pool LRU limit (evict oldest block when exceeded)
 - `file_enabled` / `file_path`: optional file persistence for restarts
+- `pool_eviction_epoch_threshold`: evict pools not accessed in this many epochs (default 1000)
+- `rpc_usage_tracking`: emit `[RPC_USAGE]` JSON logs for eth_call quantification
 
 If `lite_reserves_cache` is absent or disabled, behavior matches pre-cache (no change).
 
@@ -181,7 +186,7 @@ CACHE_HIT only happens when the **same pool** is assigned to the same slot again
 
 - **Per-pool**: Bounded. Each pool keeps at most `memory_max_entries_per_pool` (default 20) block entries. When exceeded, the smallest block is evicted.
 - **Across pools**: Unbounded. Pools are never removed from the cache. With many unique pools over time (e.g. new pools joining the active set), memory can grow. Busy pools that repeat often benefit from the cache; one-off or rare pools add entries without eviction at the pool level.
-- **Mitigation**: Tune `memory_max_entries_per_pool` down if needed; the cache is optional (`enabled: false` disables it).
+- **Mitigation**: `pool_eviction_epoch_threshold` evicts idle pools; tune `memory_max_entries_per_pool` down if needed; the cache is optional (`enabled: false` disables it).
 
 ### Quantifying RPC Savings
 
@@ -193,6 +198,22 @@ A CACHE_MISS triggers `calculate_reserves`, which does:
 Per CACHE_MISS: roughly **2–17 RPC calls**. CACHE_HIT avoids all of these for that pool.
 
 To measure: `grep "\[INCREMENTAL\] CACHE_MISS"` vs `grep "\[INCREMENTAL\] CACHE_HIT"` in logs. Hit rate = CACHE_HIT / (CACHE_HIT + CACHE_MISS).
+
+### RPC Usage Tracking
+
+When `rpc_usage_tracking: true` in `lite_reserves_cache` config, the node emits structured `[RPC_USAGE]` JSON logs for exact eth_call quantification:
+
+| Event | When | Fields |
+|-------|------|--------|
+| `reserves_cache_miss` | CACHE_MISS path | `pool`, `at_block`, `ticks_eth_calls`, `slot0_eth_calls`, `total_reserves_eth_calls` |
+| `reserves_cache_hit` | CACHE_HIT path | `pool`, `cached_block`, `to_block` (0 eth_calls for reserves) |
+| `reserves_cache_store` | After storing reserves at block | `pool`, `block` |
+| `rpc_usage_summary` | End of epoch | `reserves_cache_misses`, `reserves_cache_hits`, `reserves_ticks_eth_calls`, `reserves_slot0_eth_calls`, `reserves_total_eth_calls` |
+
+- `pool_eviction_epoch_threshold`: Evict pools not hit in this many epochs (default 1000).
+- `rpc_usage_tracking`: Enable `[RPC_USAGE]` JSON logs (default false).
+
+**Parse logs**: `grep "\[RPC_USAGE\]" <logfile>` — each line is a JSON object.
 
 ### Logging
 
@@ -220,3 +241,33 @@ This enables the node to:
 - Distinguish "not selected" (normal) from "selected but failed" (problem)
 - Track consecutive failures only for epochs where the slot was selected
 - Alert operators after 3 consecutive selected-but-failed epochs
+
+## Running Reserves Cache Tests
+
+Tests live in `computes/tests/test_reserves_cache.py` and cover cache eviction, RPC usage tracking, and cache hit/miss equivalence.
+
+**Prerequisites**
+
+1. Create `.env.test` from the project root (snapshotter-core-edge):
+   ```bash
+   cp env.test.example .env.test
+   ```
+   Edit `.env.test` if you need specific RPC URLs or Redis; the reserves cache tests use mocks and work with placeholder values.
+
+2. Run from the **snapshotter-core-edge** root (not from `computes/`):
+   ```bash
+   cd /path/to/snapshotter-core-edge
+   python -m pytest computes/tests/test_reserves_cache.py -v
+   ```
+
+**Tests included**
+
+| Test | Purpose |
+|------|---------|
+| `test_reserves_cache_get_set` | Basic get/set and per-pool LRU eviction |
+| `test_reserves_cache_prune_stale_pools` | Pools beyond `pool_eviction_epoch_threshold` are evicted |
+| `test_reserves_cache_prune_preserves_recent` | Pools within threshold are kept |
+| `test_num_tick_segments_for_fee` | Fee tier → tick eth_calls mapping |
+| `test_rpc_usage_tracker` | RpcUsageTracker totals |
+| `test_cache_hit_miss_same_reserves` | CACHE_MISS vs CACHE_HIT yield identical reserves |
+| `test_cache_replay_multiblock` | CACHE_HIT with block gap yields same reserves as CACHE_MISS |

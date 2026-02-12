@@ -24,6 +24,8 @@
     "enabled": true,
     "memory_max_entries_per_pool": 20,
     "file_enabled": false,
-    "file_path": "./.reserves_cache"
+    "file_path": "./.reserves_cache",
+    "pool_eviction_epoch_threshold": 1000,
+    "rpc_usage_tracking": true
   }
 }

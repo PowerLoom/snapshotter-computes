@@ -27,18 +27,28 @@ class ReservesCache:
         memory_max_entries_per_pool: int = 20,
         file_enabled: bool = False,
         file_path: str = './.reserves_cache',
+        pool_eviction_epoch_threshold: int = 1000,
     ):
         self.enabled = enabled
         self.memory_max_entries_per_pool = memory_max_entries_per_pool
         self.file_enabled = file_enabled
         self.file_path = Path(file_path)
+        self.pool_eviction_epoch_threshold = pool_eviction_epoch_threshold
         # pool -> {block: (token0, token1)}, evict smallest block when over limit
         self._memory: Dict[str, Dict[int, Tuple[int, int]]] = {}
+        # pool -> last epoch when pool was accessed (get hit or set)
+        self._pool_last_epoch: Dict[str, int] = {}
+
+    def _touch_pool(self, pool: str, epoch: Optional[int]) -> None:
+        """Update last-accessed epoch for pool (used by get/set when epoch provided)."""
+        if epoch is not None and self.pool_eviction_epoch_threshold > 0:
+            self._pool_last_epoch[pool] = epoch
 
     def get_latest_before(
         self,
         pool_address: str,
         max_block: int,
+        current_epoch: Optional[int] = None,
     ) -> Optional[Tuple[int, int, int]]:
         """
         Return (cached_block, token0, token1) for the largest cached block < max_block
@@ -59,7 +69,25 @@ class ReservesCache:
             return None
         best_block = max(candidates, key=lambda x: x[0])
         cached_block, (t0, t1) = best_block[0], best_block[1]
+        self._touch_pool(pool, current_epoch)
         return (cached_block, t0, t1)
+
+    def prune_stale_pools(self, current_epoch: int) -> int:
+        """
+        Remove pools not accessed in the last pool_eviction_epoch_threshold epochs.
+        Returns number of pools evicted.
+        """
+        if self.pool_eviction_epoch_threshold <= 0:
+            return 0
+        threshold = self.pool_eviction_epoch_threshold
+        to_remove = [
+            p for p, last in self._pool_last_epoch.items()
+            if current_epoch - last > threshold
+        ]
+        for p in to_remove:
+            self._memory.pop(p, None)
+            self._pool_last_epoch.pop(p, None)
+        return len(to_remove)
 
     def set(
         self,
@@ -67,11 +95,13 @@ class ReservesCache:
         block: int,
         token0: int,
         token1: int,
+        current_epoch: Optional[int] = None,
     ) -> None:
         """Store reserves for (pool, block). Evict oldest per-pool if over limit."""
         if not self.enabled:
             return
         pool = self._normalize_pool(pool_address)
+        self._touch_pool(pool, current_epoch)
         if pool not in self._memory:
             self._memory[pool] = {}
         blocks = self._memory[pool]

@@ -8,6 +8,8 @@ class LiteReservesCacheConfig(BaseModel):
     memory_max_entries_per_pool: int = 20
     file_enabled: bool = False
     file_path: str = './.reserves_cache'
+    pool_eviction_epoch_threshold: int = 1000  # Evict pool if not hit in N epochs
+    rpc_usage_tracking: bool = False  # Emit structured [RPC_USAGE] logs
 
 
 class UniswapContractAbis(BaseModel):
