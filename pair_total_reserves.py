@@ -12,7 +12,7 @@ slot coupling.
 """
 
 import random
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 from rpc_helper.rpc import RpcHelper
 from snapshotter.utils.models.message_models import SnapshotProcessMessage
@@ -21,8 +21,23 @@ from snapshotter.utils.default_logger import logger
 from computes.utils.models.message_models import UniswapBaseSnapshot
 from ipfs_client.main import AsyncIPFSClient
 from snapshotter.settings.config import settings
+from computes.settings.config import settings as computes_settings
 from computes.utils.slot_selection import SlotSelectionManager
 from computes.utils.epoch_context import prepare_epoch, compute_pool_snapshot
+from computes.utils.reserves_cache import ReservesCache
+
+
+def _get_reserves_cache() -> Optional[ReservesCache]:
+    """Build ReservesCache from computes settings if lite_reserves_cache is configured."""
+    cfg = getattr(computes_settings, 'lite_reserves_cache', None)
+    if cfg is None:
+        return None
+    return ReservesCache(
+        enabled=cfg.enabled,
+        memory_max_entries_per_pool=cfg.memory_max_entries_per_pool,
+        file_enabled=cfg.file_enabled,
+        file_path=cfg.file_path,
+    )
 
 
 class PairTotalReservesProcessor(GenericProcessor):
@@ -36,6 +51,7 @@ class PairTotalReservesProcessor(GenericProcessor):
 
     def __init__(self) -> None:
         self._logger = logger.bind(module="PairTotalReservesProcessor")
+        self._reserves_cache: Optional[ReservesCache] = _get_reserves_cache()
 
     async def compute(
         self,
@@ -104,6 +120,7 @@ class PairTotalReservesProcessor(GenericProcessor):
                 protocol_state_contract=protocol_state_contract,
                 block_details_dict=ctx.block_details_dict,
                 bds_api_url=ctx.bds_api_url,
+                reserves_cache=self._reserves_cache,
             )
             return [result] if result else []
 
@@ -152,5 +169,6 @@ class PairTotalReservesProcessor(GenericProcessor):
             protocol_state_contract=protocol_state_contract,
             block_details_dict=ctx.block_details_dict,
             bds_api_url=ctx.bds_api_url,
+            reserves_cache=self._reserves_cache,
         )
         return [result] if result else []

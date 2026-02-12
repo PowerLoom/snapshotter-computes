@@ -63,6 +63,7 @@ computes/
 │   ├── epoch_context.py         # Shared epoch context and pool computation (slot-agnostic)
 │   ├── helpers.py               # Utility helpers
 │   ├── models/                  # Data and message models
+│   ├── reserves_cache.py        # Lite reserves cache (incremental replay, see below)
 │   └── slot_selection.py        # Deterministic slot selection algorithm
 └── tests/                       # Test suite
 ```
@@ -130,6 +131,44 @@ The `SlotSelectionManager` implements epoch-based work distribution for BDS data
 4. **Pool Assignment**: `SHA256(seed + slot_id) % num_pools` assigns each selected slot to one pool
 
 All operations are deterministic given the same inputs, enabling any observer to verify assignments.
+
+## Lite Reserves Cache (`utils/reserves_cache.py`)
+
+When a slot is selected every few epochs (block gap 2–9 between consecutive assignments), the **incremental reserves cache** avoids expensive ticks+slot0 RPC calls by reusing cached reserves and replaying event deltas.
+
+### Flow
+
+1. **First work at block N**: compute base snapshot via ticks+slot0; process events in block N; cache `(token0, token1)` at block N.
+2. **Next work at block N+M**: lookup cache for reserves at block N; fetch events N+1..N+M; apply Mint/Burn/Swap deltas in one loop; result = reserves at N+M; cache for next time.
+
+### Config (`settings.json`)
+
+```json
+"lite_reserves_cache": {
+  "enabled": true,
+  "memory_max_entries_per_pool": 20,
+  "file_enabled": false,
+  "file_path": "./.reserves_cache"
+}
+```
+
+- `enabled`: turn cache on/off
+- `memory_max_entries_per_pool`: per-pool LRU limit (evict oldest block when exceeded)
+- `file_enabled` / `file_path`: optional file persistence for restarts
+
+If `lite_reserves_cache` is absent or disabled, behavior matches pre-cache (no change).
+
+### Wiring
+
+- `PairTotalReservesProcessor` builds `ReservesCache` from settings and passes it to `compute_pool_snapshot`.
+- `core.fetch_initial_reserves` returns `(reserves, cached_block)`; `cached_block` tells the caller to use event range `(cached_block+1)` to `to_block`.
+- Trade data and `PairBlockDetail` are only accumulated for epoch blocks `[from_block, to_block]`; gap blocks update running reserves only.
+
+### Logging
+
+All cache operations log with `[INCREMENTAL]` prefix (DEBUG/INFO) for production debugging.
+
+For full implementation details, event-delta rules, and validation checklist, see `ai-coord-docs/dsv_mainnet_launch/deterministic_slot_selection/LITE_NODE_INCREMENTAL_RESERVES.md` (if available in the workspace).
 
 ### Key Constants
 - `SLOTS_PER_EPOCH = 1000`: Number of slots selected per epoch

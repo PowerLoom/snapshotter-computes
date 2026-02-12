@@ -1,4 +1,13 @@
+from typing import Optional
+
 from pydantic import BaseModel
+
+
+class LiteReservesCacheConfig(BaseModel):
+    enabled: bool = True
+    memory_max_entries_per_pool: int = 20
+    file_enabled: bool = False
+    file_path: str = './.reserves_cache'
 
 
 class UniswapContractAbis(BaseModel):
@@ -26,3 +35,4 @@ class Settings(BaseModel):
     uniswap_contract_abis: UniswapContractAbis
     contract_addresses: ContractAddresses
     bds_api_url: str
+    lite_reserves_cache: Optional[LiteReservesCacheConfig] = None

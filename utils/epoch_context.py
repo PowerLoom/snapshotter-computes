@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
 import requests
+from computes.utils.reserves_cache import ReservesCache
 from tenacity import retry, stop_after_attempt, wait_random_exponential
 
 from rpc_helper.rpc import RpcHelper
@@ -174,6 +175,7 @@ async def compute_pool_snapshot(
     protocol_state_contract,
     block_details_dict: dict,
     bds_api_url: str,
+    reserves_cache: Optional[ReservesCache] = None,
 ) -> Optional[Tuple[str, UniswapBaseSnapshot]]:
     """
     Compute base snapshot for a single pool. No slot awareness.
@@ -228,6 +230,7 @@ async def compute_pool_snapshot(
         anchor_rpc_helper=anchor_rpc_helper,
         protocol_state_contract=protocol_state_contract,
         block_details_dict=block_details_dict,
+        reserves_cache=reserves_cache,
     )
 
     if not base_snapshot_data:

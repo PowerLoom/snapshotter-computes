@@ -15,6 +15,7 @@ from computes.utils.models.data_models import PairBlockDetail
 from computes.utils.models.data_models import TradeData
 from computes.utils.helpers import get_token_price_in_usd_in_block_range
 from computes.utils.helpers import get_uniswap_v3_pool_metadata
+from computes.utils.reserves_cache import ReservesCache
 
 core_logger = logger.bind(module='PowerLoom|UniswapCore')
 
@@ -24,24 +25,43 @@ async def fetch_initial_reserves(
     at_block: int,
     rpc_helper: RpcHelper,
     pair_per_token_metadata: UniswapPoolMetadata,
-) -> Optional[Tuple[int, int]]:
+    reserves_cache: Optional[ReservesCache] = None,
+) -> Tuple[Tuple[int, int], Optional[int]]:
     """
-    Fetch the initial reserves for a given Uniswap V3 pool contract address at a specific block.
+    Fetch the initial reserves for a given Uniswap V3 pool at the block before at_block.
 
-    This function first attempts to retrieve the reserves from Redis cache for the block immediately
-    preceding the given block. If not found, it calculates the reserves using the blockchain.
+    When reserves_cache is provided and enabled, first attempts to retrieve reserves from
+    the in-memory/file cache. On cache hit, returns (reserves, cached_block) so the caller
+    can replay event deltas from (cached_block+1) to at_block. On miss, calculates from chain.
 
     Args:
         pair_address (str): The Uniswap V3 pool contract address.
-        at_block (int): The block number at which to fetch reserves.
-        redis_conn (aioredis.Redis): Redis connection for caching.
+        at_block (int): The block number at which to fetch reserves (uses at_block-1 for calculation).
         rpc_helper (RpcHelper): RPC helper for blockchain interactions.
         pair_per_token_metadata (UniswapPoolMetadata): Metadata for the token pair.
+        reserves_cache (Optional[ReservesCache]): Optional lite reserves cache for incremental replay.
 
     Returns:
-        Optional[Tuple[int, int]]: Tuple of (token0_reserves, token1_reserves) or None if not found.
+        Tuple of ((token0_reserves, token1_reserves), cached_block_or_None).
     """
-    # No cache found, calculate reserves from chain
+    if reserves_cache and reserves_cache.enabled:
+        core_logger.debug(
+            "[INCREMENTAL] Pool {} | Need reserves at {} | Checking cache",
+            pair_address[:18], at_block - 1,
+        )
+        hit = reserves_cache.get_latest_before(pair_address, at_block)
+        if hit is not None:
+            cached_block, t0, t1 = hit
+            core_logger.info(
+                "[INCREMENTAL] Pool {} | CACHE_HIT | Replaying events {} to {} | Cached block {} | t0={}, t1={}",
+                pair_address[:18], cached_block + 1, at_block, cached_block, t0, t1,
+            )
+            return (t0, t1), cached_block
+        core_logger.info(
+            "[INCREMENTAL] Pool {} | CACHE_MISS | Fetching ticks+slot0 at block {}",
+            pair_address[:18], at_block - 1,
+        )
+    # Cache miss or disabled: calculate reserves from chain (ticks + slot0 at at_block-1)
     initial_reserves = await calculate_reserves(
         pair_address,
         at_block - 1,
@@ -55,8 +75,7 @@ async def fetch_initial_reserves(
         initial_reserves[0],
         initial_reserves[1]
     )
-
-    return initial_reserves
+    return initial_reserves, None
 
 
 async def generate_pair_reserves_dict_and_trade_data(
@@ -70,18 +89,20 @@ async def generate_pair_reserves_dict_and_trade_data(
     token0_price_raw: Dict[int, float],
     token1_price_raw: Dict[int, float],
     block_details_dict: Dict[int, Dict[str, Any]],
+    reserves_cache: Optional[ReservesCache] = None,
 ) -> Tuple[Dict[int, PairBlockDetail], TradeData]:
     """
     Generate a dictionary of reserves per block and aggregate trade data for a Uniswap V3 pool.
 
-    This function iterates over each block in the given range, processes all events,
-    updates reserves, and accumulates trade data for the epoch.
+    Iterates over each block in the event range, processes all events, updates reserves,
+    and accumulates trade data for the epoch. When reserves_cache hits, event range is
+    (cached_block+1) to to_block; otherwise from_block to to_block. Trade data and
+    PairBlockDetail are only accumulated/stored for blocks in [from_block, to_block].
 
     Args:
         pair_address (str): The Uniswap V3 pool contract address.
         from_block (int): Starting block number for the epoch.
         to_block (int): Ending block number for the epoch.
-        redis_conn (aioredis.Redis): Redis connection for caching.
         rpc_helper (RpcHelper): RPC helper for blockchain interactions.
         pair_per_token_metadata (UniswapPoolMetadata): Metadata for the token pair.
         token0_price_map (Dict[int, float]): Mapping of block number to token0 USD price.
@@ -89,72 +110,79 @@ async def generate_pair_reserves_dict_and_trade_data(
         token0_price_raw (Dict[int, float]): Mapping of block number to token0 price in token1.
         token1_price_raw (Dict[int, float]): Mapping of block number to token1 price in token0.
         block_details_dict (Dict[int, Dict[str, Any]]): Block details including timestamps.
+        reserves_cache (Optional[ReservesCache]): Optional lite reserves cache for incremental replay.
 
     Returns:
-        Tuple[Dict[int, PairBlockDetail], TradeData]: 
+        Tuple[Dict[int, PairBlockDetail], TradeData]:
             - Dictionary mapping block number to PairBlockDetail.
             - Aggregated TradeData for the epoch.
     """
-    # Fetch initial reserves at the start of the epoch
-    initial_reserves = await fetch_initial_reserves(
+    # Fetch initial reserves (from cache or chain)
+    initial_reserves, cached_block = await fetch_initial_reserves(
         pair_address=pair_address,
         at_block=from_block,
         rpc_helper=rpc_helper,
         pair_per_token_metadata=pair_per_token_metadata,
+        reserves_cache=reserves_cache,
     )
-
     # Initialize reserve amounts
     token0Amount = initial_reserves[0]
     token1Amount = initial_reserves[1]
 
+    effective_from = (cached_block + 1) if cached_block is not None else from_block
     core_logger.info(
         "💰 [Epoch {}-{}] Pool {} | Initial reserves: token0={}, token1={}",
         from_block, to_block, pair_address, token0Amount, token1Amount
     )
+    if cached_block is not None:
+        core_logger.debug(
+            "[INCREMENTAL] Pool {} | Need reserves at {} | Last cached: {}",
+            pair_address[:18], from_block - 1, cached_block,
+        )
     # Initialize accumulators for epoch-wide trade data
     epoch_total_trade_data = TradeData()
 
-    # Fetch all events for the pool in the block range from cache
+    # Fetch all events for the pool in the event range
     events_dict = await get_events_by_block(
         pair_address=pair_address,
         rpc=rpc_helper,
-        from_block=from_block,
+        from_block=effective_from,
         to_block=to_block,
     )
 
     # Normalize initial reserves
     token0AmountNormalized = token0Amount / (10 ** int(pair_per_token_metadata.token0.decimals))
     token1AmountNormalized = token1Amount / (10 ** int(pair_per_token_metadata.token1.decimals))
-
     pair_reserves_dict = dict()
 
-    # Iterate over each block in the range
-    for block_num in range(from_block, to_block + 1):
+    # Iterate over each block in the event range
+    for block_num in range(effective_from, to_block + 1):
         event_list = events_dict.get(block_num, [])
 
         # Track the net change in reserves for this block
         block_delta_token0 = 0
         block_delta_token1 = 0
-
+        # whether iterated block is in the epoch range
+        in_epoch_range = from_block <= block_num <= to_block
         # Process each event in the block
         for event_data_obj in event_list:
-            # Extract trade data from the event log
-            current_event_trade_data, _ = extract_trade_volume_log(
-                event_name=event_data_obj.eventName,
-                log=event_data_obj,
-                pair_per_token_metadata=pair_per_token_metadata,
-                token0_price_map=token0_price_map,
-                token1_price_map=token1_price_map,
-                block_details_dict=block_details_dict,
-            )
-            if current_event_trade_data:
-                # Accumulate trade data for the epoch (uses __add__ method)
-                epoch_total_trade_data += current_event_trade_data
+            if in_epoch_range:
+                # Extract trade data from the event log
+                current_event_trade_data, _ = extract_trade_volume_log(
+                    event_name=event_data_obj.eventName,
+                    log=event_data_obj,
+                    pair_per_token_metadata=pair_per_token_metadata,
+                    token0_price_map=token0_price_map,
+                    token1_price_map=token1_price_map,
+                    block_details_dict=block_details_dict,
+                )
+                if current_event_trade_data:
+                    # Accumulate trade data for the epoch (uses __add__ method)
+                    epoch_total_trade_data += current_event_trade_data
 
             # Update reserve deltas based on event type
             event_amount0 = event_data_obj.args['amount0']
             event_amount1 = event_data_obj.args['amount1']
-
             if event_data_obj.eventName == 'Burn':
                 # Burn events remove liquidity from the pool
                 block_delta_token0 -= event_amount0
@@ -165,52 +193,52 @@ async def generate_pair_reserves_dict_and_trade_data(
                 block_delta_token0 += event_amount0
                 block_delta_token1 += event_amount1
 
-            core_logger.debug(
-                "[Block {}] Pool {} | Event {} | Post-event deltas: token0_delta={}, token1_delta={}",
-                block_num, pair_address, event_data_obj.eventName, block_delta_token0, block_delta_token1
-            )
+            if cached_block is not None and in_epoch_range:
+                core_logger.debug(
+                    "[INCREMENTAL] Block {} | Events: {} | Delta t0={}, t1={} | Cumul t0={}, t1={}",
+                    block_num, len(event_list), block_delta_token0, block_delta_token1, token0Amount + block_delta_token0, token1Amount + block_delta_token1,
+                )
 
         token0Amount += block_delta_token0
         token1Amount += block_delta_token1
-
         # Normalize reserves for this block
         token0AmountNormalized = token0Amount / (10 ** int(pair_per_token_metadata.token0.decimals))
         token1AmountNormalized = token1Amount / (10 ** int(pair_per_token_metadata.token1.decimals))
-
         # Get block details (e.g., timestamp)
         current_block_details = block_details_dict.get(block_num, {})
 
-        # Store reserves and price data for this block
-        pair_reserves_dict[block_num] = PairBlockDetail(
-            token0ReservesNormalized=token0AmountNormalized,
-            token1ReservesNormalized=token1AmountNormalized,
-            token0Reserves=token0Amount,
-            token1Reserves=token1Amount,
-            token0ReservesUSD=token0AmountNormalized * token0_price_map.get(block_num, 0),
-            token1ReservesUSD=token1AmountNormalized * token1_price_map.get(block_num, 0),
-            token0Price=token0_price_map.get(block_num, 0),
-            token1Price=token1_price_map.get(block_num, 0),
-            token0PriceInToken1=token0_price_raw.get(block_num, 0),
-            token1PriceInToken0=token1_price_raw.get(block_num, 0),
-            timestamp=current_block_details.get('timestamp', 0),
+        if in_epoch_range:
+            # Store reserves and price data for this block (epoch blocks only)
+            pair_reserves_dict[block_num] = PairBlockDetail(
+                token0ReservesNormalized=token0AmountNormalized,
+                token1ReservesNormalized=token1AmountNormalized,
+                token0Reserves=token0Amount,
+                token1Reserves=token1Amount,
+                token0ReservesUSD=token0AmountNormalized * token0_price_map.get(block_num, 0),
+                token1ReservesUSD=token1AmountNormalized * token1_price_map.get(block_num, 0),
+                token0Price=token0_price_map.get(block_num, 0),
+                token1Price=token1_price_map.get(block_num, 0),
+                token0PriceInToken1=token0_price_raw.get(block_num, 0),
+                token1PriceInToken0=token1_price_raw.get(block_num, 0),
+                timestamp=current_block_details.get('timestamp', 0),
+            )
+
+    if reserves_cache and reserves_cache.enabled and to_block in pair_reserves_dict:
+        end_data = pair_reserves_dict[to_block]
+        reserves_cache.set(pair_address, to_block, end_data.token0Reserves, end_data.token1Reserves)
+        core_logger.info(
+            "[INCREMENTAL] Pool {} | CACHE_STORE | Block {} | t0={}, t1={}",
+            pair_address[:18], to_block, end_data.token0Reserves, end_data.token1Reserves,
         )
 
     core_logger.info(
         "📋 [Epoch {}-{}] Pool {} | Pair reserves dict: {}",
-        from_block,
-        to_block,
-        pair_address,
-        pair_reserves_dict
+        from_block, to_block, pair_address, pair_reserves_dict
     )
-
     core_logger.info(
         "📈 [Epoch {}-{}] Pool {} | Epoch total trade data: {}",
-        from_block,
-        to_block,
-        pair_address,
-        epoch_total_trade_data
+        from_block, to_block, pair_address, epoch_total_trade_data
     )
-
     return pair_reserves_dict, epoch_total_trade_data
 
 
@@ -313,6 +341,7 @@ async def base_snapshot_from_block_range(
     anchor_rpc_helper: RpcHelper,
     protocol_state_contract,
     block_details_dict: dict = dict(),
+    reserves_cache: Optional[ReservesCache] = None,
 ) -> Optional[UniswapBaseSnapshot]:
     """
     Generate a comprehensive base snapshot for a Uniswap V3 pool over a block range.
@@ -345,6 +374,13 @@ async def base_snapshot_from_block_range(
         pair_address,
         time.time()
     )
+    if from_block == to_block:
+        core_logger.warning(
+            "🔍 [Epoch {}-{}] Pool {} | From block and to block are the same",
+            from_block,
+            to_block,
+            pair_address
+        )
 
     try:
         # Normalize address format to checksum
@@ -452,6 +488,7 @@ async def base_snapshot_from_block_range(
             token0_price_raw=token0_price_raw,
             token1_price_raw=token1_price_raw,
             block_details_dict=block_details_dict,
+            reserves_cache=reserves_cache,
         )
 
         core_logger.debug(
