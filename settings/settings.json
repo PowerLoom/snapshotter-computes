@@ -19,7 +19,7 @@
     "pair_contract": "computes/static/abis/UniswapV3Pool.json",
     "uniswap_v3_helper": "computes/static/abis/UniV3Helper.json"
   },
-  "bds_api_url": "https://bds-api.powerloom.io",
+  "bds_api_url": "https://bds-curated-pools.powerloom.io",
   "lite_reserves_cache": {
     "enabled": true,
     "memory_max_entries_per_pool": 20,
