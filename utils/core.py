@@ -365,6 +365,7 @@ async def base_snapshot_from_block_range(
     anchor_rpc_helper: RpcHelper,
     protocol_state_contract,
     block_details_dict: dict = dict(),
+    redis_conn=None,
     reserves_cache: Optional[ReservesCache] = None,
     rpc_usage_tracker: Optional['RpcUsageTracker'] = None,
     epoch_id: Optional[int] = None,
@@ -416,6 +417,7 @@ async def base_snapshot_from_block_range(
             block_details_dict = await get_block_details_in_block_range(
                 from_block,
                 to_block,
+                redis_conn=redis_conn,
                 rpc_helper=rpc_helper,
             )
             core_logger.debug(
@@ -747,6 +749,7 @@ async def get_pair_trade_volume(
     anchor_rpc_helper: RpcHelper,
     protocol_state_contract,
     block_details_dict: dict = dict(),
+    redis_conn=None,
 ):
     """
     Fetch and calculate trade volume for a given Uniswap V3 pool contract address over a block range.
@@ -767,6 +770,7 @@ async def get_pair_trade_volume(
             block_details_dict = await get_block_details_in_block_range(
                 from_block,
                 to_block,
+                redis_conn=redis_conn,
                 rpc_helper=rpc_helper,
             )
         except Exception as err:
