@@ -21,6 +21,7 @@ from computes.utils.rpc_usage import RpcUsageTracker
 from tenacity import retry, stop_after_attempt, wait_random_exponential
 
 from rpc_helper.rpc import RpcHelper
+from snapshotter.utils.snapshot_utils import get_block_details_in_block_range
 from computes.utils.core import base_snapshot_from_block_range
 from computes.utils.models.message_models import UniswapBaseSnapshot
 from computes.utils.slot_selection import SlotSelectionManager
@@ -86,6 +87,7 @@ async def prepare_epoch(
     anchor_rpc_helper: RpcHelper,
     protocol_state_contract,
     preloader_results: dict,
+    redis_conn=None,
 ) -> EpochContext:
     """
     Gather all epoch-level data needed for computation. Called once per epoch
@@ -100,6 +102,8 @@ async def prepare_epoch(
         anchor_rpc_helper: RPC helper for anchor/protocol chain.
         protocol_state_contract: Web3 contract instance for ProtocolState.
         preloader_results: Pre-computed data (block details, etc.).
+        redis_conn: Optional Redis connection for fetching block details from block_cache
+            (written by block fetcher) when preloader_results lacks block_details.
 
     Returns:
         EpochContext with all epoch-level data populated.
@@ -112,14 +116,30 @@ async def prepare_epoch(
     bds_api_url = computes_settings.bds_api_url
     block_details_dict = preloader_results.get('block_details', None)
 
+    # Fallback: fetch block details from Redis block_cache (written by block fetcher) when preloader didn't provide them
+    if block_details_dict is None and redis_conn is not None:
+        try:
+            block_details_dict = await get_block_details_in_block_range(
+                from_block=min_chain_height,
+                to_block=max_chain_height,
+                redis_conn=redis_conn,
+                rpc_helper=rpc_helper,
+            )
+        except Exception as e:
+            epoch_context_logger.debug(
+                f"Block details not in Redis cache for block {max_chain_height}: {e}"
+            )
+
     # Get total node count from contract (cached 30s)
     total_slots = await SlotSelectionManager.get_total_slots(anchor_rpc_helper, protocol_state_contract)
 
-    # Get epoch end block hash from preloader results
+    # Get epoch end block hash from preloader results or Redis-fetched block_details
     block_hash = None
     if block_details_dict and max_chain_height in block_details_dict:
         epoch_end_block = block_details_dict.get(max_chain_height, {})
         block_hash = epoch_end_block.get('hash', None)
+        if block_hash is not None and hasattr(block_hash, 'hex'):
+            block_hash = block_hash.hex()
 
     if not block_hash:
         epoch_context_logger.warning(
