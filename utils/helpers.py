@@ -523,7 +523,7 @@ async def get_token_price_in_block_range(
     """
     response = await rpc_helper.batch_eth_call_on_block_range(
         abi_dict=get_contract_abi_dict(
-            abi=pair_contract_abi,
+            abi=constants.pair_contract_abi,
         ),
         contract_address=pair_metadata.address,
         from_block=from_block,
