@@ -18,11 +18,9 @@ from computes.utils.models.data_models import UniswapEvent
 
 from snapshotter.settings.config import settings
 from computes.settings.config import settings as worker_settings
-from computes.utils.constants import current_node
-from computes.utils.constants import factory_contract_obj
-from computes.utils.constants import pair_contract_abi
 from computes.utils.constants import ZER0_ADDRESS
 from computes.utils import constants
+from computes.utils.contracts_factory import ComputesContext
 from computes.utils.models.data_models import TickData, Slot0Data
 from computes.preloaders.eth_price.preloader import eth_price_preloader
 from computes.utils.models.message_models import UniswapPoolMetadata
@@ -225,6 +223,7 @@ async def calculate_reserves(
     at_block: int,
     pair_per_token_metadata: Optional[UniswapPoolMetadata],
     rpc_helper: RpcHelper,
+    compute_ctx: ComputesContext,
 ) -> Tuple[int, int]:
     """
     Calculate reserves for a given Uniswap V3 pool at a specific block.
@@ -253,6 +252,7 @@ async def calculate_reserves(
         pair_address=pair_address,
         at_block=at_block,
         pair_per_token_metadata=pair_per_token_metadata,
+        compute_ctx=compute_ctx,
     )
 
     if ticks_list is None:
@@ -400,6 +400,7 @@ async def get_tick_info(
     pair_address: str,
     at_block: int,
     pair_per_token_metadata: UniswapPoolMetadata,
+    compute_ctx: ComputesContext,
 ) -> Optional[List[TickData]]:
     """
     Fetch tick data for a Uniswap V3 pool at a specific block.
@@ -447,8 +448,8 @@ async def get_tick_info(
         try:
             tickDataResponse = await rpc_helper.web3_call(
                 tasks=tick_tasks,
-                contract_addr=constants.helper_contract.address,
-                abi=constants.helper_contract.abi,
+                contract_addr=compute_ctx.helper_contract.address,
+                abi=compute_ctx.helper_contract.abi,
                 tasks_block_override=[at_block for _ in range(len(tick_tasks))],
             )
         except Exception as e:
@@ -566,6 +567,7 @@ async def get_token_price_in_usd_in_block_range(
     anchor_rpc_helper: RpcHelper,
     protocol_state_contract,
     rpc_helper: RpcHelper,
+    compute_ctx: ComputesContext,
 ):
     """
     Fetch the price of token0 and token1 in USD for a given Uniswap V3 pool over a specified block range.
@@ -642,6 +644,7 @@ async def get_token_price_in_usd_in_block_range(
         best_pool_token_address = await identify_best_pool_to_calculate_price(
             pair_metadata=pair_metadata,
             rpc_helper=rpc_helper,
+            compute_ctx=compute_ctx,
         )
         # Generate pool metadata for the best reference pool.
         best_pool_metadata = await get_uniswap_v3_pool_metadata(
@@ -661,6 +664,7 @@ async def get_token_price_in_usd_in_block_range(
             anchor_rpc_helper=anchor_rpc_helper,
             protocol_state_contract=protocol_state_contract,
             rpc_helper=rpc_helper,
+            compute_ctx=compute_ctx,
         )
 
         # Determine which token in the best pool matches token0 or token1 of the original pair.
@@ -698,6 +702,7 @@ async def identify_best_liquidity_pool(
     token0: str,
     token1: str,
     rpc_helper: RpcHelper,
+    compute_ctx: ComputesContext,
 ):
     """
     Get the best Uniswap V3 pair address for two tokens based on liquidity across different fee tiers.
@@ -718,19 +723,19 @@ async def identify_best_liquidity_pool(
     # Prepare tasks to get the pool address for each fee tier.
     tasks = [
         get_pair(
-            factory_contract_obj=factory_contract_obj, token0=token0, token1=token1,
+            factory_contract_obj=compute_ctx.factory_contract_obj, token0=token0, token1=token1,
             fee=int(10000), rpc_helper=rpc_helper,
         ),
         get_pair(
-            factory_contract_obj=factory_contract_obj, token0=token0, token1=token1,
+            factory_contract_obj=compute_ctx.factory_contract_obj, token0=token0, token1=token1,
             fee=int(3000), rpc_helper=rpc_helper,
         ),
         get_pair(
-            factory_contract_obj=factory_contract_obj, token0=token0, token1=token1,
+            factory_contract_obj=compute_ctx.factory_contract_obj, token0=token0, token1=token1,
             fee=int(500), rpc_helper=rpc_helper,
         ),
         get_pair(
-            factory_contract_obj=factory_contract_obj, token0=token0, token1=token1,
+            factory_contract_obj=compute_ctx.factory_contract_obj, token0=token0, token1=token1,
             fee=int(100), rpc_helper=rpc_helper,
         ),
     ]
@@ -741,10 +746,11 @@ async def identify_best_liquidity_pool(
 
     if len(pair_address_list) > 0:
         # For each valid pool, create a contract object.
+        current_node = rpc_helper.get_current_node()
         pair_contracts = [
             current_node['web3_client'].eth.contract(
                 address=Web3.to_checksum_address(pair),
-                abi=pair_contract_abi,
+                abi=compute_ctx.pair_contract_abi,
             ) for pair in pair_address_list
         ]
 
@@ -774,6 +780,7 @@ async def identify_best_liquidity_pool(
 async def identify_best_pool_to_calculate_price(
     pair_metadata: UniswapPoolMetadata,
     rpc_helper: RpcHelper,
+    compute_ctx: ComputesContext,
 ):
     """
     Identify the best Uniswap V3 pool to use as a price reference for a given pair.
@@ -802,7 +809,9 @@ async def identify_best_pool_to_calculate_price(
     tasks = [
         asyncio.create_task(
             identify_best_liquidity_pool(
-                token0=token_option[0], token1=token_option[1], rpc_helper=rpc_helper)
+                token0=token_option[0], token1=token_option[1], rpc_helper=rpc_helper,
+                compute_ctx=compute_ctx,
+            )
         ) for token_option in all_token_options
     ]
     # Fetch all results.

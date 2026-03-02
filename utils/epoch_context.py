@@ -11,17 +11,16 @@ Functions:
     compute_pool_snapshot: Compute base snapshot for a single pool
 """
 
+import asyncio
 import time
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
-import requests
-from computes.utils.reserves_cache import ReservesCache
-from computes.utils.rpc_usage import RpcUsageTracker
+import httpx
 from tenacity import retry, stop_after_attempt, wait_random_exponential
 
 from rpc_helper.rpc import RpcHelper
-from snapshotter.utils.snapshot_utils import get_block_details_in_block_range
+from computes.utils.contracts_factory import ComputesContext
 from computes.utils.core import base_snapshot_from_block_range
 from computes.utils.models.message_models import UniswapBaseSnapshot
 from computes.utils.slot_selection import SlotSelectionManager
@@ -63,7 +62,10 @@ async def get_epoch_active_pools(
         Exception: If the BDS API response status is not 200 or a network error occurs.
     """
     try:
-        response = requests.get(f"{bds_api_url}/get_previous_epoch_info/{epoch_block_height}")
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{bds_api_url}/get_previous_epoch_info/{epoch_block_height}"
+            )
 
         if response.status_code != 200:
             epoch_context_logger.error(
@@ -71,8 +73,9 @@ async def get_epoch_active_pools(
             )
             raise Exception(f"Failed to fetch active pools from BDS. Status code: {response.status_code}")
 
-        epoch_context_logger.info(f"📋 BDS response for active pools: {response.json()}")
-        active_pools = list(response.json()['pools'].keys())
+        data = response.json()
+        epoch_context_logger.info(f"📋 BDS response for active pools: {data}")
+        active_pools = list(data['pools'].keys())
 
     except Exception as e:
         epoch_context_logger.error(f"❌ Exception occurred while fetching active pools from BDS: {e}")
@@ -102,8 +105,6 @@ async def prepare_epoch(
         anchor_rpc_helper: RPC helper for anchor/protocol chain.
         protocol_state_contract: Web3 contract instance for ProtocolState.
         preloader_results: Pre-computed data (block details, etc.).
-        redis_conn: Optional Redis connection for fetching block details from block_cache
-            (written by block fetcher) when preloader_results lacks block_details.
 
     Returns:
         EpochContext with all epoch-level data populated.
@@ -116,24 +117,22 @@ async def prepare_epoch(
     bds_api_url = computes_settings.bds_api_url
     block_details_dict = preloader_results.get('block_details', None)
 
-    # Fallback: fetch block details from Redis block_cache (written by block fetcher) when preloader didn't provide them
-    if block_details_dict is None and redis_conn is not None:
-        try:
-            block_details_dict = await get_block_details_in_block_range(
-                from_block=min_chain_height,
-                to_block=max_chain_height,
-                redis_conn=redis_conn,
-                rpc_helper=rpc_helper,
-            )
-        except Exception as e:
-            epoch_context_logger.debug(
-                f"Block details not in Redis cache for block {max_chain_height}: {e}"
-            )
+    # Run total_slots and active_pools in parallel (both independent)
+    if msg_obj.epochId == 0:
+        latest_block = await rpc_helper.get_current_node()['web3_client'].eth.get_block('latest')
+        query_epoch = latest_block['number'] - 1
+        epoch_context_logger.info(f"🎲 Genesis epoch: querying BDS with epoch {query_epoch} (latest - 1)")
+        total_slots, active_pools = await asyncio.gather(
+            SlotSelectionManager.get_total_slots(anchor_rpc_helper, protocol_state_contract),
+            get_epoch_active_pools(query_epoch, bds_api_url),
+        )
+    else:
+        total_slots, active_pools = await asyncio.gather(
+            SlotSelectionManager.get_total_slots(anchor_rpc_helper, protocol_state_contract),
+            get_epoch_active_pools(min_chain_height, bds_api_url),
+        )
 
-    # Get total node count from contract (cached 30s)
-    total_slots = await SlotSelectionManager.get_total_slots(anchor_rpc_helper, protocol_state_contract)
-
-    # Get epoch end block hash from preloader results or Redis-fetched block_details
+    # Get block hash from preloader results or RPC fallback
     block_hash = None
     if block_details_dict and max_chain_height in block_details_dict:
         epoch_end_block = block_details_dict.get(max_chain_height, {})
@@ -155,20 +154,6 @@ async def prepare_epoch(
 
     if not block_hash:
         raise Exception(f"Could not obtain block hash for epoch {msg_obj.epochId}")
-
-    # Fetch active pools from BDS API
-    # For genesis epoch (epoch 0), query with latest block - 1 since epoch 0 has no historical data
-    if msg_obj.epochId == 0:
-        try:
-            latest_block = await rpc_helper.get_current_node()['web3_client'].eth.get_block('latest')
-            query_epoch = latest_block['number'] - 1
-            epoch_context_logger.info(f"🎲 Genesis epoch: querying BDS with epoch {query_epoch} (latest - 1)")
-            active_pools = await get_epoch_active_pools(query_epoch, bds_api_url)
-        except Exception as e:
-            epoch_context_logger.error(f"❌ Failed to get latest block for genesis epoch: {e}")
-            raise
-    else:
-        active_pools = await get_epoch_active_pools(min_chain_height, bds_api_url)
 
     if len(active_pools) == 0:
         raise Exception(f"❌ No active pools found for epoch {msg_obj.epochId} at block {min_chain_height}")
@@ -196,10 +181,7 @@ async def compute_pool_snapshot(
     protocol_state_contract,
     block_details_dict: dict,
     bds_api_url: str,
-    redis_conn=None,
-    reserves_cache: Optional[ReservesCache] = None,
-    rpc_usage_tracker: Optional[RpcUsageTracker] = None,
-    epoch_id: Optional[int] = None,
+    compute_ctx: ComputesContext,
 ) -> Optional[Tuple[str, UniswapBaseSnapshot]]:
     """
     Compute base snapshot for a single pool. No slot awareness.
@@ -225,9 +207,10 @@ async def compute_pool_snapshot(
     epoch_context_logger.info(
         f"📡 Fetching previous snapshots data for pool {pool_address} at block {min_chain_height}"
     )
-    previous_snapshot_response = requests.get(
-        f"{bds_api_url}/previous_snapshots_data/{pool_address}/{min_chain_height}"
-    )
+    async with httpx.AsyncClient() as client:
+        previous_snapshot_response = await client.get(
+            f"{bds_api_url}/previous_snapshots_data/{pool_address}/{min_chain_height}"
+        )
 
     if previous_snapshot_response.status_code != 200:
         epoch_context_logger.error(
@@ -254,10 +237,7 @@ async def compute_pool_snapshot(
         anchor_rpc_helper=anchor_rpc_helper,
         protocol_state_contract=protocol_state_contract,
         block_details_dict=block_details_dict,
-        redis_conn=redis_conn,
-        reserves_cache=reserves_cache,
-        rpc_usage_tracker=rpc_usage_tracker,
-        epoch_id=epoch_id,
+        compute_ctx=compute_ctx,
     )
 
     if not base_snapshot_data:
