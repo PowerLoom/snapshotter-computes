@@ -509,13 +509,17 @@ async def base_snapshot_from_block_range(
         return base_snapshot
 
     except Exception as e:
-        # Log any exception that occurs during snapshot generation
+        err_str = str(e)
+        # Revert/RPC errors: re-raise so epoch_context can catch, cache, and skip (no retry)
+        if 'execution reverted' in err_str.lower() or 'rpc_jsonrpc_call_error' in err_str.lower():
+            raise
+        # Other errors: log full traceback and return None
         core_logger.opt(exception=True).error(
             "[Epoch {}-{}] Pool {} | Failed to generate base snapshot: {}",
             from_block,
             to_block,
             pair_address,
-            str(e)
+            err_str[:500],
         )
         return None
 
