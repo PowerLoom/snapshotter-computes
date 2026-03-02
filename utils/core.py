@@ -317,8 +317,8 @@ async def base_snapshot_from_block_range(
     rpc_helper: RpcHelper,
     anchor_rpc_helper: RpcHelper,
     protocol_state_contract,
-    block_details_dict: dict = dict(),
     compute_ctx: ComputesContext,
+    block_details_dict: dict = dict(),
 ) -> Optional[UniswapBaseSnapshot]:
     """
     Generate a comprehensive base snapshot for a Uniswap V3 pool over a block range.
