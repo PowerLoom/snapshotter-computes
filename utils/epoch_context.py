@@ -30,6 +30,45 @@ from snapshotter.utils.models.message_models import SnapshotProcessMessage
 
 epoch_context_logger = logger.bind(module='EpochContext')
 
+# In-memory cache for pools that revert on RPC (spam/fake). Avoids retrying every epoch.
+_revert_pool_memory: set = set()
+POOL_REVERT_REDIS_TTL = 86400  # 1 day
+
+
+def _pool_revert_redis_key(pool_address: str) -> str:
+    return f"computes:pool_revert:{pool_address.lower()}"
+
+
+async def _is_pool_cached_as_reverting(pool_address: str, redis_conn) -> bool:
+    """Check in-memory first, then Redis. Returns True if pool should be skipped."""
+    pool_lower = pool_address.lower()
+    if pool_lower in _revert_pool_memory:
+        return True
+    if redis_conn:
+        try:
+            val = await redis_conn.get(_pool_revert_redis_key(pool_address))
+            if val is not None:
+                _revert_pool_memory.add(pool_lower)
+                return True
+        except Exception:
+            pass
+    return False
+
+
+async def _cache_pool_as_reverting(pool_address: str, redis_conn) -> None:
+    """Store in memory and Redis (1-day TTL)."""
+    pool_lower = pool_address.lower()
+    _revert_pool_memory.add(pool_lower)
+    if redis_conn:
+        try:
+            await redis_conn.set(
+                _pool_revert_redis_key(pool_address),
+                "1",
+                ex=POOL_REVERT_REDIS_TTL,
+            )
+        except Exception:
+            pass
+
 
 @dataclass
 class EpochContext:
@@ -204,6 +243,21 @@ async def compute_pool_snapshot(
     Returns:
         Tuple of (pool_address, UniswapBaseSnapshot) on success, None on failure.
     """
+    blocklist = getattr(computes_settings, 'pool_blocklist', None) or []
+    if blocklist and pool_address.lower() in {a.lower() for a in blocklist}:
+        epoch_context_logger.warning(
+            "⚠️ [Epoch {}-{}] Pool {} | In blocklist, skipping",
+            min_chain_height, max_chain_height, pool_address,
+        )
+        return None
+
+    if await _is_pool_cached_as_reverting(pool_address, redis_conn):
+        epoch_context_logger.debug(
+            "⏭️ [Epoch {}-{}] Pool {} | Cached as reverting, skipping",
+            min_chain_height, max_chain_height, pool_address,
+        )
+        return None
+
     # Fetch previous snapshots data from BDS
     epoch_context_logger.info(
         f"📡 Fetching previous snapshots data for pool {pool_address} at block {min_chain_height}"
@@ -229,18 +283,28 @@ async def compute_pool_snapshot(
         min_chain_height, max_chain_height, pool_address,
     )
 
-    # Compute base snapshot
-    base_snapshot_data: Optional[UniswapBaseSnapshot] = await base_snapshot_from_block_range(
-        pair_address=pool_address,
-        from_block=min_chain_height,
-        to_block=max_chain_height,
-        rpc_helper=rpc_helper,
-        anchor_rpc_helper=anchor_rpc_helper,
-        protocol_state_contract=protocol_state_contract,
-        block_details_dict=block_details_dict,
-        compute_ctx=compute_ctx,
-        redis_conn=redis_conn,
-    )
+    try:
+        base_snapshot_data: Optional[UniswapBaseSnapshot] = await base_snapshot_from_block_range(
+            pair_address=pool_address,
+            from_block=min_chain_height,
+            to_block=max_chain_height,
+            rpc_helper=rpc_helper,
+            anchor_rpc_helper=anchor_rpc_helper,
+            protocol_state_contract=protocol_state_contract,
+            block_details_dict=block_details_dict,
+            compute_ctx=compute_ctx,
+            redis_conn=redis_conn,
+        )
+    except Exception as e:
+        err_str = str(e)
+        if 'execution reverted' in err_str or 'RPC_JSONRPC_CALL_ERROR' in err_str:
+            await _cache_pool_as_reverting(pool_address, redis_conn)
+            epoch_context_logger.warning(
+                "⚠️ [Epoch {}-{}] Pool {} | Contract reverts on RPC call (likely spam/fake pool), cached, skipping",
+                min_chain_height, max_chain_height, pool_address,
+            )
+            return None
+        raise
 
     if not base_snapshot_data:
         epoch_context_logger.error(

@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import List, Optional
 
 from pydantic import BaseModel
 
@@ -38,3 +38,4 @@ class Settings(BaseModel):
     contract_addresses: ContractAddresses
     bds_api_url: str
     lite_reserves_cache: Optional[LiteReservesCacheConfig] = None
+    pool_blocklist: Optional[List[str]] = None  # Addresses to skip (spam/fake pools)

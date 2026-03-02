@@ -20,6 +20,7 @@
     "uniswap_v3_helper": "computes/static/abis/UniV3Helper.json"
   },
   "bds_api_url": "https://bds-curated-pools.powerloom.io",
+  "pool_blocklist": [],
   "lite_reserves_cache": {
     "enabled": true,
     "memory_max_entries_per_pool": 20,
