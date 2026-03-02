@@ -319,6 +319,7 @@ async def base_snapshot_from_block_range(
     protocol_state_contract,
     compute_ctx: ComputesContext,
     block_details_dict: dict = dict(),
+    redis_conn=None,
 ) -> Optional[UniswapBaseSnapshot]:
     """
     Generate a comprehensive base snapshot for a Uniswap V3 pool over a block range.
@@ -368,6 +369,7 @@ async def base_snapshot_from_block_range(
                 from_block,
                 to_block,
                 rpc_helper=rpc_helper,
+                redis_conn=redis_conn,
             )
             core_logger.debug(
                 "[Epoch {}-{}] Pool {} | Block details fetched successfully",
@@ -698,6 +700,7 @@ async def get_pair_trade_volume(
     protocol_state_contract,
     block_details_dict: dict = dict(),
     compute_ctx: ComputesContext = None,
+    redis_conn=None,
 ):
     """
     Fetch and calculate trade volume for a given Uniswap V3 pool contract address over a block range.
@@ -719,6 +722,7 @@ async def get_pair_trade_volume(
                 from_block,
                 to_block,
                 rpc_helper=rpc_helper,
+                redis_conn=redis_conn,
             )
         except Exception as err:
             core_logger.opt(exception=True).error(

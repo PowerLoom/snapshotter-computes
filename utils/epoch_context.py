@@ -182,6 +182,7 @@ async def compute_pool_snapshot(
     block_details_dict: dict,
     bds_api_url: str,
     compute_ctx: ComputesContext,
+    redis_conn=None,
 ) -> Optional[Tuple[str, UniswapBaseSnapshot]]:
     """
     Compute base snapshot for a single pool. No slot awareness.
@@ -238,6 +239,7 @@ async def compute_pool_snapshot(
         protocol_state_contract=protocol_state_contract,
         block_details_dict=block_details_dict,
         compute_ctx=compute_ctx,
+        redis_conn=redis_conn,
     )
 
     if not base_snapshot_data:
