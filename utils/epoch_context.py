@@ -43,7 +43,7 @@ class EpochContext:
     bds_api_url: str
 
 
-@retry(stop=stop_after_attempt(3), wait=wait_random_exponential(multiplier=5, max=60))
+@retry(stop=stop_after_attempt(3), wait=wait_random_exponential(multiplier=1, max=15))
 async def get_epoch_active_pools(
     epoch_block_height: int,
     bds_api_url: str,
