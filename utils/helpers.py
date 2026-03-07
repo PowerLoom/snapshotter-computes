@@ -444,6 +444,9 @@ async def get_tick_info(
 
             tick_tasks.append(('getTicks', [pair_address, from_tick, to_tick]))
 
+        max_segment_retries = 3
+        segment_results: List[Any] = [None] * num_segments
+
         try:
             tickDataResponse = await rpc_helper.web3_call(
                 tasks=tick_tasks,
@@ -465,20 +468,65 @@ async def get_tick_info(
             )
             return None
 
-        ticks_list: List[TickData] = []
-        temp_ticks_list_of_lists = []
-        # Convert each segment's bytes to TickData objects
-        for ticks_bytes in tickDataResponse:
-            if isinstance(ticks_bytes, Exception):
-                helper_logger.warning(f"A batched RPC call for tick data failed: {ticks_bytes}")
-                continue
-            temp_ticks_list_of_lists.append(transform_tick_bytes_to_list(ticks_bytes))
+        failed_indices = []
+        for i, result in enumerate(tickDataResponse):
+            if isinstance(result, Exception):
+                failed_indices.append(i)
+            else:
+                segment_results[i] = result
 
-        if temp_ticks_list_of_lists:
-            # Flatten the list of lists, skipping empty lists
-            non_empty_tick_lists = [lst for lst in temp_ticks_list_of_lists if lst]
-            if non_empty_tick_lists:
-                ticks_list = reduce(lambda x, y: x + y, non_empty_tick_lists)
+        for retry_round in range(max_segment_retries):
+            if not failed_indices:
+                break
+            helper_logger.warning(
+                'Pool {} @ block {}: retrying {} failed tick segments (attempt {}/{}): segments {}',
+                pair_address, at_block, len(failed_indices),
+                retry_round + 1, max_segment_retries, failed_indices,
+            )
+            await asyncio.sleep(0.5 * (retry_round + 1))
+            retry_tasks = [tick_tasks[i] for i in failed_indices]
+            try:
+                retry_response = await rpc_helper.web3_call(
+                    tasks=retry_tasks,
+                    contract_addr=constants.helper_contract.address,
+                    abi=constants.helper_contract.abi,
+                    tasks_block_override=[at_block] * len(retry_tasks),
+                )
+            except Exception as e:
+                helper_logger.warning(
+                    'Pool {} @ block {}: segment retry batch failed: {}',
+                    pair_address, at_block, e,
+                )
+                continue
+
+            if retry_response is None:
+                continue
+
+            still_failed = []
+            for j, orig_idx in enumerate(failed_indices):
+                if isinstance(retry_response[j], Exception):
+                    still_failed.append(orig_idx)
+                else:
+                    segment_results[orig_idx] = retry_response[j]
+            failed_indices = still_failed
+
+        if failed_indices:
+            helper_logger.error(
+                'Pool {} @ block {}: {} tick segments failed after {} retries. '
+                'Aborting to prevent non-deterministic reserves. Failed segments: {}',
+                pair_address, at_block, len(failed_indices),
+                max_segment_retries, failed_indices,
+            )
+            return None
+
+        ticks_list: List[TickData] = []
+        temp_ticks_list_of_lists = [
+            transform_tick_bytes_to_list(seg) for seg in segment_results
+        ]
+
+        non_empty_tick_lists = [lst for lst in temp_ticks_list_of_lists if lst]
+        if non_empty_tick_lists:
+            ticks_list = reduce(lambda x, y: x + y, non_empty_tick_lists)
 
         helper_logger.info(
             'Fetched tick data ({}) for pool {} @ block {}',
