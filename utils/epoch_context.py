@@ -23,6 +23,7 @@ from rpc_helper.rpc import RpcHelper
 from computes.utils.contracts_factory import ComputesContext
 from computes.utils.core import base_snapshot_from_block_range
 from computes.utils.models.message_models import UniswapBaseSnapshot
+from computes.utils.reserves_cache import ReservesCache
 from computes.utils.slot_selection import SlotSelectionManager
 from computes.settings.config import settings as computes_settings
 from snapshotter.utils.default_logger import logger
@@ -222,6 +223,8 @@ async def compute_pool_snapshot(
     bds_api_url: str,
     compute_ctx: ComputesContext,
     redis_conn=None,
+    reserves_cache: Optional[ReservesCache] = None,
+    epoch_id: Optional[int] = None,
 ) -> Optional[Tuple[str, UniswapBaseSnapshot]]:
     """
     Compute base snapshot for a single pool. No slot awareness.
@@ -294,6 +297,8 @@ async def compute_pool_snapshot(
             block_details_dict=block_details_dict,
             compute_ctx=compute_ctx,
             redis_conn=redis_conn,
+            reserves_cache=reserves_cache,
+            epoch_id=epoch_id,
         )
     except Exception as e:
         err_str = str(e)
