@@ -1,11 +1,8 @@
+from decimal import Decimal
 from enum import Enum
-from typing import Dict
-from typing import List
-from typing import Any
+from typing import Any, Dict, List, Tuple
 
-from pydantic import BaseModel
-from pydantic import Field
-from typing import Tuple
+from pydantic import BaseModel, Field, field_serializer
 
 
 class EpochBaseSnapshot(BaseModel):
@@ -23,60 +20,53 @@ class SnapshotBase(BaseModel):
 
 class UniswapBaseSnapshot(BaseModel):
     """
-    Base Snapshot Model for Uniswap Pools/Pairs
-
-    This model captures comprehensive data about a Uniswap liquidity pool including
-    reserves, prices, and trading activity across a specific block range (epoch).
-
-    Attributes:
-        address (str): The contract address of the Uniswap pair.
-        epoch (EpochBaseSnapshot): The block range this snapshot covers.
-        token0Reserves (Dict[int, float]): Mapping of block numbers to token0 reserves.
-        token1Reserves (Dict[int, float]): Mapping of block numbers to token1 reserves.
-        token0ReservesUSD (Dict[int, float]): USD value of token0 reserves by block.
-        token1ReservesUSD (Dict[int, float]): USD value of token1 reserves by block.
-        token0Prices (Dict[int, float]): Prices of token0 in terms of token1 by block.
-        token1Prices (Dict[int, float]): Prices of token1 in terms of token0 by block.
-        token0PricesUSD (Dict[int, float]): USD prices of token0 by block.
-        token1PricesUSD (Dict[int, float]): USD prices of token1 by block.
-        totalTrade (float): Total trading volume in USD for this epoch.
-        totalFee (float): Total fees collected in USD for this epoch.
-        token0TradeVolume (float): Trading volume for token0 in its native units.
-        token1TradeVolume (float): Trading volume for token1 in its native units.
-        token0TradeVolumeUSD (float): USD value of token0 trading volume.
-        token1TradeVolumeUSD (float): USD value of token1 trading volume.
-        previousSnapshots (List[Tuple[int, str]]): References to previous snapshots
-            as tuples of (epoch_number, snapshot_cid).
+    Base Snapshot Model for Uniswap Pools/Pairs.
+    Uses Decimal for deterministic serialization and CID consistency.
     """
-    # Generic data
-    address: str                    # Contract address
-    epoch: EpochBaseSnapshot        # Range of blocks for this snapshot
-    timestamps: Dict[int, int]      # Timestamp of the snapshot
+    address: str
+    epoch: EpochBaseSnapshot
+    timestamps: Dict[int, int]
     token0: str
     token1: str
-    # Reserve Data
-    token0Reserves: Dict[int, float]     # Block number to corresponding total reserves for token0
-    token1Reserves: Dict[int, float]     # Block number to corresponding total reserves for token1
-    token0ReservesUSD: Dict[int, float]  # USD value of token0 reserves
-    token1ReservesUSD: Dict[int, float]  # USD value of token1 reserves
-    token0Prices: Dict[int, float]       # Prices of token0 (in terms of token1)
-    token1Prices: Dict[int, float]       # Prices of token1 (in terms of token0)
-    token0PricesUSD: Dict[int, float]    # Prices of token0 (in USD)
-    token1PricesUSD: Dict[int, float]    # Prices of token1 (in USD)
-    # Trade Volume Data
-    totalTrade: float  # Total trade volume in USD
-    totalTradeMintBurn: float = 0
-    totalFee: float    # Total fees collected in USD
-    token0MintBurnVolume: float = 0
-    token1MintBurnVolume: float = 0
-    token0MintBurnVolumeUSD: float = 0
-    token1MintBurnVolumeUSD: float = 0
-    token0TradeVolume: float      # Trade volume for token0 in its native decimals
-    token1TradeVolume: float      # Trade volume for token1 in its native decimals
-    token0TradeVolumeUSD: float   # Trade volume for token0 in USD
-    token1TradeVolumeUSD: float   # Trade volume for token1 in USD
-    # Previous Snapshot Links
-    previousSnapshots: List[Tuple[int, str]] = []  # Will be filled by snapshot worker
+    token0Reserves: Dict[int, Decimal]
+    token1Reserves: Dict[int, Decimal]
+    token0ReservesUSD: Dict[int, Decimal]
+    token1ReservesUSD: Dict[int, Decimal]
+    token0Prices: Dict[int, Decimal]
+    token1Prices: Dict[int, Decimal]
+    token0PricesUSD: Dict[int, Decimal]
+    token1PricesUSD: Dict[int, Decimal]
+    totalTrade: Decimal = Decimal('0')
+    totalTradeMintBurn: Decimal = Decimal('0')
+    totalFee: Decimal = Decimal('0')
+    token0MintBurnVolume: Decimal = Decimal('0')
+    token1MintBurnVolume: Decimal = Decimal('0')
+    token0MintBurnVolumeUSD: Decimal = Decimal('0')
+    token1MintBurnVolumeUSD: Decimal = Decimal('0')
+    token0TradeVolume: Decimal = Decimal('0')
+    token1TradeVolume: Decimal = Decimal('0')
+    token0TradeVolumeUSD: Decimal = Decimal('0')
+    token1TradeVolumeUSD: Decimal = Decimal('0')
+    previousSnapshots: List[Tuple[int, str]] = []
+
+    @field_serializer(
+        'token0Reserves', 'token1Reserves',
+        'token0ReservesUSD', 'token1ReservesUSD',
+        'token0Prices', 'token1Prices',
+        'token0PricesUSD', 'token1PricesUSD',
+    )
+    def serialize_decimal_dict(self, v: Dict[int, Decimal]) -> Dict[int, str]:
+        return {k: str(val) for k, val in v.items()}
+
+    @field_serializer(
+        'totalTrade', 'totalTradeMintBurn', 'totalFee',
+        'token0MintBurnVolume', 'token1MintBurnVolume',
+        'token0MintBurnVolumeUSD', 'token1MintBurnVolumeUSD',
+        'token0TradeVolume', 'token1TradeVolume',
+        'token0TradeVolumeUSD', 'token1TradeVolumeUSD',
+    )
+    def serialize_decimal(self, v: Decimal) -> str:
+        return str(v)
 
 
 class ActivePoolsSnapshot(BaseModel):
