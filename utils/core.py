@@ -1,7 +1,14 @@
 import time
+from decimal import Decimal
 from typing import Dict, Optional, Any, Tuple, List
 
 from computes.utils.models.message_models import UniswapBaseSnapshot, UniswapPoolMetadata, EpochBaseSnapshot
+from computes.utils.normalization import (
+    normalize_reserve,
+    quantize_float,
+    PRICE_DECIMALS,
+    USD_DECIMALS,
+)
 from snapshotter.utils.default_logger import logger
 from rpc_helper.rpc import RpcHelper
 from snapshotter.utils.snapshot_utils import get_block_details_in_block_range
@@ -134,8 +141,10 @@ async def generate_pair_reserves_dict_and_trade_data(
         to_block=to_block,
     )
 
-    token0AmountNormalized = token0Amount / (10 ** int(pair_per_token_metadata.token0.decimals))
-    token1AmountNormalized = token1Amount / (10 ** int(pair_per_token_metadata.token1.decimals))
+    dec0 = int(pair_per_token_metadata.token0.decimals)
+    dec1 = int(pair_per_token_metadata.token1.decimals)
+    token0AmountNormalized = normalize_reserve(token0Amount, dec0)
+    token1AmountNormalized = normalize_reserve(token1Amount, dec1)
     pair_reserves_dict = dict()
 
     for block_num in range(effective_from, to_block + 1):
@@ -170,22 +179,26 @@ async def generate_pair_reserves_dict_and_trade_data(
 
         token0Amount += block_delta_token0
         token1Amount += block_delta_token1
-        token0AmountNormalized = token0Amount / (10 ** int(pair_per_token_metadata.token0.decimals))
-        token1AmountNormalized = token1Amount / (10 ** int(pair_per_token_metadata.token1.decimals))
+        token0AmountNormalized = normalize_reserve(token0Amount, dec0)
+        token1AmountNormalized = normalize_reserve(token1Amount, dec1)
         current_block_details = block_details_dict.get(block_num, {})
 
         if in_epoch_range:
+            t0_price = quantize_float(token0_price_map.get(block_num, 0), USD_DECIMALS)
+            t1_price = quantize_float(token1_price_map.get(block_num, 0), USD_DECIMALS)
+            t0_raw = quantize_float(token0_price_raw.get(block_num, 0), PRICE_DECIMALS)
+            t1_raw = quantize_float(token1_price_raw.get(block_num, 0), PRICE_DECIMALS)
             pair_reserves_dict[block_num] = PairBlockDetail(
                 token0ReservesNormalized=token0AmountNormalized,
                 token1ReservesNormalized=token1AmountNormalized,
                 token0Reserves=token0Amount,
                 token1Reserves=token1Amount,
-                token0ReservesUSD=token0AmountNormalized * token0_price_map.get(block_num, 0),
-                token1ReservesUSD=token1AmountNormalized * token1_price_map.get(block_num, 0),
-                token0Price=token0_price_map.get(block_num, 0),
-                token1Price=token1_price_map.get(block_num, 0),
-                token0PriceInToken1=token0_price_raw.get(block_num, 0),
-                token1PriceInToken0=token1_price_raw.get(block_num, 0),
+                token0ReservesUSD=token0AmountNormalized * t0_price,
+                token1ReservesUSD=token1AmountNormalized * t1_price,
+                token0Price=t0_price,
+                token1Price=t1_price,
+                token0PriceInToken1=t0_raw,
+                token1PriceInToken0=t1_raw,
                 timestamp=current_block_details.get('timestamp', 0),
             )
 
@@ -492,8 +505,8 @@ async def base_snapshot_from_block_range(
                 from_block,
                 to_block,
                 pair_address,
-                base_snapshot.totalTrade,
-                base_snapshot.totalFee
+                float(base_snapshot.totalTrade),
+                float(base_snapshot.totalFee),
             )
         else:
             core_logger.error(
@@ -527,35 +540,21 @@ def token_native_and_usd_amount(
     token_key: str,
     token_type: str,
     current_token_price_map: Dict[int, float],
-) -> Tuple[float, float]:
+) -> Tuple[Decimal, Decimal]:
     """
     Calculate the native and USD amounts for a token from an event log.
-
-    Args:
-        log (UniswapEvent): The Uniswap event log containing transaction data.
-        pair_per_token_metadata (UniswapPoolMetadata): Metadata for the token pair.
-        token_key (str): The token key ('token0' or 'token1').
-        token_type (str): The amount type ('amount0' or 'amount1').
-        current_token_price_map (Dict[int, float]): Mapping of block numbers to token prices.
-
-    Returns:
-        Tuple[float, float]: (native_amount, usd_amount)
+    Returns Decimal for deterministic serialization.
     """
-    # Get the raw token amount from the event log
     token_amount = log.args.get(token_type, 0)
     if token_amount == 0:
-        return 0.0, 0.0
+        return Decimal('0'), Decimal('0')
 
-    # Get token metadata (decimals, etc.)
     token_metadata = getattr(pair_per_token_metadata, token_key)
-
-    # Convert from raw amount to normalized amount using token decimals
-    native_amount = token_amount / (10 ** int(token_metadata.decimals))
-
-    # Calculate USD value using the price for this block
-    token_price_usd = current_token_price_map.get(log.blockNumber, 0)
+    native_amount = normalize_reserve(token_amount, int(token_metadata.decimals))
+    token_price_usd = quantize_float(
+        current_token_price_map.get(log.blockNumber, 0), USD_DECIMALS
+    )
     usd_amount = native_amount * token_price_usd
-
     return native_amount, usd_amount
 
 
@@ -583,15 +582,12 @@ def extract_trade_volume_log(
             - TradeData object with trade volume and fee information.
             - UniswapProcessedLog model instance with processed log data.
     """
-    # Initialize token amounts and USD values
-    token0_amount = 0.0
-    token1_amount = 0.0
-    token0_amount_usd = 0.0
-    token1_amount_usd = 0.0
+    token0_amount = Decimal('0')
+    token1_amount = Decimal('0')
+    token0_amount_usd = Decimal('0')
+    token1_amount_usd = Decimal('0')
 
-    # Extract amounts based on event type
     if event_name == 'Swap':
-        # For Swap events, get absolute values of amounts
         amount0, amount0_usd = token_native_and_usd_amount(
             log=log,
             pair_per_token_metadata=pair_per_token_metadata,
@@ -606,14 +602,12 @@ def extract_trade_volume_log(
             token_type='amount1',
             current_token_price_map=token1_price_map,
         )
-
         token0_amount = abs(amount0)
         token1_amount = abs(amount1)
         token0_amount_usd = abs(amount0_usd)
         token1_amount_usd = abs(amount1_usd)
 
     elif event_name in ['Mint', 'Burn']:
-        # For Mint/Burn events, use amounts as-is (no abs)
         token0_amount, token0_amount_usd = token_native_and_usd_amount(
             log=log,
             pair_per_token_metadata=pair_per_token_metadata,
@@ -629,63 +623,53 @@ def extract_trade_volume_log(
             current_token_price_map=token1_price_map,
         )
 
-    # Calculate fee and get timestamp
-    trade_volume_usd = 0.0
-    trade_fee_usd = 0.0
-    fee_rate = int(pair_per_token_metadata.fee) / UNISWAPV3_FEE_DIV
+    fee_rate = Decimal(int(pair_per_token_metadata.fee)) / Decimal(UNISWAPV3_FEE_DIV)
     block_details = block_details_dict.get(log.blockNumber, {})
     current_timestamp = block_details.get('timestamp', None)
+    trade_volume_usd = Decimal('0')
+    trade_fee_usd = Decimal('0')
 
-    # Create trade_data object based on event type
     if event_name == 'Swap':
-        # Calculate trade volume as the higher of the two USD amounts
         if token1_amount_usd and token0_amount_usd:
             trade_volume_usd = max(token1_amount_usd, token0_amount_usd)
         else:
             trade_volume_usd = token1_amount_usd or token0_amount_usd
-
-        # Calculate trading fee (fee is taken from the token that was removed from the pool)
         trade_fee_usd = (
             token1_amount_usd * fee_rate if token1_amount_usd
             else token0_amount_usd * fee_rate
         )
-
         trade_data_obj = TradeData(
             totalTradesUSD=trade_volume_usd,
-            totalTradesMintBurnUSD=0,
+            totalTradesMintBurnUSD=Decimal('0'),
             totalFeeUSD=trade_fee_usd,
             token0TradeVolume=token0_amount,
             token1TradeVolume=token1_amount,
             token0TradeVolumeUSD=token0_amount_usd,
             token1TradeVolumeUSD=token1_amount_usd,
         )
-
-    else:  # Mint or Burn
-        # For Mint/Burn, combine both token amounts for total volume
+    else:
         trade_volume_usd = token0_amount_usd + token1_amount_usd
-
         trade_data_obj = TradeData(
-            totalTradesUSD=0,
+            totalTradesUSD=Decimal('0'),
             totalTradesMintBurnUSD=trade_volume_usd,
-            totalFeeUSD=0,
-            token0TradeVolume=0,
-            token1TradeVolume=0,
-            token0TradeVolumeUSD=0,
-            token1TradeVolumeUSD=0,
+            totalFeeUSD=Decimal('0'),
+            token0TradeVolume=Decimal('0'),
+            token1TradeVolume=Decimal('0'),
+            token0TradeVolumeUSD=Decimal('0'),
+            token1TradeVolumeUSD=Decimal('0'),
             token0MintBurnVolume=token0_amount,
             token1MintBurnVolume=token1_amount,
             token0MintBurnVolumeUSD=token0_amount_usd,
             token1MintBurnVolumeUSD=token1_amount_usd,
         )
 
-    # Create UniswapProcessedLog instance for this event
     processed_log_data = log.model_dump(by_alias=True)
     processed_log = UniswapProcessedLog(
         **processed_log_data,
-        token0_amount=token0_amount,
-        token1_amount=token1_amount,
+        token0_amount=float(token0_amount),
+        token1_amount=float(token1_amount),
         timestamp=current_timestamp,
-        trade_amount_usd=trade_volume_usd
+        trade_amount_usd=float(trade_volume_usd),
     )
 
     return trade_data_obj, processed_log

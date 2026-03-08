@@ -1,6 +1,7 @@
+from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_serializer
 
 
 class UniswapEvent(BaseModel):
@@ -31,26 +32,29 @@ class UniswapProcessedLog(UniswapEvent):
 class TradeData(BaseModel):
     """
     Represents trading data for a pair of tokens.
-
-    Attributes:
-        totalTradesUSD (float): Total value of trades in USD.
-        totalFeeUSD (float): Total fees collected in USD.
-        token0TradeVolume (float): Trading volume for token0.
-        token1TradeVolume (float): Trading volume for token1.
-        token0TradeVolumeUSD (float): Trading volume for token0 in USD.
-        token1TradeVolumeUSD (float): Trading volume for token1 in USD.
+    Uses Decimal for deterministic serialization.
     """
-    totalTradesUSD: float = 0
-    totalTradesMintBurnUSD: float = 0
-    totalFeeUSD: float = 0
-    token0MintBurnVolume: float = 0
-    token1MintBurnVolume: float = 0
-    token0MintBurnVolumeUSD: float = 0
-    token1MintBurnVolumeUSD: float = 0
-    token0TradeVolume: float = 0
-    token1TradeVolume: float = 0
-    token0TradeVolumeUSD: float = 0
-    token1TradeVolumeUSD: float = 0
+    totalTradesUSD: Decimal = Decimal('0')
+    totalTradesMintBurnUSD: Decimal = Decimal('0')
+    totalFeeUSD: Decimal = Decimal('0')
+    token0MintBurnVolume: Decimal = Decimal('0')
+    token1MintBurnVolume: Decimal = Decimal('0')
+    token0MintBurnVolumeUSD: Decimal = Decimal('0')
+    token1MintBurnVolumeUSD: Decimal = Decimal('0')
+    token0TradeVolume: Decimal = Decimal('0')
+    token1TradeVolume: Decimal = Decimal('0')
+    token0TradeVolumeUSD: Decimal = Decimal('0')
+    token1TradeVolumeUSD: Decimal = Decimal('0')
+
+    @field_serializer(
+        'totalTradesUSD', 'totalTradesMintBurnUSD', 'totalFeeUSD',
+        'token0MintBurnVolume', 'token1MintBurnVolume',
+        'token0MintBurnVolumeUSD', 'token1MintBurnVolumeUSD',
+        'token0TradeVolume', 'token1TradeVolume',
+        'token0TradeVolumeUSD', 'token1TradeVolumeUSD',
+    )
+    def serialize_decimal(self, v: Decimal) -> str:
+        return str(v)
 
     def __add__(self, other: "TradeData") -> "TradeData":
         """
@@ -167,17 +171,26 @@ class Slot0Data(BaseModel):
 class PairBlockDetail(BaseModel):
     """
     Represents the reserve and price details for a token pair at a specific block.
-    This corresponds to the structure of values in the pair_reserves_dict.
+    Uses Decimal for deterministic serialization.
     """
-    token0ReservesNormalized: float
-    token1ReservesNormalized: float
+    token0ReservesNormalized: Decimal
+    token1ReservesNormalized: Decimal
     token0Reserves: int
     token1Reserves: int
-    token0ReservesUSD: float
-    token1ReservesUSD: float
-    token0Price: float
-    token1Price: float
-    token0PriceInToken1: float
-    token1PriceInToken0: float
-    timestamp: Optional[int]
+    token0ReservesUSD: Decimal
+    token1ReservesUSD: Decimal
+    token0Price: Decimal
+    token1Price: Decimal
+    token0PriceInToken1: Decimal
+    token1PriceInToken0: Decimal
+    timestamp: Optional[int] = None
+
+    @field_serializer(
+        'token0ReservesNormalized', 'token1ReservesNormalized',
+        'token0ReservesUSD', 'token1ReservesUSD',
+        'token0Price', 'token1Price',
+        'token0PriceInToken1', 'token1PriceInToken0',
+    )
+    def serialize_decimal(self, v: Decimal) -> str:
+        return str(v)
 
