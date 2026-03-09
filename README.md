@@ -271,3 +271,27 @@ Tests live in `computes/tests/test_reserves_cache.py` and cover cache eviction, 
 | `test_rpc_usage_tracker` | RpcUsageTracker totals |
 | `test_cache_hit_miss_same_reserves` | CACHE_MISS vs CACHE_HIT yield identical reserves |
 | `test_cache_replay_multiblock` | CACHE_HIT with block gap yields same reserves as CACHE_MISS |
+
+## Running Normalization Tests (Deterministic Decimal)
+
+Tests in `computes/tests/test_normalization.py` verify the arithmetic and serialization logic for deterministic snapshot JSON. They do **not** require RPC, Redis, or a running node — they exercise only the normalization utilities and Pydantic models.
+
+**Run from snapshotter-computes root** (requires `computes` on PYTHONPATH):
+
+```bash
+# Create symlink so 'computes' module resolves (snapshotter-computes is the computes package root)
+cd /tmp && rm -rf computes 2>/dev/null; ln -s /path/to/snapshotter-computes computes
+
+# Run tests
+PYTHONPATH=/tmp python -m pytest /path/to/snapshotter-computes/tests/test_normalization.py -v
+```
+
+**Tests included**
+
+| Test | Purpose |
+|------|---------|
+| `test_normalize_reserve_8_decimals` | Token0 (8 decimals) normalization |
+| `test_normalize_reserve_18_decimals` | Token1 (18 decimals) full precision |
+| `test_normalize_reserve_rounding` | ROUND_HALF_EVEN determinism |
+| `test_quantize_decimal`, `test_quantize_float` | Quantization utilities |
+| `test_deterministic_json_same_input_same_output` | Same raw reserves → same JSON string |
