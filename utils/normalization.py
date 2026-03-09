@@ -4,10 +4,14 @@ Deterministic decimal normalization for snapshot serialization.
 Ensures identical raw reserves produce identical JSON output and CIDs
 across lite and bulk nodes by using Decimal with fixed-precision quantize.
 """
-from decimal import Decimal, ROUND_HALF_EVEN
+from decimal import Decimal, ROUND_HALF_EVEN, localcontext
 
 PRICE_DECIMALS = 8
 USD_DECIMALS = 8
+
+# Max significant digits for 18-decimal tokens with large amounts (uint256/1e18).
+# Default Decimal prec=28 is insufficient; quantize can need ~29+ digits.
+_QUANTIZE_PREC = 78
 
 
 def normalize_reserve(amount: int, decimals: int) -> Decimal:
@@ -23,7 +27,9 @@ def normalize_reserve(amount: int, decimals: int) -> Decimal:
     """
     d = Decimal(amount) / Decimal(10 ** decimals)
     quantize_exp = Decimal('0.1') ** decimals
-    return d.quantize(quantize_exp, rounding=ROUND_HALF_EVEN)
+    with localcontext() as ctx:
+        ctx.prec = _QUANTIZE_PREC
+        return d.quantize(quantize_exp, rounding=ROUND_HALF_EVEN)
 
 
 def quantize_decimal(value: Decimal, decimals: int) -> Decimal:
@@ -38,7 +44,9 @@ def quantize_decimal(value: Decimal, decimals: int) -> Decimal:
         Quantized Decimal.
     """
     quantize_exp = Decimal('0.1') ** decimals
-    return value.quantize(quantize_exp, rounding=ROUND_HALF_EVEN)
+    with localcontext() as ctx:
+        ctx.prec = _QUANTIZE_PREC
+        return value.quantize(quantize_exp, rounding=ROUND_HALF_EVEN)
 
 
 def quantize_float(value: float, decimals: int) -> Decimal:
