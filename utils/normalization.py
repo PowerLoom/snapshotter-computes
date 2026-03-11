@@ -4,7 +4,7 @@ Deterministic decimal normalization for snapshot serialization.
 Ensures identical raw reserves produce identical JSON output and CIDs
 across lite and bulk nodes by using Decimal with fixed-precision quantize.
 """
-from decimal import Decimal, ROUND_HALF_EVEN, localcontext
+from decimal import Decimal, ROUND_CEILING, localcontext
 
 PRICE_DECIMALS = 8
 USD_DECIMALS = 8
@@ -29,7 +29,7 @@ def normalize_reserve(amount: int, decimals: int) -> Decimal:
     quantize_exp = Decimal('0.1') ** decimals
     with localcontext() as ctx:
         ctx.prec = _QUANTIZE_PREC
-        return d.quantize(quantize_exp, rounding=ROUND_HALF_EVEN)
+        return d.quantize(quantize_exp, rounding=ROUND_CEILING)
 
 
 def quantize_decimal(value: Decimal, decimals: int) -> Decimal:
@@ -46,7 +46,7 @@ def quantize_decimal(value: Decimal, decimals: int) -> Decimal:
     quantize_exp = Decimal('0.1') ** decimals
     with localcontext() as ctx:
         ctx.prec = _QUANTIZE_PREC
-        return value.quantize(quantize_exp, rounding=ROUND_HALF_EVEN)
+        return value.quantize(quantize_exp, rounding=ROUND_CEILING)
 
 
 def quantize_float(value: float, decimals: int) -> Decimal:

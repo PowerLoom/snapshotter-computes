@@ -3,6 +3,7 @@ Unit tests for deterministic decimal normalization.
 
 Verifies that identical raw reserves produce identical JSON output,
 enabling CID consistency across lite and bulk nodes.
+Uses ROUND_CEILING (round up) for conservative reserve reporting.
 """
 import json
 
@@ -33,12 +34,21 @@ def test_normalize_reserve_18_decimals():
 
 
 def test_normalize_reserve_rounding():
-    """ROUND_HALF_EVEN produces deterministic results."""
-    # 2.5 -> 2 (banker's rounding)
+    """ROUND_CEILING (round up) produces deterministic results."""
+    # Exact values stay exact
     result = normalize_reserve(25, 1)
     assert str(result) == "2.5"
     result = normalize_reserve(35, 1)
     assert str(result) == "3.5"
+
+
+def test_round_ceiling_rounds_up():
+    """ROUND_CEILING rounds toward +infinity."""
+    from decimal import Decimal
+
+    v = Decimal("2.21")
+    q = quantize_decimal(v, 1)
+    assert str(q) == "2.3"  # 2.21 rounds up to 2.3 with ROUND_CEILING
 
 
 def test_quantize_decimal():
