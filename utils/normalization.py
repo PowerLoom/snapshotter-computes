@@ -6,8 +6,9 @@ across lite and bulk nodes by using Decimal with fixed-precision quantize.
 """
 from decimal import Decimal, ROUND_CEILING, localcontext
 
-PRICE_DECIMALS = 8
-USD_DECIMALS = 8
+PRICE_DECIMALS = 1
+USD_DECIMALS = 1
+OUTPUT_DECIMALS = 1  # All snapshot values rounded to 1 decimal place
 
 # Max significant digits for 18-decimal tokens with large amounts (uint256/1e18).
 # Default Decimal prec=28 is insufficient; quantize can need ~29+ digits.
@@ -16,17 +17,17 @@ _QUANTIZE_PREC = 78
 
 def normalize_reserve(amount: int, decimals: int) -> Decimal:
     """
-    Deterministic normalization: amount / 10^decimals, rounded to token decimals.
+    Deterministic normalization: amount / 10^decimals, rounded to 1 decimal place.
 
     Args:
         amount: Raw token amount (integer).
         decimals: Token decimals (e.g. 8 for WBTC, 18 for WETH).
 
     Returns:
-        Decimal quantized to the token's decimal precision.
+        Decimal quantized to 1 decimal place (ROUND_CEILING).
     """
     d = Decimal(amount) / Decimal(10 ** decimals)
-    quantize_exp = Decimal('0.1') ** decimals
+    quantize_exp = Decimal('0.1') ** OUTPUT_DECIMALS
     with localcontext() as ctx:
         ctx.prec = _QUANTIZE_PREC
         return d.quantize(quantize_exp, rounding=ROUND_CEILING)

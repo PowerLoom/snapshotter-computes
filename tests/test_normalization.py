@@ -10,6 +10,7 @@ import json
 import pytest
 
 from computes.utils.normalization import (
+    OUTPUT_DECIMALS,
     PRICE_DECIMALS,
     USD_DECIMALS,
     normalize_reserve,
@@ -20,17 +21,17 @@ from computes.utils.models.message_models import EpochBaseSnapshot, UniswapBaseS
 
 
 def test_normalize_reserve_8_decimals():
-    """Token0 (8 decimals): deterministic normalization."""
+    """Token0 (8 decimals): normalized to 1 decimal place."""
     amount = 125061643
     result = normalize_reserve(amount, 8)
-    assert str(result) == "1.25061643"
+    assert str(result) == "1.3"  # 1.25061643 -> 1.3 (ROUND_CEILING)
 
 
 def test_normalize_reserve_18_decimals():
-    """Token1 (18 decimals): full precision preserved."""
+    """Token1 (18 decimals): normalized to 1 decimal place."""
     amount = 62532078512042075697
     result = normalize_reserve(amount, 18)
-    assert str(result) == "62.532078512042075697"
+    assert str(result) == "62.6"  # 62.532078512042075697 -> 62.6 (ROUND_CEILING)
 
 
 def test_normalize_reserve_rounding():
@@ -56,20 +57,21 @@ def test_quantize_decimal():
     from decimal import Decimal
 
     v = Decimal("1.23456789")
-    q = quantize_decimal(v, 4)
-    assert str(q) == "1.2346"
+    q = quantize_decimal(v, 1)
+    assert str(q) == "1.3"  # ROUND_CEILING
 
 
 def test_quantize_float():
-    """Float to quantized Decimal."""
-    v = quantize_float(123.456789, 4)
-    assert str(v) == "123.4568"
+    """Float to quantized Decimal (1 decimal)."""
+    v = quantize_float(123.456789, 1)
+    assert str(v) == "123.5"  # ROUND_CEILING
 
 
 def test_constants():
-    """Precision constants."""
-    assert PRICE_DECIMALS == 8
-    assert USD_DECIMALS == 8
+    """Precision constants (1 decimal for snapshot output)."""
+    assert PRICE_DECIMALS == 1
+    assert USD_DECIMALS == 1
+    assert OUTPUT_DECIMALS == 1
 
 
 def test_deterministic_json_same_input_same_output():
@@ -95,19 +97,19 @@ def test_deterministic_json_same_input_same_output():
         token1="0xb",
         token0Reserves={block: Decimal(token0_norm)},
         token1Reserves={block: Decimal(token1_norm)},
-        token0ReservesUSD={block: Decimal("125000.12345678")},
-        token1ReservesUSD={block: Decimal("125000.12345678")},
-        token0Prices={block: Decimal("1.00000000")},
-        token1Prices={block: Decimal("1.00000000")},
-        token0PricesUSD={block: Decimal("50000.00000000")},
-        token1PricesUSD={block: Decimal("50000.00000000")},
+        token0ReservesUSD={block: Decimal("125000.1")},
+        token1ReservesUSD={block: Decimal("125000.1")},
+        token0Prices={block: Decimal("1.0")},
+        token1Prices={block: Decimal("1.0")},
+        token0PricesUSD={block: Decimal("50000.0")},
+        token1PricesUSD={block: Decimal("50000.0")},
     )
 
     json1 = json.dumps(snapshot.model_dump(mode="json"), sort_keys=True, separators=(",", ":"))
     json2 = json.dumps(snapshot.model_dump(mode="json"), sort_keys=True, separators=(",", ":"))
 
     assert json1 == json2
-    # Parse and verify structure
+    # Parse and verify structure (1 decimal place)
     parsed = json.loads(json1)
-    assert parsed["token0Reserves"][str(block)] == "1.25061643"
-    assert parsed["token1Reserves"][str(block)] == "62.532078512042075697"
+    assert parsed["token0Reserves"][str(block)] == "1.3"
+    assert parsed["token1Reserves"][str(block)] == "62.6"
