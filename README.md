@@ -135,7 +135,9 @@ All operations are deterministic given the same inputs, enabling any observer to
 
 ## Lite Reserves Cache (`utils/reserves_cache.py`)
 
-When a slot is selected every few epochs (block gap 2–9 between consecutive assignments), the **incremental reserves cache** avoids expensive ticks+slot0 RPC calls by reusing cached reserves and replaying event deltas.
+**Note**: Cache is **disabled by default** (`enabled: false`) for BDS CID determinism. Event replays can introduce divergence between lite and bulk nodes; disabling ensures both always do fresh chain fetch.
+
+When enabled, and a slot is selected every few epochs (block gap 2–9 between consecutive assignments), the **incremental reserves cache** avoids expensive ticks+slot0 RPC calls by reusing cached reserves and replaying event deltas.
 
 ### Flow
 
@@ -155,7 +157,7 @@ So CACHE_MISS always references the block we *fetch* (N−1); CACHE_STORE always
 
 ```json
 "lite_reserves_cache": {
-  "enabled": true,
+  "enabled": false,
   "memory_max_entries_per_pool": 20,
   "file_enabled": false,
   "file_path": "./.reserves_cache",
@@ -171,6 +173,10 @@ So CACHE_MISS always references the block we *fetch* (N−1); CACHE_STORE always
 - `rpc_usage_tracking`: emit `[RPC_USAGE]` JSON logs for eth_call quantification
 
 If `lite_reserves_cache` is absent or disabled, behavior matches pre-cache (no change).
+
+### Decimal Normalization (`utils/normalization.py`)
+
+Reserves and prices use `Decimal` with `ROUND_CEILING` (round up) for deterministic, conservative output. Ensures identical raw reserves produce identical JSON and CIDs across lite and bulk nodes. See `tests/test_normalization.py`.
 
 ### Wiring
 
