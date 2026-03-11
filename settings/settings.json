@@ -21,7 +21,7 @@
   },
   "bds_api_url": "https://bds-curated-pools.powerloom.io",
   "lite_reserves_cache": {
-    "enabled": true,
+    "enabled": false,
     "memory_max_entries_per_pool": 20,
     "file_enabled": false,
     "file_path": "./.reserves_cache",
