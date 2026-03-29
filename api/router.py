@@ -253,6 +253,8 @@ async def get_token_base_snapshots(
 
 @router.get('/snapshot/base/{pool_address}')
 @router.get('/snapshot/base/{pool_address}/{block_number}')
+@router.get('/mpp/snapshot/base/{pool_address}', tags=['uniswap', 'mpp'])
+@router.get('/mpp/snapshot/base/{pool_address}/{block_number}', tags=['uniswap', 'mpp'])
 async def get_base_snapshot(
     request: Request,
     response: Response,
@@ -295,6 +297,8 @@ async def get_base_snapshot(
 
 @router.get('/snapshot/trades/{pool_address}')
 @router.get('/snapshot/trades/{pool_address}/{block_number}')
+@router.get('/mpp/snapshot/trades/{pool_address}', tags=['uniswap', 'mpp'])
+@router.get('/mpp/snapshot/trades/{pool_address}/{block_number}', tags=['uniswap', 'mpp'])
 async def get_trades_snapshot(
     request: Request,
     response: Response,
@@ -337,6 +341,8 @@ async def get_trades_snapshot(
 
 @router.get('/snapshot/allTrades')
 @router.get('/snapshot/allTrades/{block_number}')
+@router.get('/mpp/snapshot/allTrades', tags=['uniswap', 'mpp'])
+@router.get('/mpp/snapshot/allTrades/{block_number}', tags=['uniswap', 'mpp'])
 async def get_all_trades_snapshot(
     request: Request,
     response: Response,
