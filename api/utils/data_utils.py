@@ -111,7 +111,7 @@ async def get_uniswapv3_snapshot(
             epoch_id=target_epoch,
             project_id=project_id,
             seek=False,
-            cleanup_previous_snapshots=True,
+            cleanup_previous_snapshots=False,
         )
         
         duration = time.time() - start_time
