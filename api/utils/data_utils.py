@@ -18,7 +18,9 @@ from computes.api.models.data_models import (
 from computes.utils.helpers import get_uniswap_v3_pool_metadata
 
 from snapshotter.utils.data_utils import (
+    _fetch_snapshots_for_epochs,
     get_project_last_finalized_epoch,
+    get_project_latest_snapshot,
     get_last_submitted_snapshot_data,
     get_current_epoch_id,
     get_tail_epoch_id,
