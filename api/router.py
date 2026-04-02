@@ -8,14 +8,20 @@ trade volume aggregations, and daily active tokens/pools with pagination.
 This router is designed to be included in the core API application.
 """
 
+import asyncio
+import json
+
 from fastapi import APIRouter
 from fastapi import Request
 from fastapi import Response
 from fastapi import Query
 from typing import Optional
 from web3 import Web3
+from starlette.responses import StreamingResponse
 
 from snapshotter.settings.config import settings
+from snapshotter.utils.redis.redis_keys import project_last_finalized_epoch_hmap
+from snapshotter.utils.redis.redis_keys import snapshot_finalized_channel
 from computes.api.utils.data_utils import (
     get_uniswap_trade_volume_agg,
     get_uniswap_v3_base_snapshot,
@@ -41,6 +47,26 @@ rest_logger = default_logger.bind(module='UniswapV3API')
 
 # Create APIRouter for Uniswap endpoints
 router = APIRouter(tags=["uniswap"])
+
+
+def _snapshot_model_to_json(obj):
+    if obj is None:
+        return None
+    if hasattr(obj, 'model_dump'):
+        return obj.model_dump(mode='json')
+    return obj
+
+
+async def _anchor_current_epoch_id(request: Request) -> int:
+    ps = request.app.state.protocol_state_contract
+    [current_epoch_data] = await request.app.state.anchor_rpc_helper.web3_call(
+        tasks=[
+            ('currentEpoch', [Web3.to_checksum_address(settings.data_market)]),
+        ],
+        contract_addr=ps.address,
+        abi=ps.abi,
+    )
+    return int(current_epoch_data[2])
 
 
 @router.get('/pool/{pool_address}/metadata')
@@ -414,6 +440,153 @@ async def get_all_trades_snapshot(
         rest_logger.opt(exception=True).error(f"Error getting trades snapshot for all pools at block {block_number}: {e}")
         response.status_code = 500
         return {"error": str(e)}
+
+
+@router.get('/mpp/stream/allTrades', tags=['uniswap', 'mpp', 'streaming'])
+async def mpp_stream_all_trades(
+    request: Request,
+    from_epoch: Optional[int] = None,
+):
+    """
+    Server-Sent Events stream of all-pool Uniswap V3 trades per finalized epoch (block).
+
+    Event-driven via Redis pub/sub on ``SnapshotFinalized`` events published by
+    ``unified_cache``.  Falls back to polling ``projectLastFinalizedEpoch`` Redis
+    hashmap and ultimately the ``lastFinalizedSnapshot`` contract call.
+
+    One MPP charge applies per HTTP connection (see MppConfig.stream_amount).
+    Optional query param ``from_epoch`` sets the starting epoch; defaults to the
+    latest finalized epoch for the allTrades project when omitted.
+    """
+    if not getattr(request.app.state, 'ipfs_reader_client', None):
+        async def err_no_ipfs():
+            yield f"data: {json.dumps({'error': 'IPFS not configured'})}\n\n"
+
+        return StreamingResponse(err_no_ipfs(), media_type='text/event-stream')
+
+    project_id = f"allTradesSnapshot:{settings.data_market}:{settings.namespace}"
+    channel = snapshot_finalized_channel(project_id)
+    pubsub_timeout_s = 15.0
+    retry_sleep_s = 2.0
+
+    async def _latest_finalized_epoch_from_redis(redis_conn) -> Optional[int]:
+        raw = await redis_conn.hget(project_last_finalized_epoch_hmap(), project_id)
+        return int(raw) if raw is not None else None
+
+    async def _latest_finalized_epoch_from_contract() -> Optional[int]:
+        try:
+            ps = request.app.state.protocol_state_contract
+            [epoch] = await request.app.state.anchor_rpc_helper.web3_call(
+                tasks=[
+                    ('lastFinalizedSnapshot', [Web3.to_checksum_address(settings.data_market), project_id]),
+                ],
+                contract_addr=ps.address,
+                abi=ps.abi,
+            )
+            return int(epoch) if int(epoch) > 0 else None
+        except Exception as e:
+            rest_logger.warning(f'mpp_stream: lastFinalizedSnapshot contract call failed: {e}')
+            return None
+
+    async def _fetch_and_yield(epoch_id):
+        """Fetch snapshot for a single epoch. Returns (payload_str, success)."""
+        try:
+            trades_snapshot = await asyncio.wait_for(
+                get_uniswap_v3_all_trades_snapshot(
+                    redis_conn=request.app.state.redis_conn,
+                    protocol_state_contract=request.app.state.protocol_state_contract,
+                    anchor_rpc_helper=request.app.state.anchor_rpc_helper,
+                    ipfs_reader=request.app.state.ipfs_reader_client,
+                    block_number=epoch_id,
+                ),
+                timeout=120.0,
+            )
+        except asyncio.TimeoutError:
+            rest_logger.warning(f'mpp_stream: timeout fetching epoch {epoch_id}')
+            return None, False
+        except Exception as e:
+            rest_logger.exception(f'mpp_stream: fetch error epoch {epoch_id}', e=e)
+            return None, False
+
+        if not trades_snapshot:
+            return None, False
+
+        payload = {
+            'epoch': epoch_id,
+            'snapshot': _snapshot_model_to_json(trades_snapshot),
+        }
+        return f"data: {json.dumps(payload, default=str)}\n\n", True
+
+    async def event_stream():
+        redis_conn = request.app.state.redis_conn
+        pubsub = redis_conn.pubsub()
+
+        next_epoch = from_epoch
+        if next_epoch is None:
+            next_epoch = await _latest_finalized_epoch_from_redis(redis_conn)
+        if next_epoch is None:
+            next_epoch = await _latest_finalized_epoch_from_contract()
+        if next_epoch is None:
+            try:
+                next_epoch = await _anchor_current_epoch_id(request)
+            except Exception as e:
+                rest_logger.exception('mpp_stream: failed to determine starting epoch', e=e)
+                yield f"data: {json.dumps({'error': f'cannot determine starting epoch: {e}'})}\n\n"
+                return
+
+        try:
+            await pubsub.subscribe(channel)
+            rest_logger.info(f'mpp_stream: subscribed to {channel}, starting at epoch {next_epoch}')
+
+            while True:
+                msg = await pubsub.get_message(
+                    ignore_subscribe_messages=True,
+                    timeout=pubsub_timeout_s,
+                )
+
+                if msg and msg['type'] == 'message':
+                    try:
+                        data = json.loads(msg['data'])
+                        finalized_epoch = int(data['epochId'])
+                    except (json.JSONDecodeError, KeyError, ValueError):
+                        continue
+
+                    if finalized_epoch < next_epoch:
+                        rest_logger.debug(
+                            f'mpp_stream: stale pub/sub epoch {finalized_epoch}, cursor at {next_epoch}, skipping',
+                        )
+                        continue
+
+                    while next_epoch <= finalized_epoch:
+                        sse_line, ok = await _fetch_and_yield(next_epoch)
+                        if ok:
+                            yield sse_line
+                            next_epoch += 1
+                        else:
+                            await asyncio.sleep(retry_sleep_s)
+                else:
+                    latest = await _latest_finalized_epoch_from_redis(redis_conn)
+                    if latest is None:
+                        latest = await _latest_finalized_epoch_from_contract()
+                    if latest is not None and latest < next_epoch:
+                        rest_logger.debug(
+                            f'mpp_stream: fallback latest {latest} behind cursor {next_epoch}, waiting',
+                        )
+                        continue
+                    if latest is not None:
+                        while next_epoch <= latest:
+                            sse_line, ok = await _fetch_and_yield(next_epoch)
+                            if ok:
+                                yield sse_line
+                                next_epoch += 1
+                            else:
+                                await asyncio.sleep(retry_sleep_s)
+                                break
+        finally:
+            await pubsub.unsubscribe(channel)
+            await pubsub.close()
+
+    return StreamingResponse(event_stream(), media_type='text/event-stream')
 
 
 @router.get('/tokenPrices/all/{token_address}')
