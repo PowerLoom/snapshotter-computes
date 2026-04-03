@@ -60,6 +60,17 @@ def _snapshot_model_to_json(obj):
     return obj
 
 
+def _verification_payload(*, epoch_id: int, project_id: str, cid: str) -> dict:
+    """On-chain verification hints for BDS clients."""
+    return {
+        'cid': cid,
+        'epochId': epoch_id,
+        'projectId': project_id,
+        'protocolState': settings.protocol_state.address,
+        'dataMarket': str(settings.data_market),
+    }
+
+
 async def _anchor_current_epoch_id(request: Request) -> int:
     ps = request.app.state.protocol_state_contract
     [current_epoch_data] = await request.app.state.anchor_rpc_helper.web3_call(
@@ -405,7 +416,7 @@ async def get_all_trades_snapshot(
         # Add timeout to prevent hanging on data retrieval
         rest_logger.info(f"[allTrades] Starting data fetch with 60s timeout...")
         fetch_start = time.time()
-        trades_snapshot = await asyncio.wait_for(
+        fetched = await asyncio.wait_for(
             get_uniswap_v3_all_trades_snapshot(
                 redis_conn=request.app.state.redis_conn,
                 protocol_state_contract=request.app.state.protocol_state_contract,
@@ -418,21 +429,24 @@ async def get_all_trades_snapshot(
         fetch_duration = time.time() - fetch_start
         rest_logger.info(f"[allTrades] Data fetch completed in {fetch_duration:.2f}s")
 
-        if not trades_snapshot:
+        if not fetched:
             rest_logger.warning(
                 f"AllTrades snapshot not found for block_number: {block_number or 'latest'}"
             )
             response.status_code = 404
             return {"error": "Trades snapshot not found"}
-        else:
-            # Count pools in the snapshot
-            pool_count = len(trades_snapshot.get('tradeData', {})) if isinstance(trades_snapshot, dict) else 0
-            rest_logger.info(
-                f"Successfully fetched allTrades snapshot - block_number: {block_number or 'latest'}, "
-                f"pools: {pool_count}"
-            )
-            response.status_code = 200
-            return trades_snapshot
+        trades_snapshot, epoch_id, snap_cid = fetched
+        pool_count = len(trades_snapshot.tradeData) if getattr(trades_snapshot, 'tradeData', None) is not None else 0
+        rest_logger.info(
+            f"Successfully fetched allTrades snapshot - block_number: {block_number or 'latest'}, "
+            f"pools: {pool_count}"
+        )
+        response.status_code = 200
+        body = _snapshot_model_to_json(trades_snapshot)
+        project_id = f"allTradesSnapshot:{settings.data_market}:{settings.namespace}"
+        if isinstance(body, dict):
+            body['verification'] = _verification_payload(epoch_id=epoch_id, project_id=project_id, cid=snap_cid)
+        return body
     except asyncio.TimeoutError:
         rest_logger.error(
             f"Timeout fetching allTrades snapshot for block_number: {block_number or 'latest'}"
@@ -499,7 +513,7 @@ async def mpp_stream_all_trades(
     async def _fetch_and_yield(epoch_id):
         """Fetch snapshot for a single epoch. Returns (payload_str, success)."""
         try:
-            trades_snapshot = await asyncio.wait_for(
+            fetched = await asyncio.wait_for(
                 get_uniswap_v3_all_trades_snapshot(
                     redis_conn=request.app.state.redis_conn,
                     protocol_state_contract=request.app.state.protocol_state_contract,
@@ -516,12 +530,15 @@ async def mpp_stream_all_trades(
             rest_logger.exception(f'mpp_stream: fetch error epoch {epoch_id}', e=e)
             return None, False
 
-        if not trades_snapshot:
+        if not fetched:
             return None, False
 
+        trades_snapshot, snap_epoch, snap_cid = fetched
+        project_id = f"allTradesSnapshot:{settings.data_market}:{settings.namespace}"
         payload = {
-            'epoch': epoch_id,
+            'epoch': snap_epoch,
             'snapshot': _snapshot_model_to_json(trades_snapshot),
+            'verification': _verification_payload(epoch_id=snap_epoch, project_id=project_id, cid=snap_cid),
         }
         return f"data: {json.dumps(payload, default=str)}\n\n", True
 

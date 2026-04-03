@@ -49,7 +49,7 @@ async def get_uniswapv3_snapshot(
     project_id: str,
     message_model: Type[BaseModel],
     block_number: Optional[int] = None,
-) -> Optional[Tuple[int, BaseModel]]:
+) -> Optional[Tuple[int, BaseModel, str]]:
     """
     Simplified Uniswap V3 snapshot retrieval using unified cache.
 
@@ -67,7 +67,7 @@ async def get_uniswapv3_snapshot(
         block_number (Optional[int]): Specific block number to target, if None uses latest
 
     Returns:
-        Optional[Tuple[int, BaseModel]]: Tuple of (epoch_id, parsed_snapshot) if found,
+        Optional[Tuple[int, BaseModel, str]]: Tuple of (epoch_id, parsed_snapshot, snapshot_cid) if found,
                                         None if no valid snapshot data is available
     """
     import time
@@ -126,7 +126,8 @@ async def get_uniswapv3_snapshot(
             parsed_snapshot = message_model(**snapshot_response.exact_match.data)
             total_duration = time.time() - start_time
             logger.info(f"[get_uniswapv3_snapshot] Successfully retrieved and parsed snapshot for {project_id}:{target_epoch} in {total_duration:.2f}s")
-            return target_epoch, parsed_snapshot
+            snapshot_cid = snapshot_response.exact_match.snapshot_cid
+            return target_epoch, parsed_snapshot, snapshot_cid
         except Exception as e:
             logger.error(f"[get_uniswapv3_snapshot] Failed to parse snapshot data for {project_id}:{target_epoch}: {e}")
             return None
@@ -176,7 +177,7 @@ async def get_uniswap_v3_token_pools_snapshot(
         logger.error(f"No snapshot data found for project {project_id}")
         return None
         
-    snapshot_epoch, snapshot_data = result
+    snapshot_epoch, snapshot_data, _cid = result
     if snapshot_data:
         return snapshot_data
     else:
@@ -279,7 +280,7 @@ async def get_uniswap_v3_base_snapshot(
         logger.error(f"No snapshot data found for project {project_id}")
         return None
         
-    snapshot_epoch, snapshot_data = result
+    snapshot_epoch, snapshot_data, _cid = result
     return snapshot_data
 
 
@@ -323,7 +324,7 @@ async def get_uniswap_v3_trades_snapshot(
         logger.error(f"No snapshot data found for project {project_id}")
         return None
         
-    snapshot_epoch, snapshot_data = result
+    snapshot_epoch, snapshot_data, _cid = result
     return snapshot_data
 
 
@@ -333,7 +334,7 @@ async def get_uniswap_v3_all_trades_snapshot(
     ipfs_reader: AsyncIPFSClient,
     protocol_state_contract,
     block_number: Optional[int] = None,
-):
+) -> Optional[Tuple[AllUniswapTradesSnapshot, int, str]]:
     """
     Retrieves the trades snapshot for all Uniswap V3 pools.
     
@@ -345,12 +346,10 @@ async def get_uniswap_v3_all_trades_snapshot(
         anchor_rpc_helper (RpcHelper): RPC helper for blockchain interactions
         ipfs_reader (AsyncIPFSClient): IPFS client for reading snapshot data
         protocol_state_contract: Smart contract object for protocol state
-        pool_address (str): Ethereum address of the pool
         block_number (Optional[int]): Specific block to target, uses latest if None
         
     Returns:
-        Optional[UniswapTradesSnapshot]: Trades snapshot data for the pool,
-                                       or None if not found
+        Optional[Tuple[AllUniswapTradesSnapshot, int, str]]: (snapshot model, epoch, ipfs cid), or None
     """
     project_id = f"allTradesSnapshot:{settings.data_market}:{settings.namespace}"
     logger.info(
@@ -371,7 +370,7 @@ async def get_uniswap_v3_all_trades_snapshot(
         logger.warning(f"No snapshot data found for project {project_id} at block {block_number or 'latest'}")
         return None
 
-    snapshot_epoch, snapshot_data = result
+    snapshot_epoch, snapshot_data, snapshot_cid = result
 
     # Count pools and trades in the snapshot
     pool_count = len(snapshot_data.tradeData) if hasattr(snapshot_data, 'tradeData') else 0
@@ -386,7 +385,7 @@ async def get_uniswap_v3_all_trades_snapshot(
         f"pools: {pool_count}, total_trades: {total_trades}"
     )
 
-    return snapshot_data
+    return snapshot_data, snapshot_epoch, snapshot_cid
 
 
 async def get_uniswap_v3_eth_price_snapshot(
@@ -427,7 +426,7 @@ async def get_uniswap_v3_eth_price_snapshot(
         logger.error(f"No snapshot data found for project {project_id}")
         return None
         
-    snapshot_epoch, snapshot_data = result
+    snapshot_epoch, snapshot_data, _cid = result
     if snapshot_data:
         return snapshot_data
     else:
@@ -482,7 +481,7 @@ async def get_uniswap_v3_token_price_pool(
         logger.error(f"No snapshot data found for project {base_project_id}")
         return None
         
-    snapshot_epoch, snapshot_data = result
+    snapshot_epoch, snapshot_data, _cid = result
     if not snapshot_data:
         logger.error(f"No base snapshot data found for project {base_project_id} against epoch {snapshot_epoch}")
         return None
