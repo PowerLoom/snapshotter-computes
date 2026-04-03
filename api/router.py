@@ -45,6 +45,9 @@ from computes.settings.config import settings as compute_settings
 # Bind logger for this module
 rest_logger = default_logger.bind(module='UniswapV3API')
 
+# SSE /mpp/stream/allTrades: retries per epoch before skipping (null CID, empty snapshot, transient IPFS).
+MPP_STREAM_SSE_FETCH_ATTEMPTS_PER_EPOCH = 5
+
 # Create APIRouter for Uniswap endpoints
 router = APIRouter(tags=["uniswap"])
 
@@ -457,6 +460,11 @@ async def mpp_stream_all_trades(
     One MPP charge applies per HTTP connection (see MppConfig.stream_amount).
     Optional query param ``from_epoch`` sets the starting epoch; defaults to the
     latest finalized epoch for the allTrades project when omitted.
+
+    If a finalized epoch has no snapshot (null CID, empty trades, failed submission),
+    the server retries a few times then emits
+    ``{"epoch": N, "skipped": true, "reason": "snapshot_unavailable"}`` and advances
+    so the stream does not stall forever on a gap.
     """
     if not getattr(request.app.state, 'ipfs_reader_client', None):
         async def err_no_ipfs():
@@ -534,6 +542,34 @@ async def mpp_stream_all_trades(
                 yield f"data: {json.dumps({'error': f'cannot determine starting epoch: {e}'})}\n\n"
                 return
 
+        async def _drain_epoch_window(upper: int):
+            """Advance next_epoch through upper, yielding SSE lines. Skips epochs with no snapshot after retries."""
+            nonlocal next_epoch
+            attempts = 0
+            while next_epoch <= upper:
+                sse_line, ok = await _fetch_and_yield(next_epoch)
+                if ok:
+                    yield sse_line
+                    next_epoch += 1
+                    attempts = 0
+                    continue
+                attempts += 1
+                if attempts >= MPP_STREAM_SSE_FETCH_ATTEMPTS_PER_EPOCH:
+                    rest_logger.warning(
+                        f'mpp_stream: skipping epoch {next_epoch} after {attempts} failed fetches '
+                        f'(no snapshot / null CID — empty block or missed submission)',
+                    )
+                    skip_payload = {
+                        'epoch': next_epoch,
+                        'skipped': True,
+                        'reason': 'snapshot_unavailable',
+                    }
+                    yield f"data: {json.dumps(skip_payload)}\n\n"
+                    next_epoch += 1
+                    attempts = 0
+                else:
+                    await asyncio.sleep(retry_sleep_s)
+
         try:
             await pubsub.subscribe(channel)
             rest_logger.info(f'mpp_stream: subscribed to {channel}, starting at epoch {next_epoch}')
@@ -557,13 +593,8 @@ async def mpp_stream_all_trades(
                         )
                         continue
 
-                    while next_epoch <= finalized_epoch:
-                        sse_line, ok = await _fetch_and_yield(next_epoch)
-                        if ok:
-                            yield sse_line
-                            next_epoch += 1
-                        else:
-                            await asyncio.sleep(retry_sleep_s)
+                    async for line in _drain_epoch_window(finalized_epoch):
+                        yield line
                 else:
                     latest = await _latest_finalized_epoch_from_redis(redis_conn)
                     if latest is None:
@@ -574,14 +605,8 @@ async def mpp_stream_all_trades(
                         )
                         continue
                     if latest is not None:
-                        while next_epoch <= latest:
-                            sse_line, ok = await _fetch_and_yield(next_epoch)
-                            if ok:
-                                yield sse_line
-                                next_epoch += 1
-                            else:
-                                await asyncio.sleep(retry_sleep_s)
-                                break
+                        async for line in _drain_epoch_window(latest):
+                            yield line
         finally:
             await pubsub.unsubscribe(channel)
             await pubsub.close()
