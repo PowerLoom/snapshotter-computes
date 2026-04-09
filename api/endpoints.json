@@ -1,0 +1,301 @@
+{
+  "market": "BDS_MAINNET_UNISWAPV3",
+  "version": 1,
+  "endpoints": [
+    {
+      "path": "/pool/{pool_address}/metadata",
+      "method": "GET",
+      "metered": false,
+      "sse": false,
+      "params": [
+        { "name": "pool_address", "in": "path", "type": "string", "required": true }
+      ],
+      "description": "Metadata for a single Uniswap V3 pool"
+    },
+    {
+      "path": "/token/{token_address}/pools",
+      "method": "GET",
+      "metered": false,
+      "sse": false,
+      "params": [
+        { "name": "token_address", "in": "path", "type": "string", "required": true }
+      ],
+      "description": "Pools that include a given token"
+    },
+    {
+      "path": "/ethPrice",
+      "method": "GET",
+      "metered": false,
+      "sse": false,
+      "params": [],
+      "description": "ETH price snapshot for the latest finalized epoch"
+    },
+    {
+      "path": "/ethPrice/{block_number}",
+      "method": "GET",
+      "metered": false,
+      "sse": false,
+      "params": [
+        { "name": "block_number", "in": "path", "type": "integer", "required": true }
+      ],
+      "description": "ETH price snapshot at a specific block (epoch)"
+    },
+    {
+      "path": "/token/price/{token_address}/{pool_address}",
+      "method": "GET",
+      "metered": false,
+      "sse": false,
+      "params": [
+        { "name": "token_address", "in": "path", "type": "string", "required": true },
+        { "name": "pool_address", "in": "path", "type": "string", "required": true }
+      ],
+      "description": "Token price in a pool at the latest finalized epoch"
+    },
+    {
+      "path": "/token/price/{token_address}/{pool_address}/{block_number}",
+      "method": "GET",
+      "metered": false,
+      "sse": false,
+      "params": [
+        { "name": "token_address", "in": "path", "type": "string", "required": true },
+        { "name": "pool_address", "in": "path", "type": "string", "required": true },
+        { "name": "block_number", "in": "path", "type": "integer", "required": true }
+      ],
+      "description": "Token price in a pool at a specific block"
+    },
+    {
+      "path": "/snapshot/base_all_pools/{token_address}",
+      "method": "GET",
+      "metered": false,
+      "sse": false,
+      "params": [
+        { "name": "token_address", "in": "path", "type": "string", "required": true }
+      ],
+      "description": "Base snapshots for all pools of a token"
+    },
+    {
+      "path": "/snapshot/base/{pool_address}",
+      "method": "GET",
+      "metered": false,
+      "sse": false,
+      "params": [
+        { "name": "pool_address", "in": "path", "type": "string", "required": true }
+      ],
+      "description": "Base snapshot for a pool at the latest finalized epoch"
+    },
+    {
+      "path": "/snapshot/base/{pool_address}/{block_number}",
+      "method": "GET",
+      "metered": false,
+      "sse": false,
+      "params": [
+        { "name": "pool_address", "in": "path", "type": "string", "required": true },
+        { "name": "block_number", "in": "path", "type": "integer", "required": true }
+      ],
+      "description": "Base snapshot for a pool at a specific block"
+    },
+    {
+      "path": "/mpp/snapshot/base/{pool_address}",
+      "method": "GET",
+      "metered": true,
+      "sse": false,
+      "params": [
+        { "name": "pool_address", "in": "path", "type": "string", "required": true }
+      ],
+      "description": "MPP: base snapshot for a pool at the latest finalized epoch"
+    },
+    {
+      "path": "/mpp/snapshot/base/{pool_address}/{block_number}",
+      "method": "GET",
+      "metered": true,
+      "sse": false,
+      "params": [
+        { "name": "pool_address", "in": "path", "type": "string", "required": true },
+        { "name": "block_number", "in": "path", "type": "integer", "required": true }
+      ],
+      "description": "MPP: base snapshot for a pool at a specific block"
+    },
+    {
+      "path": "/snapshot/trades/{pool_address}",
+      "method": "GET",
+      "metered": false,
+      "sse": false,
+      "params": [
+        { "name": "pool_address", "in": "path", "type": "string", "required": true }
+      ],
+      "description": "Trades snapshot for a pool at the latest finalized epoch"
+    },
+    {
+      "path": "/snapshot/trades/{pool_address}/{block_number}",
+      "method": "GET",
+      "metered": false,
+      "sse": false,
+      "params": [
+        { "name": "pool_address", "in": "path", "type": "string", "required": true },
+        { "name": "block_number", "in": "path", "type": "integer", "required": true }
+      ],
+      "description": "Trades snapshot for a pool at a specific block"
+    },
+    {
+      "path": "/mpp/snapshot/trades/{pool_address}",
+      "method": "GET",
+      "metered": true,
+      "sse": false,
+      "params": [
+        { "name": "pool_address", "in": "path", "type": "string", "required": true }
+      ],
+      "description": "MPP: trades snapshot for a pool at the latest finalized epoch"
+    },
+    {
+      "path": "/mpp/snapshot/trades/{pool_address}/{block_number}",
+      "method": "GET",
+      "metered": true,
+      "sse": false,
+      "params": [
+        { "name": "pool_address", "in": "path", "type": "string", "required": true },
+        { "name": "block_number", "in": "path", "type": "integer", "required": true }
+      ],
+      "description": "MPP: trades snapshot for a pool at a specific block"
+    },
+    {
+      "path": "/snapshot/allTrades",
+      "method": "GET",
+      "metered": false,
+      "sse": false,
+      "params": [],
+      "description": "All-pool trades snapshot at the latest finalized epoch"
+    },
+    {
+      "path": "/snapshot/allTrades/{block_number}",
+      "method": "GET",
+      "metered": false,
+      "sse": false,
+      "params": [
+        { "name": "block_number", "in": "path", "type": "integer", "required": true }
+      ],
+      "description": "All-pool trades snapshot at a specific block (epoch)"
+    },
+    {
+      "path": "/mpp/snapshot/allTrades",
+      "method": "GET",
+      "metered": true,
+      "sse": false,
+      "params": [],
+      "description": "MPP: all-pool trades snapshot at the latest finalized epoch (Bearer metering)"
+    },
+    {
+      "path": "/mpp/snapshot/allTrades/{block_number}",
+      "method": "GET",
+      "metered": true,
+      "sse": false,
+      "params": [
+        { "name": "block_number", "in": "path", "type": "integer", "required": true }
+      ],
+      "description": "MPP: all-pool trades snapshot for a given epoch (block number)"
+    },
+    {
+      "path": "/mpp/stream/allTrades",
+      "method": "GET",
+      "metered": true,
+      "sse": true,
+      "params": [
+        { "name": "from_epoch", "in": "query", "type": "integer", "required": false }
+      ],
+      "description": "SSE stream of all-pool trades per finalized epoch"
+    },
+    {
+      "path": "/tokenPrices/all/{token_address}",
+      "method": "GET",
+      "metered": false,
+      "sse": false,
+      "params": [
+        { "name": "token_address", "in": "path", "type": "string", "required": true }
+      ],
+      "description": "Token prices across pools at the latest finalized epoch"
+    },
+    {
+      "path": "/tokenPrices/all/{token_address}/{block_number}",
+      "method": "GET",
+      "metered": false,
+      "sse": false,
+      "params": [
+        { "name": "token_address", "in": "path", "type": "string", "required": true },
+        { "name": "block_number", "in": "path", "type": "integer", "required": true }
+      ],
+      "description": "Token prices across pools at a specific block"
+    },
+    {
+      "path": "/tradeVolumeAllPools/{token_address}/{time_interval}",
+      "method": "GET",
+      "metered": false,
+      "sse": false,
+      "params": [
+        { "name": "token_address", "in": "path", "type": "string", "required": true },
+        { "name": "time_interval", "in": "path", "type": "integer", "required": true }
+      ],
+      "description": "Aggregated trade volume across all pools for a token over a time window (seconds)"
+    },
+    {
+      "path": "/tradeVolume/{pool_address}/{time_interval}",
+      "method": "GET",
+      "metered": false,
+      "sse": false,
+      "params": [
+        { "name": "pool_address", "in": "path", "type": "string", "required": true },
+        { "name": "time_interval", "in": "path", "type": "integer", "required": true }
+      ],
+      "description": "Aggregated trade volume for a pool over a time window (seconds)"
+    },
+    {
+      "path": "/poolTrades/{pool_address}/{start_timestamp}/{end_timestamp}",
+      "method": "GET",
+      "metered": false,
+      "sse": false,
+      "params": [
+        { "name": "pool_address", "in": "path", "type": "string", "required": true },
+        { "name": "start_timestamp", "in": "path", "type": "integer", "required": true },
+        { "name": "end_timestamp", "in": "path", "type": "integer", "required": true }
+      ],
+      "description": "Trades for a pool between Unix start and end timestamps"
+    },
+    {
+      "path": "/timeSeries/{token_address}/{pool_address}/{time_interval}/{step_seconds}",
+      "method": "GET",
+      "metered": false,
+      "sse": false,
+      "params": [
+        { "name": "token_address", "in": "path", "type": "string", "required": true },
+        { "name": "pool_address", "in": "path", "type": "string", "required": true },
+        { "name": "time_interval", "in": "path", "type": "integer", "required": true },
+        { "name": "step_seconds", "in": "path", "type": "integer", "required": true }
+      ],
+      "description": "Token price time series for a pool with interval and step (seconds)"
+    },
+    {
+      "path": "/dailyActiveTokens",
+      "method": "GET",
+      "metered": false,
+      "sse": false,
+      "params": [
+        { "name": "page", "in": "query", "type": "integer", "required": false },
+        { "name": "size", "in": "query", "type": "integer", "required": false },
+        { "name": "metadata", "in": "query", "type": "boolean", "required": false },
+        { "name": "time_interval", "in": "query", "type": "integer", "required": false }
+      ],
+      "description": "Paginated daily active tokens (sorted by frequency)"
+    },
+    {
+      "path": "/dailyActivePools",
+      "method": "GET",
+      "metered": false,
+      "sse": false,
+      "params": [
+        { "name": "page", "in": "query", "type": "integer", "required": false },
+        { "name": "size", "in": "query", "type": "integer", "required": false },
+        { "name": "metadata", "in": "query", "type": "boolean", "required": false },
+        { "name": "time_interval", "in": "query", "type": "integer", "required": false }
+      ],
+      "description": "Paginated daily active pools (sorted by frequency)"
+    }
+  ]
+}
