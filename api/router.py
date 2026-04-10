@@ -49,7 +49,7 @@ rest_logger = default_logger.bind(module='UniswapV3API')
 MPP_STREAM_SSE_FETCH_ATTEMPTS_PER_EPOCH = 5
 
 # Create APIRouter for Uniswap endpoints
-router = APIRouter(tags=["uniswap"])
+router = APIRouter(tags=["Uniswap V3"])
 
 
 def _snapshot_model_to_json(obj):
@@ -84,6 +84,7 @@ async def _anchor_current_epoch_id(request: Request) -> int:
 
 
 @router.get('/pool/{pool_address}/metadata')
+@router.get('/mpp/pool/{pool_address}/metadata', tags=['mpp'])
 async def get_pool_metadata(
     pool_address: str,
     request: Request,
@@ -124,6 +125,7 @@ async def get_pool_metadata(
 
 
 @router.get('/token/{token_address}/pools')
+@router.get('/mpp/token/{token_address}/pools', tags=['mpp'])
 async def get_token_pools(
     token_address: str,
     request: Request,
@@ -164,6 +166,8 @@ async def get_token_pools(
 
 @router.get('/ethPrice/{block_number}')
 @router.get('/ethPrice')
+@router.get('/mpp/ethPrice/{block_number}', tags=['mpp'])
+@router.get('/mpp/ethPrice', tags=['mpp'])
 async def get_ethprice(
     request: Request,
     response: Response,
@@ -202,6 +206,8 @@ async def get_ethprice(
 
 @router.get('/token/price/{token_address}/{pool_address}')
 @router.get('/token/price/{token_address}/{pool_address}/{block_number}')
+@router.get('/mpp/token/price/{token_address}/{pool_address}', tags=['mpp'])
+@router.get('/mpp/token/price/{token_address}/{pool_address}/{block_number}', tags=['mpp'])
 async def get_token_price_pool(
     request: Request,
     response: Response,
@@ -248,6 +254,7 @@ async def get_token_price_pool(
     
 
 @router.get('/snapshot/base_all_pools/{token_address}')
+@router.get('/mpp/snapshot/base_all_pools/{token_address}', tags=['mpp'])
 async def get_token_base_snapshots(
     request: Request,
     response: Response,
@@ -293,8 +300,8 @@ async def get_token_base_snapshots(
 
 @router.get('/snapshot/base/{pool_address}')
 @router.get('/snapshot/base/{pool_address}/{block_number}')
-@router.get('/mpp/snapshot/base/{pool_address}', tags=['uniswap', 'mpp'])
-@router.get('/mpp/snapshot/base/{pool_address}/{block_number}', tags=['uniswap', 'mpp'])
+@router.get('/mpp/snapshot/base/{pool_address}', tags=['mpp'])
+@router.get('/mpp/snapshot/base/{pool_address}/{block_number}', tags=['mpp'])
 async def get_base_snapshot(
     request: Request,
     response: Response,
@@ -337,8 +344,8 @@ async def get_base_snapshot(
 
 @router.get('/snapshot/trades/{pool_address}')
 @router.get('/snapshot/trades/{pool_address}/{block_number}')
-@router.get('/mpp/snapshot/trades/{pool_address}', tags=['uniswap', 'mpp'])
-@router.get('/mpp/snapshot/trades/{pool_address}/{block_number}', tags=['uniswap', 'mpp'])
+@router.get('/mpp/snapshot/trades/{pool_address}', tags=['mpp'])
+@router.get('/mpp/snapshot/trades/{pool_address}/{block_number}', tags=['mpp'])
 async def get_trades_snapshot(
     request: Request,
     response: Response,
@@ -381,8 +388,8 @@ async def get_trades_snapshot(
 
 @router.get('/snapshot/allTrades')
 @router.get('/snapshot/allTrades/{block_number}')
-@router.get('/mpp/snapshot/allTrades', tags=['uniswap', 'mpp'])
-@router.get('/mpp/snapshot/allTrades/{block_number}', tags=['uniswap', 'mpp'])
+@router.get('/mpp/snapshot/allTrades', tags=['mpp'])
+@router.get('/mpp/snapshot/allTrades/{block_number}', tags=['mpp'])
 async def get_all_trades_snapshot(
     request: Request,
     response: Response,
@@ -459,7 +466,7 @@ async def get_all_trades_snapshot(
         return {"error": str(e)}
 
 
-@router.get('/mpp/stream/allTrades', tags=['uniswap', 'mpp', 'streaming'])
+@router.get('/mpp/stream/allTrades', tags=['mpp', 'streaming'])
 async def mpp_stream_all_trades(
     request: Request,
     from_epoch: Optional[int] = None,
@@ -633,6 +640,8 @@ async def mpp_stream_all_trades(
 
 @router.get('/tokenPrices/all/{token_address}')
 @router.get('/tokenPrices/all/{token_address}/{block_number}')
+@router.get('/mpp/tokenPrices/all/{token_address}', tags=['mpp'])
+@router.get('/mpp/tokenPrices/all/{token_address}/{block_number}', tags=['mpp'])
 async def get_token_price_all(
     request: Request,
     response: Response,
@@ -673,6 +682,7 @@ async def get_token_price_all(
 
 
 @router.get('/tradeVolumeAllPools/{token_address}/{time_interval}')
+@router.get('/mpp/tradeVolumeAllPools/{token_address}/{time_interval}', tags=['mpp'])
 async def get_trade_volume_agg_all_pools(
     request: Request,
     response: Response,
@@ -713,6 +723,7 @@ async def get_trade_volume_agg_all_pools(
 
 
 @router.get('/tradeVolume/{pool_address}/{time_interval}')
+@router.get('/mpp/tradeVolume/{pool_address}/{time_interval}', tags=['mpp'])
 async def get_trade_volume_agg(
     request: Request,
     response: Response,
@@ -755,6 +766,7 @@ async def get_trade_volume_agg(
     
 
 @router.get('/poolTrades/{pool_address}/{start_timestamp}/{end_timestamp}')
+@router.get('/mpp/poolTrades/{pool_address}/{start_timestamp}/{end_timestamp}', tags=['mpp'])
 async def get_pool_trades(
     request: Request,
     response: Response,
@@ -805,6 +817,7 @@ async def get_pool_trades(
 
 
 @router.get('/timeSeries/{token_address}/{pool_address}/{time_interval}/{step_seconds}')
+@router.get('/mpp/timeSeries/{token_address}/{pool_address}/{time_interval}/{step_seconds}', tags=['mpp'])
 async def get_token_price_series(
     request: Request,
     response: Response,
@@ -859,6 +872,16 @@ async def get_token_price_series(
     summary="Get daily active tokens with pagination",
     description=(
         "Retrieves a paginated list of active tokens for the current day, "
+        "sorted by frequency. Use page and size parameters to control pagination."
+    ),
+    response_description="Returns a paginated list of active tokens with their frequencies"
+)
+@router.get(
+    '/mpp/dailyActiveTokens',
+    tags=['mpp'],
+    summary="Get daily active tokens with pagination (MPP)",
+    description=(
+        "MPP: Retrieves a paginated list of active tokens for the current day, "
         "sorted by frequency. Use page and size parameters to control pagination."
     ),
     response_description="Returns a paginated list of active tokens with their frequencies"
@@ -947,6 +970,16 @@ async def get_daily_active_tokens(
     summary="Get daily active pools with pagination",
     description=(
         "Retrieves a paginated list of active pools for the current day, "
+        "sorted by frequency. Use page and size parameters to control pagination."
+    ),
+    response_description="Returns a paginated list of active pools with their frequencies"
+)
+@router.get(
+    '/mpp/dailyActivePools',
+    tags=['mpp'],
+    summary="Get daily active pools with pagination (MPP)",
+    description=(
+        "MPP: Retrieves a paginated list of active pools for the current day, "
         "sorted by frequency. Use page and size parameters to control pagination."
     ),
     response_description="Returns a paginated list of active pools with their frequencies"

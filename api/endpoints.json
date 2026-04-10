@@ -13,6 +13,16 @@
       "description": "Metadata for a single Uniswap V3 pool"
     },
     {
+      "path": "/mpp/pool/{pool_address}/metadata",
+      "method": "GET",
+      "metered": true,
+      "sse": false,
+      "params": [
+        { "name": "pool_address", "in": "path", "type": "string", "required": true }
+      ],
+      "description": "MPP: metadata for a single Uniswap V3 pool"
+    },
+    {
       "path": "/token/{token_address}/pools",
       "method": "GET",
       "metered": false,
@@ -23,12 +33,30 @@
       "description": "Pools that include a given token"
     },
     {
+      "path": "/mpp/token/{token_address}/pools",
+      "method": "GET",
+      "metered": true,
+      "sse": false,
+      "params": [
+        { "name": "token_address", "in": "path", "type": "string", "required": true }
+      ],
+      "description": "MPP: pools that include a given token"
+    },
+    {
       "path": "/ethPrice",
       "method": "GET",
       "metered": false,
       "sse": false,
       "params": [],
       "description": "ETH price snapshot for the latest finalized epoch"
+    },
+    {
+      "path": "/mpp/ethPrice",
+      "method": "GET",
+      "metered": true,
+      "sse": false,
+      "params": [],
+      "description": "MPP: ETH price snapshot for the latest finalized epoch"
     },
     {
       "path": "/ethPrice/{block_number}",
@@ -41,6 +69,16 @@
       "description": "ETH price snapshot at a specific block (epoch)"
     },
     {
+      "path": "/mpp/ethPrice/{block_number}",
+      "method": "GET",
+      "metered": true,
+      "sse": false,
+      "params": [
+        { "name": "block_number", "in": "path", "type": "integer", "required": true }
+      ],
+      "description": "MPP: ETH price snapshot at a specific block (epoch)"
+    },
+    {
       "path": "/token/price/{token_address}/{pool_address}",
       "method": "GET",
       "metered": false,
@@ -50,6 +88,17 @@
         { "name": "pool_address", "in": "path", "type": "string", "required": true }
       ],
       "description": "Token price in a pool at the latest finalized epoch"
+    },
+    {
+      "path": "/mpp/token/price/{token_address}/{pool_address}",
+      "method": "GET",
+      "metered": true,
+      "sse": false,
+      "params": [
+        { "name": "token_address", "in": "path", "type": "string", "required": true },
+        { "name": "pool_address", "in": "path", "type": "string", "required": true }
+      ],
+      "description": "MPP: token price in a pool at the latest finalized epoch"
     },
     {
       "path": "/token/price/{token_address}/{pool_address}/{block_number}",
@@ -64,6 +113,18 @@
       "description": "Token price in a pool at a specific block"
     },
     {
+      "path": "/mpp/token/price/{token_address}/{pool_address}/{block_number}",
+      "method": "GET",
+      "metered": true,
+      "sse": false,
+      "params": [
+        { "name": "token_address", "in": "path", "type": "string", "required": true },
+        { "name": "pool_address", "in": "path", "type": "string", "required": true },
+        { "name": "block_number", "in": "path", "type": "integer", "required": true }
+      ],
+      "description": "MPP: token price in a pool at a specific block"
+    },
+    {
       "path": "/snapshot/base_all_pools/{token_address}",
       "method": "GET",
       "metered": false,
@@ -72,6 +133,16 @@
         { "name": "token_address", "in": "path", "type": "string", "required": true }
       ],
       "description": "Base snapshots for all pools of a token"
+    },
+    {
+      "path": "/mpp/snapshot/base_all_pools/{token_address}",
+      "method": "GET",
+      "metered": true,
+      "sse": false,
+      "params": [
+        { "name": "token_address", "in": "path", "type": "string", "required": true }
+      ],
+      "description": "MPP: base snapshots for all pools of a token"
     },
     {
       "path": "/snapshot/base/{pool_address}",
@@ -214,6 +285,16 @@
       "description": "Token prices across pools at the latest finalized epoch"
     },
     {
+      "path": "/mpp/tokenPrices/all/{token_address}",
+      "method": "GET",
+      "metered": true,
+      "sse": false,
+      "params": [
+        { "name": "token_address", "in": "path", "type": "string", "required": true }
+      ],
+      "description": "MPP: token prices across pools at the latest finalized epoch"
+    },
+    {
       "path": "/tokenPrices/all/{token_address}/{block_number}",
       "method": "GET",
       "metered": false,
@@ -223,6 +304,17 @@
         { "name": "block_number", "in": "path", "type": "integer", "required": true }
       ],
       "description": "Token prices across pools at a specific block"
+    },
+    {
+      "path": "/mpp/tokenPrices/all/{token_address}/{block_number}",
+      "method": "GET",
+      "metered": true,
+      "sse": false,
+      "params": [
+        { "name": "token_address", "in": "path", "type": "string", "required": true },
+        { "name": "block_number", "in": "path", "type": "integer", "required": true }
+      ],
+      "description": "MPP: token prices across pools at a specific block"
     },
     {
       "path": "/tradeVolumeAllPools/{token_address}/{time_interval}",
@@ -236,6 +328,17 @@
       "description": "Aggregated trade volume across all pools for a token over a time window (seconds)"
     },
     {
+      "path": "/mpp/tradeVolumeAllPools/{token_address}/{time_interval}",
+      "method": "GET",
+      "metered": true,
+      "sse": false,
+      "params": [
+        { "name": "token_address", "in": "path", "type": "string", "required": true },
+        { "name": "time_interval", "in": "path", "type": "integer", "required": true }
+      ],
+      "description": "MPP: aggregated trade volume across all pools for a token over a time window (seconds)"
+    },
+    {
       "path": "/tradeVolume/{pool_address}/{time_interval}",
       "method": "GET",
       "metered": false,
@@ -245,6 +348,17 @@
         { "name": "time_interval", "in": "path", "type": "integer", "required": true }
       ],
       "description": "Aggregated trade volume for a pool over a time window (seconds)"
+    },
+    {
+      "path": "/mpp/tradeVolume/{pool_address}/{time_interval}",
+      "method": "GET",
+      "metered": true,
+      "sse": false,
+      "params": [
+        { "name": "pool_address", "in": "path", "type": "string", "required": true },
+        { "name": "time_interval", "in": "path", "type": "integer", "required": true }
+      ],
+      "description": "MPP: aggregated trade volume for a pool over a time window (seconds)"
     },
     {
       "path": "/poolTrades/{pool_address}/{start_timestamp}/{end_timestamp}",
@@ -257,6 +371,18 @@
         { "name": "end_timestamp", "in": "path", "type": "integer", "required": true }
       ],
       "description": "Trades for a pool between Unix start and end timestamps"
+    },
+    {
+      "path": "/mpp/poolTrades/{pool_address}/{start_timestamp}/{end_timestamp}",
+      "method": "GET",
+      "metered": true,
+      "sse": false,
+      "params": [
+        { "name": "pool_address", "in": "path", "type": "string", "required": true },
+        { "name": "start_timestamp", "in": "path", "type": "integer", "required": true },
+        { "name": "end_timestamp", "in": "path", "type": "integer", "required": true }
+      ],
+      "description": "MPP: trades for a pool between Unix start and end timestamps"
     },
     {
       "path": "/timeSeries/{token_address}/{pool_address}/{time_interval}/{step_seconds}",
@@ -272,6 +398,19 @@
       "description": "Token price time series for a pool with interval and step (seconds)"
     },
     {
+      "path": "/mpp/timeSeries/{token_address}/{pool_address}/{time_interval}/{step_seconds}",
+      "method": "GET",
+      "metered": true,
+      "sse": false,
+      "params": [
+        { "name": "token_address", "in": "path", "type": "string", "required": true },
+        { "name": "pool_address", "in": "path", "type": "string", "required": true },
+        { "name": "time_interval", "in": "path", "type": "integer", "required": true },
+        { "name": "step_seconds", "in": "path", "type": "integer", "required": true }
+      ],
+      "description": "MPP: token price time series for a pool with interval and step (seconds)"
+    },
+    {
       "path": "/dailyActiveTokens",
       "method": "GET",
       "metered": false,
@@ -285,6 +424,19 @@
       "description": "Paginated daily active tokens (sorted by frequency)"
     },
     {
+      "path": "/mpp/dailyActiveTokens",
+      "method": "GET",
+      "metered": true,
+      "sse": false,
+      "params": [
+        { "name": "page", "in": "query", "type": "integer", "required": false },
+        { "name": "size", "in": "query", "type": "integer", "required": false },
+        { "name": "metadata", "in": "query", "type": "boolean", "required": false },
+        { "name": "time_interval", "in": "query", "type": "integer", "required": false }
+      ],
+      "description": "MPP: paginated daily active tokens (sorted by frequency)"
+    },
+    {
       "path": "/dailyActivePools",
       "method": "GET",
       "metered": false,
@@ -296,6 +448,19 @@
         { "name": "time_interval", "in": "query", "type": "integer", "required": false }
       ],
       "description": "Paginated daily active pools (sorted by frequency)"
+    },
+    {
+      "path": "/mpp/dailyActivePools",
+      "method": "GET",
+      "metered": true,
+      "sse": false,
+      "params": [
+        { "name": "page", "in": "query", "type": "integer", "required": false },
+        { "name": "size", "in": "query", "type": "integer", "required": false },
+        { "name": "metadata", "in": "query", "type": "boolean", "required": false },
+        { "name": "time_interval", "in": "query", "type": "integer", "required": false }
+      ],
+      "description": "MPP: paginated daily active pools (sorted by frequency)"
     }
   ]
 }
