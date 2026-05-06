@@ -20,7 +20,7 @@ TODO: Currently uses getTotalNodeCount which includes ALL minted nodes (1 to nod
 
 import hashlib
 import time
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from snapshotter.utils.default_logger import logger
 
@@ -45,7 +45,40 @@ class SlotSelectionManager:
     
     # Cache: (nodeCount, fetch_timestamp)
     _node_count_cache: Tuple[int, float] = (0, 0.0)
-    
+
+    @staticmethod
+    def _coerce_node_count(value: Any) -> int:
+        """
+        RpcHelper.web3_call uses asyncio.gather(..., return_exceptions=True).
+        On failure, the list entry can be an exception instead of a raised error.
+        Never treat that as a valid node count.
+        """
+        if isinstance(value, BaseException):
+            raise value
+        if isinstance(value, bool):
+            raise TypeError(f'getTotalNodeCount returned unexpected bool: {value!r}')
+        if isinstance(value, int):
+            return value
+        try:
+            return int(value)
+        except (TypeError, ValueError) as e:
+            raise TypeError(
+                f'getTotalNodeCount returned non-integer: {type(value).__name__}'
+            ) from e
+
+    @classmethod
+    def _sanitize_node_count_cache(cls) -> Tuple[int, float]:
+        """Drop poisoned cache (e.g. exception object stored as count)."""
+        cached_count, cached_at = cls._node_count_cache
+        if isinstance(cached_count, int) and not isinstance(cached_count, bool):
+            return cached_count, cached_at
+        slot_selection_logger.warning(
+            'Clearing invalid node count cache entry (got type {})',
+            type(cached_count).__name__,
+        )
+        cls._node_count_cache = (0, 0.0)
+        return cls._node_count_cache
+
     @classmethod
     async def get_total_slots(cls, rpc_helper, protocol_state_contract) -> int:
         """
@@ -59,18 +92,23 @@ class SlotSelectionManager:
             Total node count (getTotalNodeCount from contract)
         """
         current_time = time.time()
-        cached_count, cached_at = cls._node_count_cache
-        
+        cached_count, cached_at = cls._sanitize_node_count_cache()
+
         if cached_count > 0 and (current_time - cached_at) < cls.NODE_COUNT_CACHE_TTL:
             return cached_count
-        
+
         # Fetch from contract
         try:
-            [node_count] = await rpc_helper.web3_call(
+            results = await rpc_helper.web3_call(
                 tasks=[('getTotalNodeCount', [])],
                 contract_addr=protocol_state_contract.address,
                 abi=protocol_state_contract.abi
             )
+            if not results:
+                raise RuntimeError(
+                    'web3_call returned empty response for getTotalNodeCount'
+                )
+            node_count = cls._coerce_node_count(results[0])
             cls._node_count_cache = (node_count, current_time)
             slot_selection_logger.debug(
                 f"💾 Fetched getTotalNodeCount from contract: {node_count}"
