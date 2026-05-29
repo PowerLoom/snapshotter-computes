@@ -31,6 +31,11 @@ from computes.utils.redis_keys import uniswap_v3_best_pool_map
 from snapshotter.utils.data_utils import get_project_latest_snapshot
 from computes.utils.constants import ERC20_ABI
 from computes.utils.constants import POOL_ABI
+from computes.utils.usd_sanity import (
+    MAX_USD_RECURSION_DEPTH,
+    STABLECOIN_ADDRESSES,
+    clamp_usd_price_maps,
+)
 
 AddressLike = Union[Address, ChecksumAddress]
 getcontext().prec = 36
@@ -41,6 +46,8 @@ SCORE_BLOCK_MULTIPLIER = 1_000_000
 
 WETH_ADDRESS = Web3.to_checksum_address(worker_settings.contract_addresses.WETH)
 USDC_ADDRESS = Web3.to_checksum_address(worker_settings.contract_addresses.USDC)
+USDT_ADDRESS = Web3.to_checksum_address(worker_settings.contract_addresses.USDT)
+DAI_ADDRESS = Web3.to_checksum_address(worker_settings.contract_addresses.DAI)
 
 
 class Slot0DataError(Exception):
@@ -535,6 +542,7 @@ async def get_token_price_in_usd_in_block_range(
     ipfs_reader,
     protocol_state_contract,
     rpc_helper: RpcHelper,
+    _usd_recursion_depth: int = 0,
 ):
     """
     Fetch the price of token0 and token1 in USD for a given Uniswap V3 pool over a specified block range.
@@ -561,6 +569,16 @@ async def get_token_price_in_usd_in_block_range(
             Dict[int, float],  # token1_price: token1 price in USD for each block
         ]
     """
+    if _usd_recursion_depth > MAX_USD_RECURSION_DEPTH:
+        helper_logger.error(
+            "USD price recursion depth exceeded for pool {} (depth {})",
+            pair_metadata.address,
+            _usd_recursion_depth,
+        )
+        raise RuntimeError(
+            f"USD price recursion depth exceeded for pool {pair_metadata.address}"
+        )
+
     # TODO: Rename function names and variablesto relative token price for clarity
     token0_price_raw, token1_price_raw = await get_token_price_in_block_range( 
         pair_metadata=pair_metadata,
@@ -580,34 +598,29 @@ async def get_token_price_in_usd_in_block_range(
             rpc_helper=rpc_helper,
         )
         if Web3.to_checksum_address(pair_metadata.token0.address) == WETH_ADDRESS:
-            # token0 is WETH: its price is ETH/USD, token1 is relative to ETH.
             token0_price = eth_usd_price_dict
             token1_price = {
                 block_num: eth_usd_price_dict[block_num] * token1_price_raw[block_num]
                 for block_num in token1_price_raw
             }
         else:
-            # token1 is WETH: its price is ETH/USD, token0 is relative to ETH.
             token0_price = {
                 block_num: eth_usd_price_dict[block_num] * token0_price_raw[block_num]
                 for block_num in token0_price_raw
             }
             token1_price = eth_usd_price_dict
 
-    # If either token0 or token1 is USDC, use 1 USD as the price for USDC.
-    elif Web3.to_checksum_address(pair_metadata.token0.address) == USDC_ADDRESS or Web3.to_checksum_address(pair_metadata.token1.address) == USDC_ADDRESS:
-        if Web3.to_checksum_address(pair_metadata.token0.address) == USDC_ADDRESS:
-            # token0 is USDC: price is 1 USD, token1 is relative to USDC.
-            token0_price = {
-                block_num: 1 for block_num in token0_price_raw
-            }
+    # USDC / USDT / DAI: peg stable leg to $1, other leg from pool ratio.
+    elif (
+        Web3.to_checksum_address(pair_metadata.token0.address) in STABLECOIN_ADDRESSES
+        or Web3.to_checksum_address(pair_metadata.token1.address) in STABLECOIN_ADDRESSES
+    ):
+        if Web3.to_checksum_address(pair_metadata.token0.address) in STABLECOIN_ADDRESSES:
+            token0_price = {block_num: 1 for block_num in token0_price_raw}
             token1_price = token1_price_raw
         else:
-            # token1 is USDC: price is 1 USD, token0 is relative to USDC.
             token0_price = token0_price_raw
-            token1_price = {
-                block_num: 1 for block_num in token1_price_raw
-            }
+            token1_price = {block_num: 1 for block_num in token1_price_raw}
     else:
         # For other tokens, identify the best pool (with WETH or USDC) to use as a price reference.
         best_pool_token_address = await identify_best_pool_to_calculate_price(
@@ -637,6 +650,7 @@ async def get_token_price_in_usd_in_block_range(
             ipfs_reader=ipfs_reader,
             protocol_state_contract=protocol_state_contract,
             rpc_helper=rpc_helper,
+            _usd_recursion_depth=_usd_recursion_depth + 1,
         )
 
         # Determine which token in the best pool matches token0 or token1 of the original pair.
@@ -667,6 +681,13 @@ async def get_token_price_in_usd_in_block_range(
             }
             token1_price = reference_token_price_usd
 
+    token0_price, token1_price = clamp_usd_price_maps(
+        pair_metadata,
+        token0_price_raw,
+        token1_price_raw,
+        token0_price,
+        token1_price,
+    )
     return token0_price_raw, token1_price_raw, token0_price, token1_price
 
 

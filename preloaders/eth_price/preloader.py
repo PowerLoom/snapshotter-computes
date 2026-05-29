@@ -121,11 +121,12 @@ class EthPricePreloader(GenericPreloader):
                     token1_decimals=self.TOKENS_DECIMALS['WETH'],
                 )
                 # using fixed weightage for now, will use liquidity based weightage later
-                eth_price_usd_dict[block_num] = float(eth_price_usd)
+                price = float(eth_price_usd)
+                eth_price_usd_dict[block_num] = price
 
                 redis_cache_mapping[
                     json.dumps(
-                        {'blockHeight': block_num, 'price': float(eth_price_usd)},
+                        {'blockHeight': block_num, 'price': price},
                     )
                 ] = int(block_num)
 
