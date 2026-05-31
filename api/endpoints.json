@@ -78,7 +78,7 @@
           "required": true
         }
       ],
-      "description": "MPP: USD price for one token in one pool (latest epoch). Preferred over tokenPrices/all; pair with GET /token/{token}/pools",
+      "description": "MPP: USD price for one token in one pool (latest epoch). Preferred over tokenPrices/all; pair with GET /mpp/token/{token}/pools",
       "credit_weight": 5
     },
     {
@@ -255,7 +255,7 @@
           "required": true
         }
       ],
-      "description": "MPP: USD prices across all pools (<=20 pools only). NOT for USDC/WETH/hub tokens — use /token/{token}/pools then /token/price/{token}/{pool}",
+      "description": "MPP: USD prices across all pools (<=20 pools only). NOT for USDC/WETH/hub tokens — use /mpp/token/{token}/pools then /mpp/token/price/{token}/{pool}",
       "credit_weight": 10
     },
     {
@@ -277,7 +277,7 @@
           "required": true
         }
       ],
-      "description": "MPP: USD prices across all pools at a block (<=20 pools). NOT for USDC/WETH/hub tokens — use /token/{token}/pools then /token/price/{token}/{pool}/{block}",
+      "description": "MPP: USD prices across all pools at a block (<=20 pools). NOT for USDC/WETH/hub tokens — use /mpp/token/{token}/pools then /mpp/token/price/{token}/{pool}/{block}",
       "credit_weight": 10
     },
     {
