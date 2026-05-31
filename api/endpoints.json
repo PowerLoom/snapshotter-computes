@@ -383,8 +383,8 @@
           "required": true
         }
       ],
-      "description": "MPP: token price time series for a pool with interval and step (seconds)",
-      "credit_weight": 1
+      "description": "MPP: token price time series for a pool with interval and step (seconds). Dashboard/analytics; use token/price/{block} for trading.",
+      "credit_weight": 5
     },
     {
       "path": "/mpp/dailyActiveTokens",
