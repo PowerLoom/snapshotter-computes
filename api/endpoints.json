@@ -1,6 +1,11 @@
 {
   "market": "BDS_MAINNET_UNISWAPV3",
-  "version": 3,
+  "version": 4,
+  "billing": {
+    "credit_per_epoch": 0.0001388888888888889,
+    "credit_per_epoch_note": "1/7200 credits per credit_weight unit per GET (bds-agenthub-billing-metering CREDIT_PER_EPOCH)",
+    "credit_per_stream_session": 0.01
+  },
   "endpoints": [
     {
       "path": "/mpp/pool/{pool_address}/metadata",
@@ -239,8 +244,12 @@
           "required": false
         }
       ],
-      "description": "SSE stream of all-pool trades per finalized epoch",
-      "credit_weight": 1
+      "description": "SSE stream of all-pool trades per finalized epoch (flat session debit; credit_weight ignored by metering)",
+      "credit_weight": 1,
+      "billing_modifier": {
+        "type": "stream_session",
+        "credits_per_connection": 0.01
+      }
     },
     {
       "path": "/mpp/tokenPrices/all/{token_address}",
