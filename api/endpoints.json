@@ -1,6 +1,6 @@
 {
   "market": "BDS_MAINNET_UNISWAPV3",
-  "version": 2,
+  "version": 3,
   "endpoints": [
     {
       "path": "/mpp/pool/{pool_address}/metadata",
@@ -384,7 +384,25 @@
         }
       ],
       "description": "MPP: token price time series for a pool with interval and step (seconds). Dashboard/analytics; use token/price/{block} for trading.",
-      "credit_weight": 5
+      "credit_weight": 5,
+      "billing_modifier": {
+        "type": "lookback_multiplier",
+        "param": "time_interval",
+        "tiers": [
+          { "max_seconds": 600, "multiplier": 1 },
+          { "max_seconds": 1800, "multiplier": 2 },
+          { "max_seconds": 3600, "multiplier": 4 },
+          { "max_seconds": 7200, "multiplier": 8 },
+          { "max_seconds": 14400, "multiplier": 16 },
+          { "max_seconds": 21600, "multiplier": 32 },
+          { "max_seconds": 43200, "multiplier": 64 },
+          { "max_seconds": 86400, "multiplier": 128 },
+          { "max_seconds": 172800, "multiplier": 256 },
+          { "max_seconds": 345600, "multiplier": 512 },
+          { "max_seconds": 604800, "multiplier": 1024 }
+        ],
+        "overflow_multiplier": 2048
+      }
     },
     {
       "path": "/mpp/dailyActiveTokens",
